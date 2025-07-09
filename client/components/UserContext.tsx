@@ -2,10 +2,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react"
 import { useRouter } from "next/navigation"
 
-interface User {
-  name: string
-  email: string
-}
+export type User = {
+  [key: string]: any;
+  name: string;
+  email: string;
+};
 
 interface UserContextType {
   user: User | null

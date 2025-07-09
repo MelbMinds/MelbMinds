@@ -19,7 +19,13 @@ export default function Header() {
           <div className="absolute right-0 mt-2 w-48 bg-white rounded shadow-lg border p-4">
             <div className="font-semibold mb-2">{user.name}</div>
             <div className="text-xs text-gray-500 mb-2">{user.email}</div>
-            <button className="text-sm text-red-500 hover:underline" onClick={logout}>Logout</button>
+            <button
+              className="text-sm text-blue-600 hover:underline mb-2 w-full text-left"
+              onClick={() => { window.location.href = '/profile'; setOpen(false); }}
+            >
+              Profile
+            </button>
+            <button className="text-sm text-red-500 hover:underline w-full text-left" onClick={logout}>Logout</button>
           </div>
         )}
       </div>

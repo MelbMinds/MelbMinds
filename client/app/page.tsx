@@ -1,11 +1,14 @@
+"use client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Users, Video, MapPin, UserCheck, Star, ArrowRight, Clock, Globe, Quote } from "lucide-react"
 import Link from "next/link"
 import HomeNavbar from "@/components/HomeNavbar"
+import { useUser } from "@/components/UserContext"
 
 export default function HomePage() {
+  const { user } = useUser();
   const testimonials = [
     {
       name: "Sarah Chen",

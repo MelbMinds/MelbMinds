@@ -83,7 +83,7 @@ export default function AuthPage() {
         return
       }
       const data = await res.json()
-      setUser({ name: data.name, email: data.email })
+      setUser(data)
       setIsLoading(false)
       router.push("/")
     } catch (err) {
@@ -123,7 +123,7 @@ export default function AuthPage() {
         return
       }
       const data = await res.json()
-      setUser({ name: data.name, email: data.email })
+      setUser(data)
       setIsLoading(false)
       router.push("/")
     } catch (err) {

@@ -1,0 +1,638 @@
+"use client"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  User,
+  Mail,
+  Calendar,
+  BookOpen,
+  Users,
+  Star,
+  Edit3,
+  Save,
+  X,
+  MapPin,
+  Video,
+  Globe,
+  Award,
+  Target,
+} from "lucide-react"
+import Link from "next/link"
+
+export default function ProfilePage() {
+  const [isEditing, setIsEditing] = useState(false)
+  const [profileData, setProfileData] = useState({
+    name: "John Doe",
+    email: "john.doe@student.unimelb.edu.au",
+    year: "3rd Year",
+    major: "Computer Science",
+    bio: "I'm a night owl who loves explaining concepts and helping others succeed! I prefer quiet study sessions and enjoy collaborative problem-solving.",
+    studyFormat: "Hybrid",
+    languages: ["English", "Mandarin"],
+    joinDate: "September 2023",
+    avatar: "/placeholder.svg?height=120&width=120",
+  })
+
+  const userStats = {
+    groupsJoined: 5,
+    sessionsAttended: 42,
+    studyHours: 156,
+    averageRating: 4.8,
+    helpfulVotes: 89,
+    streakDays: 12,
+  }
+
+  const joinedGroups = [
+    {
+      id: 1,
+      subject: "COMP10001",
+      name: "Python Programming Fundamentals",
+      role: "Member",
+      joinedDate: "Jan 2024",
+      status: "Active",
+    },
+    {
+      id: 2,
+      subject: "COMP20003",
+      name: "Algorithms & Data Structures",
+      role: "Admin",
+      joinedDate: "Dec 2023",
+      status: "Active",
+    },
+    {
+      id: 3,
+      subject: "MAST20004",
+      name: "Probability Theory Masters",
+      role: "Member",
+      joinedDate: "Nov 2023",
+      status: "Active",
+    },
+    {
+      id: 4,
+      subject: "COMP30024",
+      name: "AI Project Collaboration",
+      role: "Member",
+      joinedDate: "Oct 2023",
+      status: "Completed",
+    },
+  ]
+
+  const achievements = [
+    {
+      title: "Study Streak Champion",
+      description: "Maintained a 30-day study streak",
+      icon: Target,
+      earned: "Jan 2024",
+      color: "text-gold",
+    },
+    {
+      title: "Helpful Mentor",
+      description: "Received 50+ helpful votes from peers",
+      icon: Award,
+      earned: "Dec 2023",
+      color: "text-blue-600",
+    },
+    {
+      title: "Group Leader",
+      description: "Successfully led 3 study groups",
+      icon: Users,
+      earned: "Nov 2023",
+      color: "text-green-600",
+    },
+    {
+      title: "Early Adopter",
+      description: "One of the first 100 MelbMinds users",
+      icon: Star,
+      earned: "Sep 2023",
+      color: "text-purple-600",
+    },
+  ]
+
+  const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Masters", "PhD"]
+  const majors = [
+    "Computer Science",
+    "Biomedical Science",
+    "Law",
+    "Medicine",
+    "Engineering",
+    "Business",
+    "Arts",
+    "Science",
+    "Psychology",
+    "Economics",
+    "Architecture",
+    "Education",
+    "Fine Arts",
+    "Music",
+    "Other",
+  ]
+  const studyFormats = ["Virtual", "In-person", "Hybrid"]
+  const availableLanguages = [
+    "English",
+    "Mandarin",
+    "Spanish",
+    "Hindi",
+    "Arabic",
+    "French",
+    "German",
+    "Japanese",
+    "Korean",
+  ]
+
+  const handleSave = () => {
+    setIsEditing(false)
+    // Save profile data
+  }
+
+  const handleCancel = () => {
+    setIsEditing(false)
+    // Reset any changes
+  }
+
+  const toggleLanguage = (language: string) => {
+    setProfileData((prev) => ({
+      ...prev,
+      languages: prev.languages.includes(language)
+        ? prev.languages.filter((l) => l !== language)
+        : [...prev.languages, language],
+    }))
+  }
+
+  return (
+    <div className="min-h-screen bg-soft-gray">
+      {/* Navigation */}
+      <nav className="border-b border-gray-200 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <Link href="/" className="flex items-center">
+              <h1 className="text-2xl font-serif font-bold text-deep-blue">MelbMinds</h1>
+            </Link>
+            <div className="flex items-center space-x-4">
+              <Link href="/dashboard">
+                <Button variant="ghost" className="text-deep-blue hover:bg-soft-gray">
+                  Dashboard
+                </Button>
+              </Link>
+              <Link href="/discover">
+                <Button variant="ghost" className="text-deep-blue hover:bg-soft-gray">
+                  Discover
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl lg:text-5xl font-serif font-bold text-deep-blue mb-2">My Profile</h1>
+          <p className="text-xl text-gray-600">Manage your account and study preferences</p>
+        </div>
+
+        <div className="grid lg:grid-cols-4 gap-8">
+          {/* Profile Overview */}
+          <div className="lg:col-span-1">
+            <Card className="shadow-lg border-0 mb-6">
+              <CardContent className="p-6 text-center">
+                <Avatar className="h-24 w-24 mx-auto mb-4">
+                  <AvatarImage src={profileData.avatar || "/placeholder.svg"} />
+                  <AvatarFallback className="bg-deep-blue text-white text-2xl font-serif">
+                    {profileData.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
+                  </AvatarFallback>
+                </Avatar>
+                <h2 className="text-xl font-serif font-semibold text-deep-blue mb-1">{profileData.name}</h2>
+                <p className="text-gray-600 mb-2">
+                  {profileData.major} • {profileData.year}
+                </p>
+                <p className="text-sm text-gray-500 mb-4">Member since {profileData.joinDate}</p>
+                <Button
+                  onClick={() => setIsEditing(!isEditing)}
+                  className="w-full bg-deep-blue hover:bg-deep-blue/90 text-white font-serif"
+                >
+                  <Edit3 className="mr-2 h-4 w-4" />
+                  {isEditing ? "Cancel Edit" : "Edit Profile"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Quick Stats */}
+            <Card className="shadow-lg border-0">
+              <CardHeader>
+                <CardTitle className="font-serif font-medium text-deep-blue">Quick Stats</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Groups Joined</span>
+                    <span className="font-semibold text-deep-blue">{userStats.groupsJoined}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Sessions Attended</span>
+                    <span className="font-semibold text-deep-blue">{userStats.sessionsAttended}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Study Hours</span>
+                    <span className="font-semibold text-deep-blue">{userStats.studyHours}h</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Average Rating</span>
+                    <div className="flex items-center">
+                      <Star className="h-4 w-4 text-gold fill-current mr-1" />
+                      <span className="font-semibold text-deep-blue">{userStats.averageRating}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Study Streak</span>
+                    <span className="font-semibold text-deep-blue">{userStats.streakDays} days</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Main Content */}
+          <div className="lg:col-span-3">
+            <Tabs defaultValue="profile" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="profile">Profile Info</TabsTrigger>
+                <TabsTrigger value="groups">My Groups</TabsTrigger>
+                <TabsTrigger value="achievements">Achievements</TabsTrigger>
+                <TabsTrigger value="settings">Settings</TabsTrigger>
+              </TabsList>
+
+              {/* Profile Info Tab */}
+              <TabsContent value="profile">
+                <Card className="shadow-lg border-0">
+                  <CardHeader>
+                    <div className="flex justify-between items-center">
+                      <CardTitle className="font-serif text-deep-blue">Profile Information</CardTitle>
+                      {isEditing && (
+                        <div className="flex space-x-2">
+                          <Button onClick={handleSave} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+                            <Save className="mr-1 h-4 w-4" />
+                            Save
+                          </Button>
+                          <Button onClick={handleCancel} size="sm" variant="outline" className="bg-transparent">
+                            <X className="mr-1 h-4 w-4" />
+                            Cancel
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Basic Information */}
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Full Name</Label>
+                        {isEditing ? (
+                          <Input
+                            id="name"
+                            value={profileData.name}
+                            onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                          />
+                        ) : (
+                          <div className="flex items-center p-3 bg-soft-gray rounded-md">
+                            <User className="mr-2 h-4 w-4 text-gray-500" />
+                            <span>{profileData.name}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="email">University Email</Label>
+                        <div className="flex items-center p-3 bg-gray-100 rounded-md">
+                          <Mail className="mr-2 h-4 w-4 text-gray-500" />
+                          <span className="text-gray-600">{profileData.email}</span>
+                        </div>
+                        <p className="text-xs text-gray-500">Email cannot be changed</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="year">Year Level</Label>
+                        {isEditing ? (
+                          <Select
+                            value={profileData.year}
+                            onValueChange={(value) => setProfileData({ ...profileData, year: value })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {yearLevels.map((year) => (
+                                <SelectItem key={year} value={year}>
+                                  {year}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div className="flex items-center p-3 bg-soft-gray rounded-md">
+                            <Calendar className="mr-2 h-4 w-4 text-gray-500" />
+                            <span>{profileData.year}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="major">Major</Label>
+                        {isEditing ? (
+                          <Select
+                            value={profileData.major}
+                            onValueChange={(value) => setProfileData({ ...profileData, major: value })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {majors.map((major) => (
+                                <SelectItem key={major} value={major}>
+                                  {major}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div className="flex items-center p-3 bg-soft-gray rounded-md">
+                            <BookOpen className="mr-2 h-4 w-4 text-gray-500" />
+                            <span>{profileData.major}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bio */}
+                    <div className="space-y-2">
+                      <Label htmlFor="bio">Bio & Study Personality</Label>
+                      {isEditing ? (
+                        <Textarea
+                          id="bio"
+                          value={profileData.bio}
+                          onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
+                          rows={4}
+                          placeholder="Tell others about your study style and personality..."
+                        />
+                      ) : (
+                        <div className="p-4 bg-soft-gray rounded-md">
+                          <p className="text-gray-700">{profileData.bio}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Study Preferences */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-serif font-medium text-deep-blue">Study Preferences</h3>
+
+                      <div className="space-y-2">
+                        <Label>Preferred Study Format</Label>
+                        {isEditing ? (
+                          <div className="grid grid-cols-3 gap-3">
+                            {studyFormats.map((format) => (
+                              <div
+                                key={format}
+                                className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                                  profileData.studyFormat === format
+                                    ? "border-deep-blue bg-deep-blue/5"
+                                    : "border-gray-200 hover:border-gray-300"
+                                }`}
+                                onClick={() => setProfileData({ ...profileData, studyFormat: format })}
+                              >
+                                <div className="flex items-center justify-center space-x-2">
+                                  {format === "Virtual" && <Video className="h-4 w-4 text-sky-blue" />}
+                                  {format === "In-person" && <MapPin className="h-4 w-4 text-green-600" />}
+                                  {format === "Hybrid" && <Users className="h-4 w-4 text-gold" />}
+                                  <span className="text-sm font-medium">{format}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex items-center p-3 bg-soft-gray rounded-md">
+                            {profileData.studyFormat === "Virtual" && <Video className="mr-2 h-4 w-4 text-sky-blue" />}
+                            {profileData.studyFormat === "In-person" && (
+                              <MapPin className="mr-2 h-4 w-4 text-green-600" />
+                            )}
+                            {profileData.studyFormat === "Hybrid" && <Users className="mr-2 h-4 w-4 text-gold" />}
+                            <span>{profileData.studyFormat}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Languages Spoken</Label>
+                        {isEditing ? (
+                          <div className="flex flex-wrap gap-2">
+                            {availableLanguages.map((language) => (
+                              <Badge
+                                key={language}
+                                variant={profileData.languages.includes(language) ? "default" : "outline"}
+                                className={`cursor-pointer transition-all ${
+                                  profileData.languages.includes(language)
+                                    ? "bg-deep-blue text-white"
+                                    : "hover:bg-gray-100"
+                                }`}
+                                onClick={() => toggleLanguage(language)}
+                              >
+                                {language}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex items-center p-3 bg-soft-gray rounded-md">
+                            <Globe className="mr-2 h-4 w-4 text-gray-500" />
+                            <div className="flex flex-wrap gap-2">
+                              {profileData.languages.map((language) => (
+                                <Badge key={language} variant="secondary">
+                                  {language}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* My Groups Tab */}
+              <TabsContent value="groups">
+                <Card className="shadow-lg border-0">
+                  <CardHeader>
+                    <CardTitle className="font-serif text-deep-blue">My Study Groups</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {joinedGroups.map((group) => (
+                        <div key={group.id} className="flex items-center justify-between p-4 bg-soft-gray rounded-lg">
+                          <div>
+                            <div className="flex items-center space-x-3 mb-2">
+                              <Badge variant="outline" className="text-deep-blue border-deep-blue">
+                                {group.subject}
+                              </Badge>
+                              <Badge variant={group.role === "Admin" ? "default" : "secondary"} className="text-xs">
+                                {group.role}
+                              </Badge>
+                              <Badge
+                                variant={group.status === "Active" ? "default" : "secondary"}
+                                className={group.status === "Active" ? "bg-green-600" : ""}
+                              >
+                                {group.status}
+                              </Badge>
+                            </div>
+                            <h3 className="font-medium text-deep-blue">{group.name}</h3>
+                            <p className="text-sm text-gray-600">Joined {group.joinedDate}</p>
+                          </div>
+                          <Link href={`/group/${group.id}`}>
+                            <Button variant="outline" size="sm" className="bg-transparent">
+                              View Group
+                            </Button>
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Achievements Tab */}
+              <TabsContent value="achievements">
+                <Card className="shadow-lg border-0">
+                  <CardHeader>
+                    <CardTitle className="font-serif text-deep-blue">Achievements & Badges</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid md:grid-cols-2 gap-6">
+                      {achievements.map((achievement, index) => (
+                        <div key={index} className="flex items-start space-x-4 p-4 bg-soft-gray rounded-lg">
+                          <div className={`p-3 rounded-full bg-white ${achievement.color}`}>
+                            <achievement.icon className="h-6 w-6" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium text-deep-blue mb-1">{achievement.title}</h3>
+                            <p className="text-sm text-gray-600 mb-2">{achievement.description}</p>
+                            <p className="text-xs text-gray-500">Earned {achievement.earned}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Settings Tab */}
+              <TabsContent value="settings">
+                <Card className="shadow-lg border-0">
+                  <CardHeader>
+                    <CardTitle className="font-serif text-deep-blue">Account Settings</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-serif font-medium text-deep-blue">Privacy Settings</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-3 bg-soft-gray rounded-lg">
+                          <div>
+                            <p className="font-medium">Profile Visibility</p>
+                            <p className="text-sm text-gray-600">Who can see your profile information</p>
+                          </div>
+                          <Select defaultValue="members">
+                            <SelectTrigger className="w-40">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="public">Public</SelectItem>
+                              <SelectItem value="members">Group Members</SelectItem>
+                              <SelectItem value="private">Private</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-soft-gray rounded-lg">
+                          <div>
+                            <p className="font-medium">Study Statistics</p>
+                            <p className="text-sm text-gray-600">Show your study hours and session count</p>
+                          </div>
+                          <Select defaultValue="visible">
+                            <SelectTrigger className="w-40">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="visible">Visible</SelectItem>
+                              <SelectItem value="hidden">Hidden</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-serif font-medium text-deep-blue">Notification Settings</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-3 bg-soft-gray rounded-lg">
+                          <div>
+                            <p className="font-medium">Email Notifications</p>
+                            <p className="text-sm text-gray-600">Receive updates about your groups via email</p>
+                          </div>
+                          <Select defaultValue="important">
+                            <SelectTrigger className="w-40">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Updates</SelectItem>
+                              <SelectItem value="important">Important Only</SelectItem>
+                              <SelectItem value="none">None</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-soft-gray rounded-lg">
+                          <div>
+                            <p className="font-medium">Session Reminders</p>
+                            <p className="text-sm text-gray-600">Get reminded before study sessions</p>
+                          </div>
+                          <Select defaultValue="30min">
+                            <SelectTrigger className="w-40">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1hour">1 Hour Before</SelectItem>
+                              <SelectItem value="30min">30 Min Before</SelectItem>
+                              <SelectItem value="15min">15 Min Before</SelectItem>
+                              <SelectItem value="none">No Reminders</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-6 border-t">
+                      <div className="flex space-x-4">
+                        <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
+                          Save Settings
+                        </Button>
+                        <Button variant="outline" className="bg-transparent">
+                          Reset to Default
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
