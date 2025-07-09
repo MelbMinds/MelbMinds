@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Users, Video, MapPin, UserCheck, Star, ArrowRight, Clock, Globe, Quote } from "lucide-react"
 import Link from "next/link"
+import HomeNavbar from "@/components/HomeNavbar"
 
 export default function HomePage() {
   const testimonials = [
@@ -69,16 +70,7 @@ export default function HomePage() {
             <div className="flex items-center">
               <h1 className="text-2xl font-serif font-bold text-deep-blue">MelbMinds</h1>
             </div>
-            <div className="flex items-center space-x-6">
-              <Link href="/discover">
-                <Button variant="ghost" className="text-deep-blue hover:bg-soft-gray font-medium">
-                  Discover Groups
-                </Button>
-              </Link>
-              <Link href="/auth">
-                <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-medium">Sign In</Button>
-              </Link>
-            </div>
+            <HomeNavbar />
           </div>
         </div>
       </nav>

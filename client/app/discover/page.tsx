@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -17,95 +17,27 @@ export default function DiscoverPage() {
   const [selectedFormat, setSelectedFormat] = useState("")
   const [selectedLanguage, setSelectedLanguage] = useState("")
   const [personalityFilters, setPersonalityFilters] = useState<string[]>([])
+  const [groups, setGroups] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const studyGroups = [
-    {
-      id: 1,
-      subject: "COMP10001",
-      name: "Python Programming Fundamentals",
-      members: 12,
-      maxMembers: 15,
-      format: "Hybrid",
-      languages: ["English"],
-      yearLevel: "1st Year",
-      tags: ["Beginner-friendly", "Assignment help", "Exam prep"],
-      personalityTags: ["Quiet", "Patient", "Collaborative"],
-      description:
-        "Weekly sessions covering Python basics, assignments, and exam preparation with collaborative coding.",
-      schedule: "Tuesdays 6PM, Fridays 2PM",
-      location: "Doug McDonell Building + Online",
-      rating: 4.8,
-      studyHours: 24,
-    },
-    {
-      id: 2,
-      subject: "BIOL10004",
-      name: "Biology Study Circle",
-      members: 8,
-      maxMembers: 12,
-      format: "In-person",
-      languages: ["English", "Mandarin"],
-      yearLevel: "1st Year",
-      tags: ["International", "Lab help", "Domestic"],
-      personalityTags: ["Talkative", "Visual learner", "Hands-on"],
-      description: "Collaborative study group focusing on biology concepts and lab work with multilingual support.",
-      schedule: "Wednesdays 4PM",
-      location: "Bio21 Institute",
-      rating: 4.9,
-      studyHours: 18,
-    },
-    {
-      id: 3,
-      subject: "LAWS10001",
-      name: "Legal Foundations Group",
-      members: 15,
-      maxMembers: 20,
-      format: "Virtual",
-      languages: ["English"],
-      yearLevel: "1st Year",
-      tags: ["Case studies", "Essay writing", "Exam-focused"],
-      personalityTags: ["Analytical", "Discussion-focused", "Fast-paced"],
-      description: "Discussion-based sessions on legal principles and case analysis with structured debates.",
-      schedule: "Sundays 7PM",
-      location: "Virtual Room",
-      rating: 4.7,
-      studyHours: 32,
-    },
-    {
-      id: 4,
-      subject: "MAST20004",
-      name: "Probability Theory Masters",
-      members: 6,
-      maxMembers: 10,
-      format: "Hybrid",
-      languages: ["English"],
-      yearLevel: "Masters",
-      tags: ["Advanced", "Problem solving", "International"],
-      personalityTags: ["Analytical", "Quiet", "Detail-oriented"],
-      description: "Advanced probability theory discussions and problem-solving sessions for graduate students.",
-      schedule: "Thursdays 5PM",
-      location: "Peter Hall Building + Online",
-      rating: 4.6,
-      studyHours: 28,
-    },
-    {
-      id: 5,
-      subject: "PSYC10004",
-      name: "Psychology Research Methods",
-      members: 14,
-      maxMembers: 18,
-      format: "In-person",
-      languages: ["English", "Spanish"],
-      yearLevel: "1st Year",
-      tags: ["Research-focused", "Statistics", "Group projects"],
-      personalityTags: ["Collaborative", "Creative", "Patient"],
-      description: "Hands-on approach to learning research methods with real data analysis and group projects.",
-      schedule: "Mondays 2PM, Thursdays 11AM",
-      location: "Redmond Barry Building",
-      rating: 4.8,
-      studyHours: 22,
-    },
-  ]
+  useEffect(() => {
+    const fetchGroups = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch("http://localhost:8000/api/groups/")
+        if (!res.ok) throw new Error("Failed to fetch groups")
+        const data = await res.json()
+        setGroups(data)
+      } catch (err) {
+        setError("Could not load groups.")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchGroups()
+  }, [])
 
   const subjects = ["COMP10001", "BIOL10004", "LAWS10001", "MAST20004", "PSYC10004"]
   const yearLevels = ["1st Year", "2nd Year", "3rd Year", "Masters", "PhD"]
@@ -125,18 +57,16 @@ export default function DiscoverPage() {
     "Detail-oriented",
   ]
 
-  const filteredGroups = studyGroups.filter((group) => {
+  const filteredGroups = groups.filter((group) => {
     const matchesSearch =
-      group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      group.subject.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesSubject = !selectedSubject || group.subject === selectedSubject
-    const matchesYear = !selectedYear || group.yearLevel === selectedYear
-    const matchesFormat = !selectedFormat || group.format === selectedFormat
-    const matchesLanguage = !selectedLanguage || group.languages.includes(selectedLanguage)
-    const matchesPersonality =
-      personalityFilters.length === 0 || personalityFilters.some((filter) => group.personalityTags.includes(filter))
-
-    return matchesSearch && matchesSubject && matchesYear && matchesFormat && matchesLanguage && matchesPersonality
+      (group.group_name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (group.subject_code?.toLowerCase() || "").includes(searchTerm.toLowerCase())
+    const matchesSubject = !selectedSubject || group.subject_code === selectedSubject
+    const matchesYear = !selectedYear || group.year_level === selectedYear
+    const matchesFormat = !selectedFormat || group.meeting_format === selectedFormat
+    const matchesLanguage = !selectedLanguage || group.primary_language === selectedLanguage
+    // Remove personality filter for now, or add if you store it
+    return matchesSearch && matchesSubject && matchesYear && matchesFormat && matchesLanguage
   })
 
   const getFormatIcon = (format: string) => {
@@ -168,6 +98,22 @@ export default function DiscoverPage() {
   const togglePersonalityFilter = (personality: string) => {
     setPersonalityFilters((prev) =>
       prev.includes(personality) ? prev.filter((p) => p !== personality) : [...prev, personality],
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-soft-gray flex items-center justify-center">
+        <h2 className="text-2xl font-serif font-bold text-deep-blue">Loading study groups...</h2>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-soft-gray flex items-center justify-center">
+        <h2 className="text-2xl font-serif font-bold text-deep-blue">{error}</h2>
+      </div>
     )
   }
 
@@ -339,7 +285,7 @@ export default function DiscoverPage() {
           <div className="lg:col-span-3">
             <div className="flex justify-between items-center mb-6">
               <p className="text-gray-600">
-                Showing {filteredGroups.length} of {studyGroups.length} study groups
+                Showing {filteredGroups.length} of {groups.length} study groups
               </p>
               <Select defaultValue="newest">
                 <SelectTrigger className="w-48">
@@ -364,9 +310,9 @@ export default function DiscoverPage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <Badge variant="outline" className="mb-2 text-deep-blue border-deep-blue">
-                          {group.subject}
+                          {group.subject_code}
                         </Badge>
-                        <CardTitle className="text-lg font-serif text-deep-blue">{group.name}</CardTitle>
+                        <CardTitle className="text-lg font-serif text-deep-blue">{group.group_name}</CardTitle>
                         <div className="flex items-center mt-2 space-x-4">
                           <div className="flex items-center">
                             <Star className="h-4 w-4 text-gold fill-current mr-1" />
@@ -374,13 +320,13 @@ export default function DiscoverPage() {
                           </div>
                           <div className="flex items-center text-sm text-gray-600">
                             <Clock className="h-4 w-4 mr-1" />
-                            {group.studyHours}h studied
+                            {group.study_hours}h studied
                           </div>
                         </div>
                       </div>
-                      <Badge className={`${getFormatColor(group.format)} flex items-center gap-1 border`}>
-                        {getFormatIcon(group.format)}
-                        {group.format}
+                      <Badge className={`${getFormatColor(group.meeting_format)} flex items-center gap-1 border`}>
+                        {getFormatIcon(group.meeting_format)}
+                        {group.meeting_format}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -390,7 +336,7 @@ export default function DiscoverPage() {
                     <div className="space-y-3 mb-4">
                       <div className="flex items-center text-sm text-gray-600">
                         <Users className="mr-2 h-4 w-4" />
-                        {group.members}/{group.maxMembers} members
+                        {group.members}/{group.max_members} members
                       </div>
                       <div className="flex items-center text-sm text-gray-600">
                         <Clock className="mr-2 h-4 w-4" />
@@ -402,25 +348,25 @@ export default function DiscoverPage() {
                       </div>
                       <div className="flex items-center text-sm text-gray-600">
                         <Globe className="mr-2 h-4 w-4" />
-                        {group.languages.join(", ")}
+                        {group.primary_language}
                       </div>
                     </div>
 
                     <div className="space-y-2 mb-4">
                       <div className="flex flex-wrap gap-1">
-                        {group.tags.slice(0, 2).map((tag, index) => (
+                        {(group.tags ? group.tags.split(',').map((t: string) => t.trim()) : []).slice(0, 2).map((tag: string, index: number) => (
                           <Badge key={index} variant="secondary" className="text-xs">
                             {tag}
                           </Badge>
                         ))}
-                        {group.tags.length > 2 && (
+                        {group.tags && group.tags.split(',').map((t: string) => t.trim()).length > 2 && (
                           <Badge variant="secondary" className="text-xs">
-                            +{group.tags.length - 2}
+                            +{group.tags.split(',').map((t: string) => t.trim()).length - 2}
                           </Badge>
                         )}
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        {group.personalityTags.slice(0, 3).map((tag, index) => (
+                        {(Array.isArray(group.personality_tags) ? group.personality_tags : []).slice(0, 3).map((tag: string, index: number) => (
                           <Badge key={index} className="text-xs bg-gold/10 text-amber-700 border-gold/20">
                             {tag}
                           </Badge>
@@ -429,7 +375,7 @@ export default function DiscoverPage() {
                     </div>
 
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600 font-medium">{group.yearLevel}</span>
+                      <span className="text-sm text-gray-600 font-medium">{group.year_level}</span>
                       <Link href={`/group/${group.id}`}>
                         <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">Join Group</Button>
                       </Link>

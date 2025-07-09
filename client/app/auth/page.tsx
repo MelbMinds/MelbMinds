@@ -3,6 +3,8 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useUser } from "@/components/UserContext"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -26,6 +28,9 @@ export default function AuthPage() {
   const [bio, setBio] = useState("")
   const [studyFormat, setStudyFormat] = useState("")
   const [languages, setLanguages] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+  const { setUser } = useUser()
 
   const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Masters", "PhD"]
   const majors = [
@@ -61,21 +66,70 @@ export default function AuthPage() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    // Simulate API call
-    setTimeout(() => {
+    setError(null)
+    try {
+      const res = await fetch("http://localhost:8000/api/login/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data?.detail || "Login failed")
+        setIsLoading(false)
+        return
+      }
+      const data = await res.json()
+      setUser({ name: data.name, email: data.email })
       setIsLoading(false)
-      // Redirect to dashboard
-    }, 2000)
+      router.push("/")
+    } catch (err) {
+      setError("Network error. Please try again.")
+      setIsLoading(false)
+    }
   }
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    // Simulate API call
-    setTimeout(() => {
+    setError(null)
+    if (password !== confirmPassword) {
+      setError("Passwords do not match")
       setIsLoading(false)
-      // Show verification message
-    }, 2000)
+      return
+    }
+    try {
+      const res = await fetch("http://localhost:8000/api/register/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: fullName,
+          email,
+          password,
+          major,
+          year_level: year,
+          preferred_study_format: studyFormat,
+          languages_spoken: languages.join(", "),
+          bio,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data?.email?.[0] || data?.detail || "Registration failed")
+        setIsLoading(false)
+        return
+      }
+      const data = await res.json()
+      setUser({ name: data.name, email: data.email })
+      setIsLoading(false)
+      router.push("/")
+    } catch (err) {
+      setError("Network error. Please try again.")
+      setIsLoading(false)
+    }
   }
 
   const toggleLanguage = (language: string) => {

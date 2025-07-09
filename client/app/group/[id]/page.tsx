@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -27,121 +27,39 @@ import {
   Plus,
 } from "lucide-react"
 import Link from "next/link"
+import { useUser } from "@/components/UserContext"
+import { use } from "react"
 
-export default function StudyGroupPage({ params }: { params: { id: string } }) {
+export default function StudyGroupPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
+  const [group, setGroup] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showAlert, setShowAlert] = useState(false)
+  const { user } = useUser()
+
+  useEffect(() => {
+    const fetchGroup = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch(`http://localhost:8000/api/groups/${id}/`)
+        if (!res.ok) throw new Error("Failed to fetch group")
+        const data = await res.json()
+        setGroup(data)
+      } catch (err) {
+        setError("Could not load group.")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchGroup()
+  }, [id])
+
   const [message, setMessage] = useState("")
   const [hasRequested, setHasRequested] = useState(false)
   const [newFlashcard, setNewFlashcard] = useState({ front: "", back: "" })
   const [chatMessage, setChatMessage] = useState("")
-
-  // Mock data - in real app, fetch based on params.id
-  const group = {
-    id: 1,
-    subject: "COMP10001",
-    name: "Python Programming Fundamentals",
-    description:
-      "A collaborative study group focused on mastering Python programming fundamentals. We cover weekly lectures, work through assignments together, and prepare for exams as a team. Perfect for beginners who want to build a strong foundation in programming.",
-    members: 12,
-    maxMembers: 15,
-    format: "Hybrid",
-    languages: ["English"],
-    yearLevel: "1st Year",
-    tags: ["Beginner-friendly", "Assignment help", "Exam prep"],
-    personalityTags: ["Quiet", "Patient", "Collaborative"],
-    schedule: "Tuesdays 6PM, Fridays 2PM",
-    location: "Doug McDonell Building + Online",
-    rating: 4.8,
-    studyHours: 24,
-    admin: {
-      name: "Sarah Chen",
-      avatar: "/placeholder.svg?height=40&width=40",
-      year: "3rd Year",
-      major: "Computer Science",
-      bio: "I'm a night owl who loves explaining concepts and helping others succeed!",
-    },
-    members_list: [
-      { name: "Sarah Chen", avatar: "/placeholder.svg?height=32&width=32", role: "Admin", online: true },
-      { name: "James Wilson", avatar: "/placeholder.svg?height=32&width=32", role: "Member", online: true },
-      { name: "Priya Patel", avatar: "/placeholder.svg?height=32&width=32", role: "Member", online: false },
-      { name: "Alex Kim", avatar: "/placeholder.svg?height=32&width=32", role: "Member", online: true },
-      { name: "Emma Thompson", avatar: "/placeholder.svg?height=32&width=32", role: "Member", online: false },
-      { name: "David Liu", avatar: "/placeholder.svg?height=32&width=32", role: "Member", online: true },
-    ],
-    chat_messages: [
-      {
-        id: 1,
-        author: "Sarah Chen",
-        time: "2:30 PM",
-        message:
-          "Hey everyone! Don't forget we have our session tonight at 6 PM. I've uploaded the practice problems to our files section.",
-        avatar: "/placeholder.svg?height=32&width=32",
-      },
-      {
-        id: 2,
-        author: "James Wilson",
-        time: "2:45 PM",
-        message:
-          "Thanks Sarah! Quick question about Assignment 2 - are we allowed to use external libraries for the data visualization part?",
-        avatar: "/placeholder.svg?height=32&width=32",
-      },
-      {
-        id: 3,
-        author: "Alex Kim",
-        time: "3:10 PM",
-        message: "I think we can use matplotlib and pandas, but let me double-check the assignment specs.",
-        avatar: "/placeholder.svg?height=32&width=32",
-      },
-    ],
-    files: [
-      { name: "Week 3 Lecture Notes.pdf", size: "2.4 MB", uploadedBy: "Sarah Chen", date: "Jan 15" },
-      { name: "Assignment 2 Solutions.py", size: "15 KB", uploadedBy: "James Wilson", date: "Jan 14" },
-      { name: "Python Cheat Sheet.pdf", size: "890 KB", uploadedBy: "Priya Patel", date: "Jan 12" },
-      { name: "Practice Problems Set 1.docx", size: "1.2 MB", uploadedBy: "Sarah Chen", date: "Jan 10" },
-    ],
-    flashcards: [
-      {
-        id: 1,
-        front: "What is a Python list?",
-        back: "A mutable, ordered collection of items that can store different data types",
-        createdBy: "Sarah Chen",
-      },
-      {
-        id: 2,
-        front: "How do you define a function in Python?",
-        back: "Use the 'def' keyword followed by function name and parameters: def function_name(parameters):",
-        createdBy: "James Wilson",
-      },
-      {
-        id: 3,
-        front: "What's the difference between '==' and 'is' in Python?",
-        back: "'==' compares values, 'is' compares object identity (memory location)",
-        createdBy: "Alex Kim",
-      },
-    ],
-    upcoming_sessions: [
-      {
-        date: "Tuesday, Jan 16",
-        time: "6:00 PM - 8:00 PM",
-        topic: "Functions and Modules",
-        location: "Doug McDonell Building, Room 234",
-        type: "In-person + Virtual",
-      },
-      {
-        date: "Friday, Jan 19",
-        time: "2:00 PM - 4:00 PM",
-        topic: "Assignment 2 Workshop",
-        location: "Online (Zoom link will be shared)",
-        type: "Virtual",
-      },
-      {
-        date: "Tuesday, Jan 23",
-        time: "6:00 PM - 8:00 PM",
-        topic: "Data Structures Review",
-        location: "Doug McDonell Building, Room 234",
-        type: "In-person + Virtual",
-      },
-    ],
-  }
 
   const getFormatIcon = (format: string) => {
     switch (format) {
@@ -170,6 +88,10 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
   }
 
   const handleJoinRequest = () => {
+    if (user && group && user.email === group.creator_email) {
+      setShowAlert(true)
+      return
+    }
     setHasRequested(true)
   }
 
@@ -186,6 +108,10 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
       setNewFlashcard({ front: "", back: "" })
     }
   }
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
+  if (!group) return null
 
   return (
     <div className="min-h-screen bg-soft-gray">
@@ -211,6 +137,12 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       </nav>
+
+      {showAlert && (
+        <div className="max-w-xl mx-auto mt-6 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded shadow">
+          <strong>Notice:</strong> You can't join the group you created, you are already in it.
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid lg:grid-cols-4 gap-8">
@@ -275,7 +207,7 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
                   <div>
                     <span className="text-sm font-medium text-gray-700 mr-2">Study Focus:</span>
                     <div className="flex flex-wrap gap-2 mt-1">
-                      {group.tags.map((tag, index) => (
+                      {(group.tags ? group.tags.split(',').map((t: string) => t.trim()) : []).map((tag: string, index: number) => (
                         <Badge key={index} variant="secondary">
                           {tag}
                         </Badge>
@@ -285,7 +217,7 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
                   <div>
                     <span className="text-sm font-medium text-gray-700 mr-2">Group Personality:</span>
                     <div className="flex flex-wrap gap-2 mt-1">
-                      {group.personalityTags.map((tag, index) => (
+                      {(Array.isArray(group.personalityTags) ? group.personalityTags : []).map((tag: string, index: number) => (
                         <Badge key={index} className="bg-gold/10 text-amber-700 border-gold/20">
                           {tag}
                         </Badge>
@@ -297,20 +229,32 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
                 <div className="flex items-center justify-between p-4 bg-soft-gray rounded-lg">
                   <div className="flex items-center space-x-3">
                     <Avatar className="h-12 w-12">
-                      <AvatarImage src={group.admin.avatar || "/placeholder.svg"} />
-                      <AvatarFallback className="bg-deep-blue text-white font-serif">
-                        {group.admin.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
+                      {group.admin ? (
+                        <>
+                          <AvatarImage src={group.admin.avatar || "/placeholder.svg"} />
+                          <AvatarFallback className="bg-deep-blue text-white font-serif">
+                            {group.admin.name
+                              .split(" ")
+                              .map((n: string) => n[0])
+                              .join("")}
+                          </AvatarFallback>
+                        </>
+                      ) : (
+                        <AvatarFallback className="bg-deep-blue text-white font-serif">?</AvatarFallback>
+                      )}
                     </Avatar>
                     <div>
-                      <p className="font-medium text-deep-blue">{group.admin.name}</p>
-                      <p className="text-sm text-gray-600">
-                        Group Admin • {group.admin.major} • {group.admin.year}
-                      </p>
-                      <p className="text-xs text-gray-500 italic">{group.admin.bio}</p>
+                      {group.admin ? (
+                        <>
+                          <p className="font-medium text-deep-blue">{group.admin.name}</p>
+                          <p className="text-sm text-gray-600">
+                            Group Admin • {group.admin.major} • {group.admin.year}
+                          </p>
+                          <p className="text-xs text-gray-500 italic">{group.admin.bio}</p>
+                        </>
+                      ) : (
+                        <p className="text-gray-500 italic">No admin info available</p>
+                      )}
                     </div>
                   </div>
 
@@ -354,14 +298,14 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
                   {/* Chat Tab */}
                   <TabsContent value="chat" className="space-y-4">
                     <div className="h-96 overflow-y-auto space-y-4 p-4 bg-soft-gray rounded-lg">
-                      {group.chat_messages.map((msg) => (
+                      {(Array.isArray(group.chat_messages) ? group.chat_messages : []).map((msg: any) => (
                         <div key={msg.id} className="flex space-x-3">
                           <Avatar className="h-8 w-8">
                             <AvatarImage src={msg.avatar || "/placeholder.svg"} />
                             <AvatarFallback className="bg-deep-blue text-white text-xs">
                               {msg.author
                                 .split(" ")
-                                .map((n) => n[0])
+                                .map((n: string) => n[0])
                                 .join("")}
                             </AvatarFallback>
                           </Avatar>
@@ -401,7 +345,7 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
                     </div>
 
                     <div className="space-y-3">
-                      {group.files.map((file, index) => (
+                      {(Array.isArray(group.files) ? group.files : []).map((file: any, index: number) => (
                         <div key={index} className="flex items-center justify-between p-4 bg-white rounded-lg border">
                           <div className="flex items-center space-x-3">
                             <FileText className="h-8 w-8 text-deep-blue" />
@@ -460,7 +404,7 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
 
                     {/* Existing Flashcards */}
                     <div className="grid md:grid-cols-2 gap-4">
-                      {group.flashcards.map((card) => (
+                      {(Array.isArray(group.flashcards) ? group.flashcards : []).map((card: any) => (
                         <div key={card.id} className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow">
                           <div className="mb-3">
                             <div className="text-sm font-medium text-deep-blue mb-2">Question:</div>
@@ -487,7 +431,7 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
                     </div>
 
                     <div className="space-y-4">
-                      {group.upcoming_sessions.map((session, index) => (
+                      {(Array.isArray(group.upcoming_sessions) ? group.upcoming_sessions : []).map((session: any, index: number) => (
                         <div key={index} className="p-4 bg-white rounded-lg border">
                           <div className="flex justify-between items-start mb-3">
                             <div>
@@ -524,7 +468,7 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
                     <h3 className="text-lg font-serif font-medium text-deep-blue">Group Members ({group.members})</h3>
 
                     <div className="grid md:grid-cols-2 gap-4">
-                      {group.members_list.map((member, index) => (
+                      {(Array.isArray(group.members_list) ? group.members_list : []).map((member: any, index: number) => (
                         <div key={index} className="flex items-center space-x-3 p-3 bg-white rounded-lg border">
                           <div className="relative">
                             <Avatar className="h-10 w-10">
@@ -532,7 +476,7 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
                               <AvatarFallback className="bg-deep-blue text-white">
                                 {member.name
                                   .split(" ")
-                                  .map((n) => n[0])
+                                  .map((n: string) => n[0])
                                   .join("")}
                               </AvatarFallback>
                             </Avatar>
@@ -585,7 +529,7 @@ export default function StudyGroupPage({ params }: { params: { id: string } }) {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Languages</span>
-                    <span className="text-sm font-medium">{group.languages.join(", ")}</span>
+                    <span className="text-sm font-medium">{Array.isArray(group.languages) ? group.languages.join(", ") : (group.languages || group.primary_language || "N/A")}</span>
                   </div>
                 </div>
               </CardContent>

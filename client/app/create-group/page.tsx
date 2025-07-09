@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { BookOpen, Users, MapPin, Video, Clock, Plus, X } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 export default function CreateGroupPage() {
   const [groupName, setGroupName] = useState("")
@@ -27,6 +28,8 @@ export default function CreateGroupPage() {
   const [tags, setTags] = useState<string[]>([])
   const [newTag, setNewTag] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const router = useRouter()
+  const [error, setError] = useState<string | null>(null)
 
   const subjects = [
     "COMP10001",
@@ -90,12 +93,36 @@ export default function CreateGroupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-
-    // Simulate API call
-    setTimeout(() => {
+    setError(null)
+    try {
+      const res = await fetch("http://localhost:8000/api/groups/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          group_name: groupName,
+          subject_code: subject,
+          description,
+          year_level: yearLevel,
+          meeting_format: format,
+          primary_language: language,
+          meeting_schedule: schedule,
+          location,
+          tags: tags.join(", "),
+          group_guidelines: "Respectful, Attendance, Academic Integrity, Moderation", // or collect from checkboxes
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data?.detail || "Failed to create group")
+        setIsSubmitting(false)
+        return
+      }
       setIsSubmitting(false)
-      // Redirect to group page or dashboard
-    }, 2000)
+      router.push("/discover")
+    } catch (err) {
+      setError("Network error. Please try again.")
+      setIsSubmitting(false)
+    }
   }
 
   return (

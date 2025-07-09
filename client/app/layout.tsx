@@ -2,6 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter, DM_Serif_Display } from "next/font/google"
 import "./globals.css"
+import { UserProvider } from "@/components/UserContext"
+import Header from "@/components/Header"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 const dmSerifDisplay = DM_Serif_Display({
@@ -25,7 +27,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${dmSerifDisplay.variable} font-sans`}>{children}</body>
+      <body className={`${inter.variable} ${dmSerifDisplay.variable} font-sans`}>
+        <UserProvider>
+          <Header />
+          {children}
+        </UserProvider>
+      </body>
     </html>
   )
 }
