@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from .views import RegisterView, LoginView, GroupListCreateView, GroupRetrieveView, UserProfileView, JoinGroupView, GroupChatView, GroupMembersView
+from .views import RegisterView, LoginView, GroupListCreateView, GroupRetrieveView, UserProfileView, JoinGroupView, GroupChatView, GroupMembersView, GroupSessionListCreateView, GroupSessionRetrieveUpdateDeleteView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
@@ -31,4 +31,6 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/groups/<int:group_id>/chat/', GroupChatView.as_view(), name='group-chat'),
     path('api/groups/<int:group_id>/members/', GroupMembersView.as_view(), name='group-members'),
+    path('api/groups/<int:group_id>/sessions/', GroupSessionListCreateView.as_view(), name='group-sessions'),
+    path('api/sessions/<int:session_id>/', GroupSessionRetrieveUpdateDeleteView.as_view(), name='session-detail'),
 ]

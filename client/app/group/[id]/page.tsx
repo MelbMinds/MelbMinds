@@ -25,11 +25,15 @@ import {
   CalendarPlus,
   Send,
   Plus,
+  Calendar as CalendarIcon,
+  Edit,
+  Trash2,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
 import { use } from "react"
 import { toast } from "@/components/ui/use-toast"
+import { format } from "date-fns"
 
 export default function StudyGroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -41,6 +45,12 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [joined, setJoined] = useState(false)
   const [members, setMembers] = useState<any[]>([])
   const [messages, setMessages] = useState<any[]>([])
+
+  // Add state for sessions
+  const [sessions, setSessions] = useState<any[]>([])
+  const [sessionForm, setSessionForm] = useState({ date: '', time: '', location: '', description: '' })
+  const [editingSession, setEditingSession] = useState<any>(null)
+  const [sessionLoading, setSessionLoading] = useState(false)
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -79,6 +89,17 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       })
         .then(res => res.json())
         .then(setMessages)
+    }
+  }, [group?.id, joined, tokens])
+
+  // Fetch sessions
+  useEffect(() => {
+    if (group?.id && (joined || isGroupCreator())) {
+      fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      })
+        .then(res => res.json())
+        .then(setSessions)
     }
   }, [group?.id, joined, tokens])
 
@@ -179,35 +200,97 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // Session CRUD handlers
+  const handleSessionFormChange = (e: any) => {
+    setSessionForm({ ...sessionForm, [e.target.name]: e.target.value })
+  }
+  const handleCreateSession = async (e: any) => {
+    e.preventDefault()
+    setSessionLoading(true)
+    let { date, time, location, description } = sessionForm
+    // Ensure time is in HH:MM:SS format
+    if (time && time.length === 5) time = time + ':00'
+    const payload = { date, time, location, description }
+    console.log('Session creation payload:', payload)
+    const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+      },
+      body: JSON.stringify(payload)
+    })
+    setSessionLoading(false)
+    if (res.ok) {
+      setSessionForm({ date: '', time: '', location: '', description: '' })
+      fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      })
+        .then(res => res.json())
+        .then(setSessions)
+      toast({ title: 'Session created!' })
+    } else {
+      const err = await res.json()
+      console.error('Session creation error:', err)
+      toast({ title: 'Error creating session', variant: 'destructive' })
+    }
+  }
+  const handleEditSession = (session: any) => {
+    setEditingSession(session)
+    setSessionForm({
+      date: session.date,
+      time: session.time,
+      location: session.location,
+      description: session.description || ''
+    })
+  }
+  const handleUpdateSession = async (e: any) => {
+    e.preventDefault()
+    setSessionLoading(true)
+    const res = await fetch(`http://localhost:8000/api/sessions/${editingSession.id}/`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+      },
+      body: JSON.stringify(sessionForm)
+    })
+    setSessionLoading(false)
+    if (res.ok) {
+      setEditingSession(null)
+      setSessionForm({ date: '', time: '', location: '', description: '' })
+      fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      })
+        .then(res => res.json())
+        .then(setSessions)
+      toast({ title: 'Session updated!' })
+    } else {
+      toast({ title: 'Error updating session', variant: 'destructive' })
+    }
+  }
+  const handleDeleteSession = async (sessionId: number) => {
+    if (!window.confirm('Delete this session?')) return
+    setSessionLoading(true)
+    const res = await fetch(`http://localhost:8000/api/sessions/${sessionId}/`, {
+      method: 'DELETE',
+      headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+    })
+    setSessionLoading(false)
+    if (res.ok) {
+      setSessions(sessions.filter(s => s.id !== sessionId))
+      toast({ title: 'Session deleted!' })
+    } else {
+      toast({ title: 'Error deleting session', variant: 'destructive' })
+    }
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
   if (!group) return null
 
   return (
     <div className="min-h-screen bg-soft-gray">
-      {/* Navigation */}
-      <nav className="border-b border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center">
-              <h1 className="text-2xl font-serif font-bold text-deep-blue">MelbMinds</h1>
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Link href="/discover">
-                <Button variant="ghost" className="text-deep-blue hover:bg-soft-gray">
-                  Back to Discover
-                </Button>
-              </Link>
-              <Link href="/dashboard">
-                <Button variant="ghost" className="text-deep-blue hover:bg-soft-gray">
-                  Dashboard
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
       {showAlert && (
         <div className="max-w-xl mx-auto mt-6 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded shadow">
           <strong>Notice:</strong> You can't join the group you created, you are already in it.
@@ -342,31 +425,27 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             <Card className="shadow-lg border-0">
               <Tabs defaultValue={joined ? "chat" : "members"} className="w-full">
                 <CardHeader>
-                  <TabsList className={`grid w-full grid-cols-${joined ? 5 : 2}`}>
-                    {joined && (
-                      <TabsTrigger value="chat" className="flex items-center gap-2">
-                        <MessageCircle className="h-4 w-4" />
-                        Chat
-                      </TabsTrigger>
-                    )}
-                    {joined && (
-                      <TabsTrigger value="files" className="flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        Files
-                      </TabsTrigger>
-                    )}
-                    {joined && (
-                      <TabsTrigger value="flashcards" className="flex items-center gap-2">
-                        <Brain className="h-4 w-4" />
-                        Flashcards
-                      </TabsTrigger>
-                    )}
-                    {joined && (
-                      <TabsTrigger value="meetups" className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        Meetups
-                      </TabsTrigger>
-                    )}
+                  <TabsList className={`grid w-full grid-cols-6`}>
+                    <TabsTrigger value="chat" className="flex items-center gap-2">
+                      <MessageCircle className="h-4 w-4" />
+                      Chat
+                    </TabsTrigger>
+                    <TabsTrigger value="files" className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Files
+                    </TabsTrigger>
+                    <TabsTrigger value="flashcards" className="flex items-center gap-2">
+                      <Brain className="h-4 w-4" />
+                      Flashcards
+                    </TabsTrigger>
+                    <TabsTrigger value="meetups" className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Meetups
+                    </TabsTrigger>
+                    <TabsTrigger value="sessions" className="flex items-center gap-2">
+                      <CalendarIcon className="h-4 w-4" />
+                      Sessions
+                    </TabsTrigger>
                     <TabsTrigger value="members" className="flex items-center gap-2">
                       <Users className="h-4 w-4" />
                       Members
@@ -545,6 +624,45 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       </div>
                     </TabsContent>
                   )}
+
+                  {/* Sessions Tab */}
+                  <TabsContent value="sessions" className="space-y-4">
+                    <h3 className="text-lg font-serif font-medium text-deep-blue mb-2">Upcoming Sessions</h3>
+                    {isGroupCreator() && (
+                      <form onSubmit={editingSession ? handleUpdateSession : handleCreateSession} className="mb-6 space-y-2 bg-white p-4 rounded-lg shadow">
+                        <div className="flex flex-wrap gap-2">
+                          <input type="date" name="date" value={sessionForm.date} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
+                          <input type="time" name="time" value={sessionForm.time} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
+                          <input type="text" name="location" value={sessionForm.location} onChange={handleSessionFormChange} required placeholder="Location" className="border rounded px-2 py-1" />
+                          <input type="text" name="description" value={sessionForm.description} onChange={handleSessionFormChange} placeholder="Description (optional)" className="border rounded px-2 py-1 flex-1" />
+                          <Button type="submit" className="bg-deep-blue text-white" disabled={sessionLoading}>
+                            {editingSession ? 'Update' : 'Create'}
+                          </Button>
+                          {editingSession && (
+                            <Button type="button" variant="outline" onClick={() => { setEditingSession(null); setSessionForm({ date: '', time: '', location: '', description: '' }) }}>Cancel</Button>
+                          )}
+                        </div>
+                      </form>
+                    )}
+                    <div className="space-y-2">
+                      {sessions.length === 0 && <div className="text-gray-500">No sessions scheduled.</div>}
+                      {sessions.map(session => (
+                        <div key={session.id} className="flex items-center justify-between bg-white p-3 rounded shadow">
+                          <div>
+                            <div className="font-medium text-deep-blue">{format(new Date(session.date + 'T' + session.time), 'eeee, MMM d, yyyy h:mm a')}</div>
+                            <div className="text-sm text-gray-600">{session.location}</div>
+                            {session.description && <div className="text-xs text-gray-500">{session.description}</div>}
+                          </div>
+                          {isGroupCreator() && (
+                            <div className="flex gap-2">
+                              <Button size="icon" variant="ghost" onClick={() => handleEditSession(session)}><Edit className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" onClick={() => handleDeleteSession(session.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
 
                   {/* Members Tab */}
                   <TabsContent value="members" className="space-y-4">

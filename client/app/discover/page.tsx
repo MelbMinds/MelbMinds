@@ -369,9 +369,13 @@ export default function DiscoverPage() {
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600 font-medium">{group.year_level}</span>
                       {isGroupCreator(group) ? (
-                        <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                          You created this group
-                        </Button>
+                        <Link href={`/group/${group.id}`}>
+                          <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">View Your Group</Button>
+                        </Link>
+                      ) : group.joined ? (
+                        <Link href={`/group/${group.id}`}>
+                          <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">View Group</Button>
+                        </Link>
                       ) : (
                         <Link href={`/group/${group.id}`}>
                           <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">Join Group</Button>

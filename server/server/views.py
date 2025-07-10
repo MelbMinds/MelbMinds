@@ -2,9 +2,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, generics
 from django.contrib.auth import authenticate
-from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer
-from .models import Group, Message
+from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer
+from .models import Group, Message, GroupSession
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes
 
 class RegisterView(APIView):
@@ -101,3 +102,61 @@ class GroupMembersView(APIView):
         members = group.members.all()
         data = [{'id': m.id, 'name': m.name, 'email': m.email} for m in members]
         return Response(data) 
+
+class IsGroupCreatorOrReadOnly(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return obj.creator == request.user
+
+class GroupSessionListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id):
+        group = Group.objects.get(id=group_id)
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+            return Response({'detail': 'Not a group member'}, status=403)
+        sessions = GroupSession.objects.filter(group=group).order_by('date', 'time')
+        serializer = GroupSessionSerializer(sessions, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, group_id):
+        group = Group.objects.get(id=group_id)
+        if group.creator != request.user:
+            return Response({'detail': 'Only the group creator can create sessions'}, status=403)
+        serializer = GroupSessionSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(group=group, creator=request.user)
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+
+class GroupSessionRetrieveUpdateDeleteView(APIView):
+    permission_classes = [IsAuthenticated, IsGroupCreatorOrReadOnly]
+
+    def get_object(self, session_id):
+        return GroupSession.objects.get(id=session_id)
+
+    def get(self, request, session_id):
+        session = self.get_object(session_id)
+        group = session.group
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+            return Response({'detail': 'Not a group member'}, status=403)
+        serializer = GroupSessionSerializer(session)
+        return Response(serializer.data)
+
+    def put(self, request, session_id):
+        session = self.get_object(session_id)
+        if session.creator != request.user:
+            return Response({'detail': 'Only the group creator can edit sessions'}, status=403)
+        serializer = GroupSessionSerializer(session, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
+
+    def delete(self, request, session_id):
+        session = self.get_object(session_id)
+        if session.creator != request.user:
+            return Response({'detail': 'Only the group creator can delete sessions'}, status=403)
+        session.delete()
+        return Response(status=204) 

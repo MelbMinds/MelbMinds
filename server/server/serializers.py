@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Group, Message
+from .models import User, Group, Message, GroupSession
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -58,3 +58,10 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = ['id', 'user', 'user_name', 'text', 'timestamp'] 
+
+class GroupSessionSerializer(serializers.ModelSerializer):
+    creator_name = serializers.CharField(source='creator.name', read_only=True)
+    class Meta:
+        model = GroupSession
+        fields = ['id', 'group', 'creator', 'creator_name', 'date', 'time', 'location', 'description', 'created_at', 'updated_at']
+        read_only_fields = ['group', 'creator', 'creator_name', 'created_at', 'updated_at'] 
