@@ -36,7 +36,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAlert, setShowAlert] = useState(false)
-  const { user } = useUser()
+  const { user, tokens } = useUser()
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -87,12 +87,36 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const handleJoinRequest = () => {
+  const handleJoinRequest = async () => {
     if (user && group && user.email === group.creator_email) {
       setShowAlert(true)
       return
     }
-    setHasRequested(true)
+    
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${id}/join/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+        },
+      })
+      
+      if (res.ok) {
+        setHasRequested(true)
+        // Optionally refresh the group data to show updated member count
+        window.location.reload()
+      } else {
+        const data = await res.json()
+        setError(data?.detail || 'Failed to join group')
+      }
+    } catch (err) {
+      setError('Network error. Please try again.')
+    }
+  }
+
+  const isGroupCreator = () => {
+    return user && group && user.email === group.creator_email
   }
 
   const handleSendMessage = () => {
@@ -160,17 +184,22 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
                       <div className="flex items-center">
                         <Users className="mr-1 h-4 w-4" />
-                        {group.members}/{group.maxMembers} members
+                        {group.member_count || 0} members
                       </div>
                       <div className="flex items-center">
                         <Star className="mr-1 h-4 w-4 text-gold fill-current" />
-                        {group.rating}
+                        {group.rating || "New"}
                       </div>
-                      <Badge className={`${getFormatColor(group.format)} flex items-center gap-1 border`}>
-                        {getFormatIcon(group.format)}
-                        {group.format}
+                      <Badge className={`${getFormatColor(group.meeting_format)} flex items-center gap-1 border`}>
+                        {getFormatIcon(group.meeting_format)}
+                        {group.meeting_format}
                       </Badge>
-                      <span>{group.yearLevel}</span>
+                      <span>{group.year_level}</span>
+                      <div className="flex flex-col gap-2 mb-4">
+                        <span className="text-lg font-bold text-deep-blue">Group Admin: {group.creator_name}</span>
+                        <span className="text-base text-gray-700">Course Code: {group.subject_code}</span>
+                        <span className="text-base text-gray-700">Course Name: {group.course_name}</span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -258,10 +287,20 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     </div>
                   </div>
 
-                  <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Join Group
-                  </Button>
+                  {isGroupCreator() ? (
+                    <Button className="bg-green-600 hover:bg-green-700 text-white font-serif" disabled>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      You created this group
+                    </Button>
+                  ) : (
+                    <Button 
+                      className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif"
+                      onClick={handleJoinRequest}
+                    >
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Join Group
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

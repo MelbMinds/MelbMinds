@@ -14,8 +14,10 @@ import { Badge } from "@/components/ui/badge"
 import { BookOpen, Users, MapPin, Video, Clock, Plus, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useUser } from "@/components/UserContext"
 
 export default function CreateGroupPage() {
+  const { tokens } = useUser()
   const [groupName, setGroupName] = useState("")
   const [subject, setSubject] = useState("")
   const [description, setDescription] = useState("")
@@ -30,6 +32,7 @@ export default function CreateGroupPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [courseName, setCourseName] = useState("")
 
   const subjects = [
     "COMP10001",
@@ -97,10 +100,14 @@ export default function CreateGroupPage() {
     try {
       const res = await fetch("http://localhost:8000/api/groups/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(tokens?.access && { "Authorization": `Bearer ${tokens.access}` })
+        },
         body: JSON.stringify({
           group_name: groupName,
           subject_code: subject,
+          course_name: courseName,
           description,
           year_level: yearLevel,
           meeting_format: format,
@@ -193,6 +200,17 @@ export default function CreateGroupPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="courseName">Course Name *</Label>
+                    <Input
+                      id="courseName"
+                      placeholder="e.g., Introduction to Programming"
+                      value={courseName}
+                      onChange={(e) => setCourseName(e.target.value)}
+                      required
+                    />
                   </div>
 
                   <div className="space-y-2">

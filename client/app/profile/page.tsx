@@ -46,17 +46,7 @@ export default function ProfilePage() {
         })
         if (!res.ok) throw new Error("Failed to fetch profile data")
         const data = await res.json()
-        setProfileData({
-          name: data.name,
-          email: data.email,
-          year: data.year_level,
-          major: data.major,
-          bio: data.bio,
-          studyFormat: data.preferred_study_format,
-          languages: data.languages_spoken.split(",").map((l: string) => l.trim()),
-          joinDate: "", // You may want to add this to your model/serializer
-          avatar: "/placeholder.svg?height=120&width=120", // Replace with actual avatar if available
-        })
+        setProfileData(data)
       } catch (err: any) {
         setError(err.message)
       } finally {
@@ -491,7 +481,7 @@ export default function ProfilePage() {
                           <div className="flex items-center p-3 bg-soft-gray rounded-md">
                             <Globe className="mr-2 h-4 w-4 text-gray-500" />
                             <div className="flex flex-wrap gap-2">
-                              {profileData.languages.map((language: string) => (
+                              {Array.isArray(profileData.languages) && profileData.languages.map((language: string) => (
                                 <Badge key={language} variant="secondary">
                                   {language}
                                 </Badge>
@@ -512,34 +502,21 @@ export default function ProfilePage() {
                     <CardTitle className="font-serif text-deep-blue">My Study Groups</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      {joinedGroups.map((group) => (
-                        <div key={group.id} className="flex items-center justify-between p-4 bg-soft-gray rounded-lg">
-                          <div>
-                            <div className="flex items-center space-x-3 mb-2">
-                              <Badge variant="outline" className="text-deep-blue border-deep-blue">
-                                {group.subject}
-                              </Badge>
-                              <Badge variant={group.role === "Admin" ? "default" : "secondary"} className="text-xs">
-                                {group.role}
-                              </Badge>
-                              <Badge
-                                variant={group.status === "Active" ? "default" : "secondary"}
-                                className={group.status === "Active" ? "bg-green-600" : ""}
-                              >
-                                {group.status}
-                              </Badge>
-                            </div>
-                            <h3 className="font-medium text-deep-blue">{group.name}</h3>
-                            <p className="text-sm text-gray-600">Joined {group.joinedDate}</p>
-                          </div>
-                          <Link href={`/group/${group.id}`}>
-                            <Button variant="outline" size="sm" className="bg-transparent">
-                              View Group
-                            </Button>
-                          </Link>
-                        </div>
-                      ))}
+                    <div className="mt-8">
+                      <h2 className="text-2xl font-bold mb-4">My Groups</h2>
+                      {Array.isArray(profileData.joined_groups) && profileData.joined_groups.length > 0 ? (
+                        <ul className="space-y-2">
+                          {profileData.joined_groups.map((group: any) => (
+                            <li key={group.id} className="p-4 bg-white rounded shadow border flex flex-col gap-1">
+                              <span className="font-semibold text-deep-blue">{group.group_name}</span>
+                              <span className="text-gray-700">Course: {group.course_name} ({group.subject_code})</span>
+                              <span className="text-gray-500 text-sm">Admin: {group.creator_name}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-gray-600">You haven't joined any groups yet.</p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

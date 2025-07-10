@@ -16,9 +16,26 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 class GroupSerializer(serializers.ModelSerializer):
+    creator_name = serializers.CharField(source='creator.name', read_only=True)
+    creator_email = serializers.CharField(source='creator.email', read_only=True)
+    course_name = serializers.CharField(source='course.name', read_only=True)
+    
     class Meta:
         model = Group
         fields = '__all__'
+
+class GroupDetailSerializer(serializers.ModelSerializer):
+    creator_name = serializers.CharField(source='creator.name', read_only=True)
+    creator_email = serializers.CharField(source='creator.email', read_only=True)
+    member_count = serializers.SerializerMethodField()
+    course_name = serializers.CharField(source='course.name', read_only=True)
+    
+    class Meta:
+        model = Group
+        fields = '__all__'
+    
+    def get_member_count(self, obj):
+        return obj.members.count()
 
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:

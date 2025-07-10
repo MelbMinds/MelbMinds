@@ -9,8 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Users, MapPin, Video, Clock, Filter, Search, Globe, Star } from "lucide-react"
 import Link from "next/link"
+import { useUser } from "@/components/UserContext"
 
 export default function DiscoverPage() {
+  const { user, tokens } = useUser()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedSubject, setSelectedSubject] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
@@ -68,6 +70,10 @@ export default function DiscoverPage() {
     // Remove personality filter for now, or add if you store it
     return matchesSearch && matchesSubject && matchesYear && matchesFormat && matchesLanguage
   })
+
+  const isGroupCreator = (group: any) => {
+    return user && group.creator_email === user.email
+  }
 
   const getFormatIcon = (format: string) => {
     switch (format) {
@@ -336,11 +342,11 @@ export default function DiscoverPage() {
                     <div className="space-y-3 mb-4">
                       <div className="flex items-center text-sm text-gray-600">
                         <Users className="mr-2 h-4 w-4" />
-                        {group.members}/{group.max_members} members
+                        {group.member_count || 0} members
                       </div>
                       <div className="flex items-center text-sm text-gray-600">
                         <Clock className="mr-2 h-4 w-4" />
-                        {group.schedule}
+                        {group.meeting_schedule}
                       </div>
                       <div className="flex items-center text-sm text-gray-600">
                         <MapPin className="mr-2 h-4 w-4" />
@@ -350,6 +356,12 @@ export default function DiscoverPage() {
                         <Globe className="mr-2 h-4 w-4" />
                         {group.primary_language}
                       </div>
+                      {group.creator_name && (
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Users className="mr-2 h-4 w-4" />
+                          Created by: {group.creator_name}
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2 mb-4">
@@ -376,9 +388,15 @@ export default function DiscoverPage() {
 
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600 font-medium">{group.year_level}</span>
-                      <Link href={`/group/${group.id}`}>
-                        <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">Join Group</Button>
-                      </Link>
+                      {isGroupCreator(group) ? (
+                        <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
+                          You created this group
+                        </Button>
+                      ) : (
+                        <Link href={`/group/${group.id}`}>
+                          <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">Join Group</Button>
+                        </Link>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
