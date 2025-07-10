@@ -40,6 +40,11 @@ class GroupRetrieveView(generics.RetrieveAPIView):
     queryset = Group.objects.all()
     serializer_class = GroupDetailSerializer
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
 class JoinGroupView(APIView):
     permission_classes = [IsAuthenticated]
     

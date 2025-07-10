@@ -29,6 +29,7 @@ import {
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
 import { use } from "react"
+import { toast } from "@/components/ui/use-toast"
 
 export default function StudyGroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -37,16 +38,20 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [error, setError] = useState<string | null>(null)
   const [showAlert, setShowAlert] = useState(false)
   const { user, tokens } = useUser()
+  const [joined, setJoined] = useState(false)
 
   useEffect(() => {
     const fetchGroup = async () => {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`http://localhost:8000/api/groups/${id}/`)
+        const res = await fetch(`http://localhost:8000/api/groups/${id}/`, {
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        })
         if (!res.ok) throw new Error("Failed to fetch group")
         const data = await res.json()
         setGroup(data)
+        setJoined(!!data.joined)
       } catch (err) {
         setError("Could not load group.")
       } finally {
@@ -54,7 +59,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       }
     }
     fetchGroup()
-  }, [id])
+  }, [id, tokens])
 
   const [message, setMessage] = useState("")
   const [hasRequested, setHasRequested] = useState(false)
@@ -104,8 +109,13 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       
       if (res.ok) {
         setHasRequested(true)
+        setJoined(true)
+        toast({
+          title: 'Congratulations!',
+          description: 'You have successfully joined the group.',
+        })
         // Optionally refresh the group data to show updated member count
-        window.location.reload()
+        window.setTimeout(() => window.location.reload(), 1200)
       } else {
         const data = await res.json()
         setError(data?.detail || 'Failed to join group')
@@ -273,6 +283,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     <Button className="bg-green-600 hover:bg-green-700 text-white font-serif" disabled>
                       <UserPlus className="mr-2 h-4 w-4" />
                       You created this group
+                    </Button>
+                  ) : joined || hasRequested ? (
+                    <Button className="bg-gray-400 text-white font-serif" disabled>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      You already joined this group
                     </Button>
                   ) : (
                     <Button 

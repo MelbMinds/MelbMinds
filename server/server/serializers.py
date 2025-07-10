@@ -29,6 +29,7 @@ class GroupDetailSerializer(serializers.ModelSerializer):
     creator_email = serializers.CharField(source='creator.email', read_only=True)
     member_count = serializers.SerializerMethodField()
     course_name = serializers.CharField(source='course.name', read_only=True)
+    joined = serializers.SerializerMethodField()
     
     class Meta:
         model = Group
@@ -36,6 +37,12 @@ class GroupDetailSerializer(serializers.ModelSerializer):
     
     def get_member_count(self, obj):
         return obj.members.count()
+    
+    def get_joined(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.members.filter(id=request.user.id).exists()
+        return False
 
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
