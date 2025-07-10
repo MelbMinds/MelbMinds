@@ -8,10 +8,17 @@ export type User = {
   email: string;
 };
 
+interface AuthTokens {
+  access: string;
+  refresh: string;
+}
+
 interface UserContextType {
   user: User | null
-  setUser: (user: User | null) => void
+  setUser: (user: User | null, tokens?: AuthTokens | null) => void
   logout: () => void
+  tokens: AuthTokens | null
+  setTokens: (tokens: AuthTokens | null) => void
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
@@ -23,28 +30,41 @@ export const useUser = () => {
 }
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUserState] = useState<User | null>(null)
+  const [tokens, setTokensState] = useState<AuthTokens | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    // Load user from localStorage if available
+    // Load user and tokens from localStorage if available
     const stored = localStorage.getItem("user")
-    if (stored) setUser(JSON.parse(stored))
+    const storedTokens = localStorage.getItem("tokens")
+    if (stored) setUserState(JSON.parse(stored))
+    if (storedTokens) setTokensState(JSON.parse(storedTokens))
   }, [])
 
-  const setAndStoreUser = (user: User | null) => {
-    setUser(user)
+  const setUser = (user: User | null, tokensArg?: AuthTokens | null) => {
+    setUserState(user)
     if (user) localStorage.setItem("user", JSON.stringify(user))
     else localStorage.removeItem("user")
+    if (tokensArg !== undefined) {
+      setTokens(tokensArg)
+    }
+  }
+
+  const setTokens = (tokens: AuthTokens | null) => {
+    setTokensState(tokens)
+    if (tokens) localStorage.setItem("tokens", JSON.stringify(tokens))
+    else localStorage.removeItem("tokens")
   }
 
   const logout = () => {
-    setAndStoreUser(null)
+    setUser(null, null)
+    setTokens(null)
     router.push("/auth")
   }
 
   return (
-    <UserContext.Provider value={{ user, setUser: setAndStoreUser, logout }}>
+    <UserContext.Provider value={{ user, setUser, logout, tokens, setTokens }}>
       {children}
     </UserContext.Provider>
   )

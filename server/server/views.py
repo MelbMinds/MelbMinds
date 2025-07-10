@@ -2,8 +2,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, generics
 from django.contrib.auth import authenticate
-from .serializers import UserSerializer, GroupSerializer
+from .serializers import UserSerializer, GroupSerializer, UserProfileSerializer
 from .models import Group
+from rest_framework.permissions import IsAuthenticated
 
 class RegisterView(APIView):
     def post(self, request):
@@ -29,4 +30,11 @@ class GroupListCreateView(generics.ListCreateAPIView):
 
 class GroupRetrieveView(generics.RetrieveAPIView):
     queryset = Group.objects.all()
-    serializer_class = GroupSerializer 
+    serializer_class = GroupSerializer
+
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserProfileSerializer(request.user)
+        return Response(serializer.data) 

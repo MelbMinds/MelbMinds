@@ -18,4 +18,12 @@ class UserSerializer(serializers.ModelSerializer):
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
-        fields = '__all__' 
+        fields = '__all__'
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "name", "email", "major", "year_level", "preferred_study_format",
+            "languages_spoken", "bio"
+        ] 

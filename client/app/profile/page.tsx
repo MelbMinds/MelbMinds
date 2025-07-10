@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -27,20 +27,57 @@ import {
   Target,
 } from "lucide-react"
 import Link from "next/link"
+import { useUser } from "@/components/UserContext"
 
 export default function ProfilePage() {
+  const { tokens } = useUser()
   const [isEditing, setIsEditing] = useState(false)
-  const [profileData, setProfileData] = useState({
-    name: "John Doe",
-    email: "john.doe@student.unimelb.edu.au",
-    year: "3rd Year",
-    major: "Computer Science",
-    bio: "I'm a night owl who loves explaining concepts and helping others succeed! I prefer quiet study sessions and enjoy collaborative problem-solving.",
-    studyFormat: "Hybrid",
-    languages: ["English", "Mandarin"],
-    joinDate: "September 2023",
-    avatar: "/placeholder.svg?height=120&width=120",
-  })
+  const [profileData, setProfileData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchProfile() {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/profile/", {
+          headers: tokens?.access ? { "Authorization": `Bearer ${tokens.access}` } : {},
+        })
+        if (!res.ok) throw new Error("Failed to fetch profile data")
+        const data = await res.json()
+        setProfileData({
+          name: data.name,
+          email: data.email,
+          year: data.year_level,
+          major: data.major,
+          bio: data.bio,
+          studyFormat: data.preferred_study_format,
+          languages: data.languages_spoken.split(",").map((l: string) => l.trim()),
+          joinDate: "", // You may want to add this to your model/serializer
+          avatar: "/placeholder.svg?height=120&width=120", // Replace with actual avatar if available
+        })
+      } catch (err: any) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    if (tokens?.access) fetchProfile()
+    else setLoading(false)
+  }, [tokens])
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  }
+
+  if (error) {
+    return <div className="min-h-screen flex items-center justify-center text-red-600">{error}</div>
+  }
+
+  if (!profileData) {
+    return <div className="min-h-screen flex items-center justify-center">No profile data found.</div>
+  }
 
   const userStats = {
     groupsJoined: 5,
@@ -159,10 +196,10 @@ export default function ProfilePage() {
   }
 
   const toggleLanguage = (language: string) => {
-    setProfileData((prev) => ({
+    setProfileData((prev: any) => ({
       ...prev,
       languages: prev.languages.includes(language)
-        ? prev.languages.filter((l) => l !== language)
+        ? prev.languages.filter((l: string) => l !== language)
         : [...prev.languages, language],
     }))
   }
@@ -209,7 +246,7 @@ export default function ProfilePage() {
                   <AvatarFallback className="bg-deep-blue text-white text-2xl font-serif">
                     {profileData.name
                       .split(" ")
-                      .map((n) => n[0])
+                      .map((n: string) => n[0])
                       .join("")}
                   </AvatarFallback>
                 </Avatar>
@@ -454,7 +491,7 @@ export default function ProfilePage() {
                           <div className="flex items-center p-3 bg-soft-gray rounded-md">
                             <Globe className="mr-2 h-4 w-4 text-gray-500" />
                             <div className="flex flex-wrap gap-2">
-                              {profileData.languages.map((language) => (
+                              {profileData.languages.map((language: string) => (
                                 <Badge key={language} variant="secondary">
                                   {language}
                                 </Badge>
