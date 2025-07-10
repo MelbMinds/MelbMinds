@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Group
+from .models import User, Group, Message
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -51,3 +51,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "name", "email", "major", "year_level", "preferred_study_format",
             "languages_spoken", "bio"
         ] 
+
+class MessageSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    user_name = serializers.CharField(source='user.name', read_only=True)
+    class Meta:
+        model = Message
+        fields = ['id', 'user', 'user_name', 'text', 'timestamp'] 

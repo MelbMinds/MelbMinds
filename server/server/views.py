@@ -2,9 +2,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, generics
 from django.contrib.auth import authenticate
-from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer
-from .models import Group
+from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer
+from .models import Group, Message
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes
 
 class RegisterView(APIView):
     def post(self, request):
@@ -71,4 +72,32 @@ class UserProfileView(APIView):
         serializer = UserProfileSerializer(user)
         data = serializer.data
         data['joined_groups'] = groups_data
+        return Response(data) 
+
+class GroupChatView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id):
+        group = Group.objects.get(id=group_id)
+        if not group.members.filter(id=request.user.id).exists():
+            return Response({'detail': 'Not a group member'}, status=403)
+        messages = Message.objects.filter(group=group).order_by('timestamp')
+        serializer = MessageSerializer(messages, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, group_id):
+        group = Group.objects.get(id=group_id)
+        if not group.members.filter(id=request.user.id).exists():
+            return Response({'detail': 'Not a group member'}, status=403)
+        serializer = MessageSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=request.user, group=group)
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+
+class GroupMembersView(APIView):
+    def get(self, request, group_id):
+        group = Group.objects.get(id=group_id)
+        members = group.members.all()
+        data = [{'id': m.id, 'name': m.name, 'email': m.email} for m in members]
         return Response(data) 
