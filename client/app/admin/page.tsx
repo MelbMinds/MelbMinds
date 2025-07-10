@@ -140,26 +140,24 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
-      <nav className="border-b border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2">
-              <BookOpen className="h-8 w-8 text-[#003366]" />
-              <span className="text-2xl font-bold text-[#003366]">MelbMinds</span>
-              <Badge variant="secondary" className="ml-2">
-                Admin
-              </Badge>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-between items-center h-16">
+          <Link href="/" className="flex items-center space-x-2">
+            <BookOpen className="h-8 w-8 text-[#003366]" />
+            <span className="text-2xl font-bold text-[#003366]">MelbMinds</span>
+            <Badge variant="secondary" className="ml-2">
+              Admin
+            </Badge>
+          </Link>
+          <div className="flex items-center space-x-4">
+            <Link href="/dashboard">
+              <Button variant="ghost" className="text-[#003366] hover:bg-blue-50">
+                Back to Dashboard
+              </Button>
             </Link>
-            <div className="flex items-center space-x-4">
-              <Link href="/dashboard">
-                <Button variant="ghost" className="text-[#003366] hover:bg-blue-50">
-                  Back to Dashboard
-                </Button>
-              </Link>
-            </div>
           </div>
         </div>
-      </nav>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}

@@ -4,7 +4,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Users, Video, MapPin, UserCheck, Star, ArrowRight, Clock, Globe, Quote } from "lucide-react"
 import Link from "next/link"
-import HomeNavbar from "@/components/HomeNavbar"
 import { useUser } from "@/components/UserContext"
 
 export default function HomePage() {
@@ -66,18 +65,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Navigation */}
-      <nav className="border-b border-gray-100 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-serif font-bold text-deep-blue">MelbMinds</h1>
-            </div>
-            <HomeNavbar />
-          </div>
-        </div>
-      </nav>
-
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-deep-blue to-deep-blue/80 text-white py-20 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

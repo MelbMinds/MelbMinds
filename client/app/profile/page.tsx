@@ -197,28 +197,6 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-soft-gray">
       {/* Navigation */}
-      <nav className="border-b border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center">
-              <h1 className="text-2xl font-serif font-bold text-deep-blue">MelbMinds</h1>
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Link href="/dashboard">
-                <Button variant="ghost" className="text-deep-blue hover:bg-soft-gray">
-                  Dashboard
-                </Button>
-              </Link>
-              <Link href="/discover">
-                <Button variant="ghost" className="text-deep-blue hover:bg-soft-gray">
-                  Discover
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
