@@ -175,43 +175,40 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             {/* Group Header */}
             <Card className="shadow-lg border-0 mb-6">
               <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <Badge variant="outline" className="mb-2 text-deep-blue border-deep-blue">
-                      {group.subject}
-                    </Badge>
-                    <CardTitle className="text-2xl lg:text-3xl font-serif text-deep-blue mb-2">{group.name}</CardTitle>
-                    <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
-                      <div className="flex items-center">
-                        <Users className="mr-1 h-4 w-4" />
-                        {group.member_count || 0} members
-                      </div>
-                      <div className="flex items-center">
-                        <Star className="mr-1 h-4 w-4 text-gold fill-current" />
-                        {group.rating || "New"}
-                      </div>
-                      <Badge className={`${getFormatColor(group.meeting_format)} flex items-center gap-1 border`}>
-                        {getFormatIcon(group.meeting_format)}
-                        {group.meeting_format}
-                      </Badge>
-                      <span>{group.year_level}</span>
-                      <div className="flex flex-col gap-2 mb-4">
-                        <span className="text-lg font-bold text-deep-blue">Group Admin: {group.creator_name}</span>
-                        <span className="text-base text-gray-700">Course Code: {group.subject_code}</span>
-                        <span className="text-base text-gray-700">Course Name: {group.course_name}</span>
-                      </div>
+                <div className="flex flex-col gap-2 mb-4">
+                  <Badge variant="outline" className="w-fit mb-2 text-deep-blue border-deep-blue">
+                    {group.subject_code}
+                  </Badge>
+                  <CardTitle className="text-3xl font-serif text-deep-blue mb-2">{group.group_name}</CardTitle>
+                  <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
+                    <div className="flex items-center">
+                      <Users className="mr-1 h-4 w-4" />
+                      {group.member_count || 0} members
                     </div>
+                    <div className="flex items-center">
+                      <Star className="mr-1 h-4 w-4 text-gold fill-current" />
+                      {group.rating || "New"}
+                    </div>
+                    <Badge className={`${getFormatColor(group.meeting_format)} flex items-center gap-1 border`}>
+                      {getFormatIcon(group.meeting_format)}
+                      {group.meeting_format}
+                    </Badge>
+                    <span>{group.year_level}</span>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="bg-transparent">
-                      <Share2 className="h-4 w-4 mr-1" />
-                      Share
-                    </Button>
-                    <Button variant="outline" size="sm" className="bg-transparent">
-                      <Flag className="h-4 w-4 mr-1" />
-                      Report
-                    </Button>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-base text-gray-700">Course Code: {group.subject_code}</span>
+                    <span className="text-base text-gray-700">Course Name: {group.course_name}</span>
                   </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="bg-transparent">
+                    <Share2 className="h-4 w-4 mr-1" />
+                    Share
+                  </Button>
+                  <Button variant="outline" size="sm" className="bg-transparent">
+                    <Flag className="h-4 w-4 mr-1" />
+                    Report
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -255,38 +252,23 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   </div>
                 </div>
 
+                {/* Admin Info at the bottom */}
                 <div className="flex items-center justify-between p-4 bg-soft-gray rounded-lg">
                   <div className="flex items-center space-x-3">
                     <Avatar className="h-12 w-12">
-                      {group.admin ? (
-                        <>
-                          <AvatarImage src={group.admin.avatar || "/placeholder.svg"} />
-                          <AvatarFallback className="bg-deep-blue text-white font-serif">
-                            {group.admin.name
-                              .split(" ")
-                              .map((n: string) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </>
-                      ) : (
-                        <AvatarFallback className="bg-deep-blue text-white font-serif">?</AvatarFallback>
-                      )}
+                      <AvatarImage src={group.creator_avatar || "/placeholder.svg"} />
+                      <AvatarFallback className="bg-deep-blue text-white font-serif">
+                        {group.creator_name ? group.creator_name.split(" ").map((n: string) => n[0]).join("") : "?"}
+                      </AvatarFallback>
                     </Avatar>
                     <div>
-                      {group.admin ? (
-                        <>
-                          <p className="font-medium text-deep-blue">{group.admin.name}</p>
-                          <p className="text-sm text-gray-600">
-                            Group Admin • {group.admin.major} • {group.admin.year}
-                          </p>
-                          <p className="text-xs text-gray-500 italic">{group.admin.bio}</p>
-                        </>
-                      ) : (
-                        <p className="text-gray-500 italic">No admin info available</p>
-                      )}
+                      <p className="font-medium text-deep-blue">{group.creator_name}</p>
+                      <p className="text-sm text-gray-600">
+                        Group Admin{group.creator_major ? ` • ${group.creator_major}` : ""}{group.creator_year_level ? ` • ${group.creator_year_level}` : ""}
+                      </p>
+                      {group.creator_bio && <p className="text-xs text-gray-500 italic">{group.creator_bio}</p>}
                     </div>
                   </div>
-
                   {isGroupCreator() ? (
                     <Button className="bg-green-600 hover:bg-green-700 text-white font-serif" disabled>
                       <UserPlus className="mr-2 h-4 w-4" />
