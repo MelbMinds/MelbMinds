@@ -425,7 +425,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             <Card className="shadow-lg border-0">
               <Tabs defaultValue={joined ? "chat" : "members"} className="w-full">
                 <CardHeader>
-                  <TabsList className={`grid w-full grid-cols-6`}>
+                  <TabsList className={`grid w-full grid-cols-5`}>
                     <TabsTrigger value="chat" className="flex items-center gap-2">
                       <MessageCircle className="h-4 w-4" />
                       Chat
@@ -437,10 +437,6 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     <TabsTrigger value="flashcards" className="flex items-center gap-2">
                       <Brain className="h-4 w-4" />
                       Flashcards
-                    </TabsTrigger>
-                    <TabsTrigger value="meetups" className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      Meetups
                     </TabsTrigger>
                     <TabsTrigger value="sessions" className="flex items-center gap-2">
                       <CalendarIcon className="h-4 w-4" />
@@ -574,51 +570,6 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                               <div className="text-gray-700">{card.back}</div>
                             </div>
                             <div className="text-xs text-gray-500">Created by {card.createdBy}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </TabsContent>
-                  )}
-
-                  {/* Meetups Tab */}
-                  {joined && (
-                    <TabsContent value="meetups" className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-serif font-medium text-deep-blue">Upcoming Sessions</h3>
-                        <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                          <CalendarPlus className="mr-2 h-4 w-4" />
-                          Schedule Session
-                        </Button>
-                      </div>
-
-                      <div className="space-y-4">
-                        {(Array.isArray(group.upcoming_sessions) ? group.upcoming_sessions : []).map((session: any, index: number) => (
-                          <div key={index} className="p-4 bg-white rounded-lg border">
-                            <div className="flex justify-between items-start mb-3">
-                              <div>
-                                <h4 className="font-semibold text-deep-blue text-lg">{session.topic}</h4>
-                                <p className="text-gray-600">
-                                  {session.date} • {session.time}
-                                </p>
-                              </div>
-                              <Badge
-                                className={getFormatColor(session.type.includes("Virtual") ? "Virtual" : "In-person")}
-                              >
-                                {session.type}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center text-sm text-gray-600 mb-3">
-                              <MapPin className="mr-2 h-4 w-4" />
-                              {session.location}
-                            </div>
-                            <div className="flex space-x-2">
-                              <Button size="sm" className="bg-deep-blue hover:bg-deep-blue/90 text-white">
-                                Join Session
-                              </Button>
-                              <Button size="sm" variant="outline" className="bg-transparent">
-                                Add to Calendar
-                              </Button>
-                            </div>
                           </div>
                         ))}
                       </div>

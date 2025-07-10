@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useUser } from "@/components/UserContext"
+import { format } from "date-fns"
 
 export default function DashboardPage() {
   const [notifications] = useState([
@@ -44,6 +45,7 @@ export default function DashboardPage() {
   ])
 
   const [groups, setGroups] = useState<any[]>([])
+  const [sessions, setSessions] = useState<any[]>([])
   const { tokens } = useUser()
   useEffect(() => {
     if (tokens?.access) {
@@ -54,6 +56,27 @@ export default function DashboardPage() {
         .then(data => setGroups(data.joined_groups || []))
     }
   }, [tokens])
+
+  // Fetch all sessions for joined groups
+  useEffect(() => {
+    async function fetchSessions() {
+      if (!groups.length) return setSessions([])
+      let allSessions: any[] = []
+      for (const group of groups) {
+        const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        })
+        if (res.ok) {
+          const data = await res.json()
+          allSessions = allSessions.concat(data.map((s: any) => ({ ...s, group })))
+        }
+      }
+      // Sort sessions by date+time ascending
+      allSessions.sort((a, b) => new Date(a.date + 'T' + a.time).getTime() - new Date(b.date + 'T' + b.time).getTime())
+      setSessions(allSessions)
+    }
+    if (groups.length) fetchSessions()
+  }, [groups, tokens])
 
   const recommendedGroups = [
     {
@@ -82,30 +105,6 @@ export default function DashboardPage() {
       format: "Online",
       match: 82,
       reason: "Matches your study preferences",
-    },
-  ]
-
-  const upcomingSessions = [
-    {
-      group: "Python Programming Fundamentals",
-      subject: "COMP10001",
-      time: "Today, 6:00 PM - 8:00 PM",
-      location: "Doug McDonell Building + Online",
-      type: "Hybrid",
-    },
-    {
-      group: "Biology Study Circle",
-      subject: "BIOL10004",
-      time: "Tomorrow, 4:00 PM - 6:00 PM",
-      location: "Bio21 Institute",
-      type: "In-person",
-    },
-    {
-      group: "Legal Foundations Group",
-      subject: "LAWS10001",
-      time: "Sunday, 7:00 PM - 9:00 PM",
-      location: "Virtual Room",
-      type: "Online",
     },
   ]
 
@@ -215,31 +214,35 @@ export default function DashboardPage() {
                 <h2 className="text-2xl font-bold text-[#003366]">Upcoming Sessions</h2>
 
                 <div className="space-y-4">
-                  {upcomingSessions.map((session, index) => (
-                    <Card key={index}>
+                  {sessions.length === 0 && <div className="text-gray-600">No upcoming sessions.</div>}
+                  {sessions.map((session, index) => (
+                    <Card key={session.id || index}>
                       <CardContent className="p-6">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            <h3 className="font-semibold text-lg">{session.group}</h3>
+                            <h3 className="font-semibold text-lg">{session.group.group_name}</h3>
                             <Badge variant="outline" className="mb-2 text-[#003366] border-[#003366]">
-                              {session.subject}
+                              {session.group.subject_code}
                             </Badge>
                             <div className="space-y-2 mt-3">
                               <div className="flex items-center text-sm text-gray-600">
                                 <Clock className="mr-2 h-4 w-4" />
-                                {session.time}
+                                {format(new Date(session.date + 'T' + session.time), 'eeee, MMM d, yyyy h:mm a')}
                               </div>
                               <div className="flex items-center text-sm text-gray-600">
                                 <MapPin className="mr-2 h-4 w-4" />
                                 {session.location}
                               </div>
+                              {session.description && (
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <span className="mr-2">Description:</span>{session.description}
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="flex flex-col items-end space-y-2">
-                            <Badge className={getFormatColor(session.type)}>{session.type}</Badge>
-                            <Button size="sm" className="bg-[#003366] hover:bg-[#002244] text-white">
-                              Join
-                            </Button>
+                            <Badge className={getFormatColor(session.group.meeting_format)}>{session.group.meeting_format}</Badge>
+                            {/* Optionally add a Join button if session is live */}
                           </div>
                         </div>
                       </CardContent>
