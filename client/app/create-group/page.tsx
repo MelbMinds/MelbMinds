@@ -34,6 +34,28 @@ export default function CreateGroupPage() {
   const [error, setError] = useState<string | null>(null)
   const [courseName, setCourseName] = useState("")
 
+  const personalityOptions = [
+    "Quiet",
+    "Talkative",
+    "Fast-paced",
+    "Patient",
+    "Collaborative",
+    "Analytical",
+    "Creative",
+    "Visual learner",
+    "Hands-on",
+    "Discussion-focused",
+    "Detail-oriented",
+  ]
+  const [personalities, setPersonalities] = useState<string[]>([])
+  const handlePersonalityChange = (personality: string) => {
+    setPersonalities((prev) =>
+      prev.includes(personality)
+        ? prev.filter((p) => p !== personality)
+        : [...prev, personality]
+    )
+  }
+
   const subjects = [
     "COMP10001",
     "COMP10002",
@@ -116,6 +138,7 @@ export default function CreateGroupPage() {
           location,
           tags: tags.join(", "),
           group_guidelines: "Respectful, Attendance, Academic Integrity, Moderation", // or collect from checkboxes
+          group_personality: personalities.join(", "),
         }),
       })
       if (!res.ok) {
@@ -406,6 +429,33 @@ export default function CreateGroupPage() {
                       </Label>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Group Personality */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Group Personality</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex flex-wrap gap-4">
+                    {personalityOptions.map((personality) => (
+                      <label key={personality} className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={personalities.includes(personality)}
+                          onCheckedChange={() => handlePersonalityChange(personality)}
+                        />
+                        <span className="text-sm">{personality}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {personalities.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {personalities.map((p) => (
+                        <Badge key={p} className="bg-gold/10 text-amber-700 border-gold/20 text-xs">{p}</Badge>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

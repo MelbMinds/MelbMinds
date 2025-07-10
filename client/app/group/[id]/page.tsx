@@ -372,7 +372,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   <div>
                     <span className="text-sm font-medium text-gray-700 mr-2">Group Personality:</span>
                     <div className="flex flex-wrap gap-2 mt-1">
-                      {(Array.isArray(group.personalityTags) ? group.personalityTags : []).map((tag: string, index: number) => (
+                      {(group.group_personality ? group.group_personality.split(',').map((tag: string) => tag.trim()) : []).map((tag: string, index: number) => (
                         <Badge key={index} className="bg-gold/10 text-amber-700 border-gold/20">
                           {tag}
                         </Badge>

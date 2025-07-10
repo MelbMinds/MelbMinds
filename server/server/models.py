@@ -62,6 +62,7 @@ class Group(models.Model):
     location = models.CharField(max_length=255)
     tags = models.CharField(max_length=255, blank=True)
     group_guidelines = models.TextField(blank=True)
+    group_personality = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_groups', null=True, blank=True)
     members = models.ManyToManyField(User, related_name='joined_groups', blank=True)
