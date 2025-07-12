@@ -1019,7 +1019,12 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1">
-                            <p className="font-medium text-deep-blue">{member.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-deep-blue">{member.name}</p>
+                              {member.is_creator && (
+                                <Badge className="bg-deep-blue text-white text-xs">Creator</Badge>
+                              )}
+                            </div>
                             <span className="text-xs text-gray-500">{member.email}</span>
                           </div>
                         </div>

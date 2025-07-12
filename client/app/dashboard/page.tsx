@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Users, Calendar, Bell, BookOpen, Clock, MapPin, Video, Plus, Settings, Star, TrendingUp } from "lucide-react"
+import { Users, Calendar, Bell, BookOpen, Clock, MapPin, Video, Plus, Settings, Star, TrendingUp, ChevronDown, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import {
   DropdownMenu,
@@ -44,25 +44,44 @@ export default function DashboardPage() {
     },
   ])
 
-  const [groups, setGroups] = useState<any[]>([])
+  const [createdGroups, setCreatedGroups] = useState<any[]>([])
+  const [joinedGroups, setJoinedGroups] = useState<any[]>([])
   const [sessions, setSessions] = useState<any[]>([])
+  const [showCreatedGroups, setShowCreatedGroups] = useState(true)
+  const [showJoinedGroups, setShowJoinedGroups] = useState(true)
   const { tokens } = useUser()
+  
   useEffect(() => {
     if (tokens?.access) {
-      fetch("http://localhost:8000/api/profile/", {
+      // Fetch created groups
+      fetch("http://localhost:8000/api/groups/", {
         headers: { "Authorization": `Bearer ${tokens.access}` },
       })
         .then(res => res.json())
-        .then(data => setGroups(data.joined_groups || []))
+        .then(data => {
+          const created = data.filter((group: any) => group.creator_email === tokens.user?.email)
+          const joined = data.filter((group: any) => group.joined && group.creator_email !== tokens.user?.email)
+          setCreatedGroups(created)
+          setJoinedGroups(joined)
+        })
+        .catch(() => {
+          // Fallback to profile endpoint
+          fetch("http://localhost:8000/api/profile/", {
+            headers: { "Authorization": `Bearer ${tokens.access}` },
+          })
+            .then(res => res.json())
+            .then(data => setJoinedGroups(data.joined_groups || []));
+        });
     }
-  }, [tokens])
+  }, [tokens]);
 
-  // Fetch all sessions for joined groups
+  // Fetch all sessions for all groups (created + joined)
   useEffect(() => {
     async function fetchSessions() {
-      if (!groups.length) return setSessions([])
+      const allGroups = [...createdGroups, ...joinedGroups]
+      if (!allGroups.length) return setSessions([])
       let allSessions: any[] = []
-      for (const group of groups) {
+      for (const group of allGroups) {
         const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
         })
@@ -75,8 +94,8 @@ export default function DashboardPage() {
       allSessions.sort((a, b) => new Date(a.date + 'T' + a.time).getTime() - new Date(b.date + 'T' + b.time).getTime())
       setSessions(allSessions)
     }
-    if (groups.length) fetchSessions()
-  }, [groups, tokens])
+    if (createdGroups.length || joinedGroups.length) fetchSessions()
+  }, [createdGroups, joinedGroups, tokens])
 
   const recommendedGroups = [
     {
@@ -167,44 +186,125 @@ export default function DashboardPage() {
                   </Link>
                 </div>
 
-                <div className="space-y-4">
-                  {groups.length > 0 ? (
-                    groups.map((group: any) => (
-                      <Card key={group.id} className="hover:shadow-lg transition-shadow">
-                        <CardContent className="p-6">
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <Badge variant="outline" className="mb-2 text-[#003366] border-[#003366]">
-                                {group.subject_code}
-                              </Badge>
-                              <h3 className="text-lg font-semibold">{group.group_name}</h3>
-                              <p className="text-sm text-gray-600">{group.members?.length || 0} members</p>
-                            </div>
-                            <Badge className="bg-gray-100 text-gray-800 flex items-center gap-1">
-                              {/* Optionally show group format if available */}
-                              {group.format || "Group"}
-                            </Badge>
-                          </div>
+                <div className="space-y-6">
+                  {/* Groups I Created */}
+                  {createdGroups.length > 0 && (
+                    <div>
+                      <button
+                        onClick={() => setShowCreatedGroups(!showCreatedGroups)}
+                        className="flex items-center gap-2 text-lg font-semibold text-[#003366] mb-4 hover:text-[#002244] transition-colors"
+                      >
+                        {showCreatedGroups ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                        Groups I Created ({createdGroups.length})
+                      </button>
+                      
+                      {showCreatedGroups && (
+                        <div className="space-y-4">
+                          {createdGroups.map((group: any) => (
+                            <Card key={group.id} className="hover:shadow-lg transition-shadow border-l-4 border-l-[#003366]">
+                              <CardContent className="p-6">
+                                <div className="flex justify-between items-start mb-4">
+                                  <div>
+                                    <Badge variant="outline" className="mb-2 text-[#003366] border-[#003366]">
+                                      {group.subject_code}
+                                    </Badge>
+                                    <h3 className="text-lg font-semibold">{group.group_name}</h3>
+                                    <p className="text-sm text-gray-600">{group.member_count || 0} members</p>
+                                  </div>
+                                  <Badge className="bg-[#003366] text-white flex items-center gap-1">
+                                    Creator
+                                  </Badge>
+                                </div>
 
-                          <div className="space-y-3">
-                            <div className="flex items-center text-sm text-gray-600">
-                              <Clock className="mr-2 h-4 w-4" />
-                              {/* Optionally show next session info if available */}
-                              Next session: {group.next_session || "TBA"}
-                            </div>
-                          </div>
+                                <div className="space-y-3">
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <Clock className="mr-2 h-4 w-4" />
+                                    Next session: {group.next_session || "TBA"}
+                                  </div>
+                                </div>
 
-                          <div className="flex justify-between items-center mt-4">
-                            <Link href={`/group/${group.id}`}>
-                              <Button variant="outline">View Group</Button>
-                            </Link>
-                            {/* Optionally show Join Session button if relevant */}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  ) : (
-                    <p className="text-gray-600">You haven't joined any groups yet.</p>
+                                <div className="flex justify-between items-center mt-4">
+                                  <Link href={`/group/${group.id}`}>
+                                    <Button variant="outline">Manage Group</Button>
+                                  </Link>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Groups I Joined */}
+                  {joinedGroups.length > 0 && (
+                    <div>
+                      <button
+                        onClick={() => setShowJoinedGroups(!showJoinedGroups)}
+                        className="flex items-center gap-2 text-lg font-semibold text-[#003366] mb-4 hover:text-[#002244] transition-colors"
+                      >
+                        {showJoinedGroups ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                        Groups I Joined ({joinedGroups.length})
+                      </button>
+                      
+                      {showJoinedGroups && (
+                        <div className="space-y-4">
+                          {joinedGroups.map((group: any) => (
+                            <Card key={group.id} className="hover:shadow-lg transition-shadow">
+                              <CardContent className="p-6">
+                                <div className="flex justify-between items-start mb-4">
+                                  <div>
+                                    <Badge variant="outline" className="mb-2 text-[#003366] border-[#003366]">
+                                      {group.subject_code}
+                                    </Badge>
+                                    <h3 className="text-lg font-semibold">{group.group_name}</h3>
+                                    <p className="text-sm text-gray-600">{group.member_count || 0} members</p>
+                                  </div>
+                                  <Badge className="bg-gray-100 text-gray-800 flex items-center gap-1">
+                                    {group.meeting_format || "Group"}
+                                  </Badge>
+                                </div>
+
+                                <div className="space-y-3">
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <Clock className="mr-2 h-4 w-4" />
+                                    Next session: {group.next_session || "TBA"}
+                                  </div>
+                                </div>
+
+                                <div className="flex justify-between items-center mt-4">
+                                  <Link href={`/group/${group.id}`}>
+                                    <Button variant="outline">View Group</Button>
+                                  </Link>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* No groups message */}
+                  {createdGroups.length === 0 && joinedGroups.length === 0 && (
+                    <div className="text-center py-8">
+                      <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                      <p className="text-gray-600 mb-4">You haven't created or joined any groups yet.</p>
+                      <div className="flex gap-4 justify-center">
+                        <Link href="/create-group">
+                          <Button className="bg-[#003366] hover:bg-[#002244] text-white">
+                            <Plus className="mr-2 h-4 w-4" />
+                            Create Group
+                          </Button>
+                        </Link>
+                        <Link href="/discover">
+                          <Button variant="outline">
+                            <Users className="mr-2 h-4 w-4" />
+                            Find Groups
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
                   )}
                 </div>
               </TabsContent>

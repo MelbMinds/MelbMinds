@@ -402,7 +402,13 @@ class GroupMembersView(APIView):
     def get(self, request, group_id):
         group = Group.objects.get(id=group_id)
         members = group.members.all()
-        data = [{'id': m.id, 'name': m.name, 'email': m.email} for m in members]
+        
+        # Include the creator in the members list
+        all_members = list(members)
+        if group.creator not in all_members:
+            all_members.append(group.creator)
+        
+        data = [{'id': m.id, 'name': m.name, 'email': m.email, 'is_creator': m == group.creator} for m in all_members]
         return Response(data) 
 
 class IsGroupCreatorOrReadOnly(permissions.BasePermission):
