@@ -31,6 +31,7 @@ import {
   Bell,
   Download,
   Heart,
+  Crown,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
@@ -1153,7 +1154,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                             <div className="flex items-center gap-2">
                               <p className="font-medium text-deep-blue">{member.name}</p>
                               {member.is_creator && (
-                                <Badge className="bg-deep-blue text-white text-xs">Creator</Badge>
+                                <div className="flex items-center">
+                                  <Crown className="h-4 w-4 text-yellow-400 -mt-0.5" />
+                                </div>
                               )}
                             </div>
                             <span className="text-xs text-gray-500">{member.email}</span>

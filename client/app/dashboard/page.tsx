@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Users, Calendar, Bell, BookOpen, Clock, MapPin, Video, Plus, Settings, Star, TrendingUp, ChevronDown, ChevronRight } from "lucide-react"
+import { Users, Calendar, Bell, BookOpen, Clock, MapPin, Video, Plus, Settings, Star, TrendingUp, ChevronDown, ChevronRight, Crown } from "lucide-react"
 import Link from "next/link"
 import {
   DropdownMenu,
@@ -49,23 +49,25 @@ export default function DashboardPage() {
   const [sessions, setSessions] = useState<any[]>([])
   const [showCreatedGroups, setShowCreatedGroups] = useState(true)
   const [showJoinedGroups, setShowJoinedGroups] = useState(true)
-  const { tokens } = useUser()
+  const { user, tokens } = useUser()
   
   useEffect(() => {
-    if (tokens?.access) {
-      // Fetch created groups
+    if (tokens?.access && user?.email) {
+      // Fetch all groups and filter them properly
       fetch("http://localhost:8000/api/groups/", {
         headers: { "Authorization": `Bearer ${tokens.access}` },
       })
         .then(res => res.json())
         .then(data => {
-          const created = data.filter((group: any) => group.creator_email === tokens.user?.email)
-          const joined = data.filter((group: any) => group.joined && group.creator_email !== tokens.user?.email)
+          // Filter groups where user is the creator
+          const created = data.filter((group: any) => group.creator_email === user.email)
+          // Filter groups where user has joined (but is not the creator)
+          const joined = data.filter((group: any) => group.joined && group.creator_email !== user.email)
           setCreatedGroups(created)
           setJoinedGroups(joined)
         })
         .catch(() => {
-          // Fallback to profile endpoint
+          // Fallback to profile endpoint for joined groups
           fetch("http://localhost:8000/api/profile/", {
             headers: { "Authorization": `Bearer ${tokens.access}` },
           })
@@ -73,7 +75,7 @@ export default function DashboardPage() {
             .then(data => setJoinedGroups(data.joined_groups || []));
         });
     }
-  }, [tokens]);
+  }, [tokens, user]);
 
   // Fetch all sessions for all groups (created + joined)
   useEffect(() => {
@@ -187,20 +189,20 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="space-y-6">
-                  {/* Groups I Created */}
-                  {createdGroups.length > 0 && (
-                    <div>
-                      <button
-                        onClick={() => setShowCreatedGroups(!showCreatedGroups)}
-                        className="flex items-center gap-2 text-lg font-semibold text-[#003366] mb-4 hover:text-[#002244] transition-colors"
-                      >
-                        {showCreatedGroups ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-                        Groups I Created ({createdGroups.length})
-                      </button>
-                      
-                      {showCreatedGroups && (
-                        <div className="space-y-4">
-                          {createdGroups.map((group: any) => (
+                  {/* Groups I Created - Always show this section first */}
+                  <div>
+                    <button
+                      onClick={() => setShowCreatedGroups(!showCreatedGroups)}
+                      className="flex items-center gap-2 text-lg font-semibold text-[#003366] mb-4 hover:text-[#002244] transition-colors"
+                    >
+                      {showCreatedGroups ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                      Groups Created ({createdGroups.length})
+                    </button>
+                    
+                    {showCreatedGroups && (
+                      <div className="space-y-4">
+                        {createdGroups.length > 0 ? (
+                          createdGroups.map((group: any) => (
                             <Card key={group.id} className="hover:shadow-lg transition-shadow border-l-4 border-l-[#003366]">
                               <CardContent className="p-6">
                                 <div className="flex justify-between items-start mb-4">
@@ -211,9 +213,9 @@ export default function DashboardPage() {
                                     <h3 className="text-lg font-semibold">{group.group_name}</h3>
                                     <p className="text-sm text-gray-600">{group.member_count || 0} members</p>
                                   </div>
-                                  <Badge className="bg-[#003366] text-white flex items-center gap-1">
-                                    Creator
-                                  </Badge>
+                                  <div className="flex items-center gap-1">
+                                    <Crown className="h-5 w-5 text-yellow-400 -mt-0.5" />
+                                  </div>
                                 </div>
 
                                 <div className="space-y-3">
@@ -230,26 +232,37 @@ export default function DashboardPage() {
                                 </div>
                               </CardContent>
                             </Card>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                          ))
+                        ) : (
+                          <div className="text-center py-8 bg-gray-50 rounded-lg">
+                            <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                            <p className="text-gray-600 mb-4">You haven't created any groups yet.</p>
+                            <Link href="/create-group">
+                              <Button className="bg-[#003366] hover:bg-[#002244] text-white">
+                                <Plus className="mr-2 h-4 w-4" />
+                                Create Your First Group
+                              </Button>
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Groups I Joined */}
-                  {joinedGroups.length > 0 && (
-                    <div>
-                      <button
-                        onClick={() => setShowJoinedGroups(!showJoinedGroups)}
-                        className="flex items-center gap-2 text-lg font-semibold text-[#003366] mb-4 hover:text-[#002244] transition-colors"
-                      >
-                        {showJoinedGroups ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-                        Groups I Joined ({joinedGroups.length})
-                      </button>
-                      
-                      {showJoinedGroups && (
-                        <div className="space-y-4">
-                          {joinedGroups.map((group: any) => (
+                  <div>
+                    <button
+                      onClick={() => setShowJoinedGroups(!showJoinedGroups)}
+                      className="flex items-center gap-2 text-lg font-semibold text-[#003366] mb-4 hover:text-[#002244] transition-colors"
+                    >
+                      {showJoinedGroups ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                      Groups Joined ({joinedGroups.length})
+                    </button>
+                    
+                    {showJoinedGroups && (
+                      <div className="space-y-4">
+                        {joinedGroups.length > 0 ? (
+                          joinedGroups.map((group: any) => (
                             <Card key={group.id} className="hover:shadow-lg transition-shadow">
                               <CardContent className="p-6">
                                 <div className="flex justify-between items-start mb-4">
@@ -279,13 +292,24 @@ export default function DashboardPage() {
                                 </div>
                               </CardContent>
                             </Card>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                          ))
+                        ) : (
+                          <div className="text-center py-8 bg-gray-50 rounded-lg">
+                            <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                            <p className="text-gray-600 mb-4">You haven't joined any groups yet.</p>
+                            <Link href="/discover">
+                              <Button className="bg-[#003366] hover:bg-[#002244] text-white">
+                                <Users className="mr-2 h-4 w-4" />
+                                Find Groups to Join
+                              </Button>
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-                  {/* No groups message */}
+                  {/* No groups message - only show if both sections are empty */}
                   {createdGroups.length === 0 && joinedGroups.length === 0 && (
                     <div className="text-center py-8">
                       <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
