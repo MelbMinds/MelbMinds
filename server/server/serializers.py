@@ -55,12 +55,21 @@ class GroupDetailSerializer(serializers.ModelSerializer):
         return False
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    languages = serializers.SerializerMethodField()
+    year = serializers.CharField(source='year_level')
+    studyFormat = serializers.CharField(source='preferred_study_format')
+    
     class Meta:
         model = User
         fields = [
-            "name", "email", "major", "year_level", "preferred_study_format",
-            "languages_spoken", "bio"
-        ] 
+            "name", "email", "major", "year", "studyFormat",
+            "languages", "bio"
+        ]
+    
+    def get_languages(self, obj):
+        if obj.languages_spoken:
+            return [lang.strip() for lang in obj.languages_spoken.split(',') if lang.strip()]
+        return []
 
 class MessageSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
