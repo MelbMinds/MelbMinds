@@ -91,3 +91,24 @@ class GroupSession(models.Model):
 
     def __str__(self):
         return f"Session for {self.group.group_name} on {self.date} at {self.time}"
+
+class CompletedSessionCounter(models.Model):
+    count = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"Completed Sessions: {self.count}"
+
+    @classmethod
+    def increment(cls, amount=1):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        obj.count += amount
+        obj.save()
+        return obj.count
+
+class GroupNotification(models.Model):
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='notifications')
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Notification for {self.group.group_name}: {self.message[:30]}"

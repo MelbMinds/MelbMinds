@@ -4,7 +4,7 @@ from rest_framework import status, generics
 from django.contrib.auth import authenticate
 from django.db.models import Q
 from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer
-from .models import Group, Message, GroupSession
+from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -167,7 +167,29 @@ class GroupSessionListCreateView(APIView):
         group = Group.objects.get(id=group_id)
         if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
             return Response({'detail': 'Not a group member'}, status=403)
-        sessions = GroupSession.objects.filter(group=group).order_by('date', 'time')
+        now = timezone.now()
+        # Delete past sessions, increment counter, and notify
+        past_sessions = GroupSession.objects.filter(
+            group=group,
+            Q(date__lt=now.date()) |
+            Q(date=now.date(), time__lt=now.time())
+        )
+        deleted_count = past_sessions.count()
+        for session in past_sessions:
+            GroupNotification.objects.create(
+                group=group,
+                message=f"Session at {session.location} on {session.date} {session.time} has finished."
+            )
+        past_sessions.delete()
+        if deleted_count:
+            CompletedSessionCounter.increment(deleted_count)
+        # Return only upcoming sessions
+        sessions = GroupSession.objects.filter(
+            group=group
+        ).filter(
+            Q(date__gt=now.date()) |
+            Q(date=now.date(), time__gte=now.time())
+        ).order_by('date', 'time')
         serializer = GroupSessionSerializer(sessions, many=True)
         return Response(serializer.data)
 
@@ -177,7 +199,11 @@ class GroupSessionListCreateView(APIView):
             return Response({'detail': 'Only the group creator can create sessions'}, status=403)
         serializer = GroupSessionSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(group=group, creator=request.user)
+            session = serializer.save(group=group, creator=request.user)
+            GroupNotification.objects.create(
+                group=group,
+                message=f"New session created at {session.location} on {session.date} {session.time}."
+            )
             return Response(serializer.data, status=201)
         return Response(serializer.errors, status=400)
 
@@ -213,17 +239,26 @@ class GroupSessionRetrieveUpdateDeleteView(APIView):
         return Response(status=204) 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def group_notifications(request, group_id):
+    group = Group.objects.get(id=group_id)
+    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        return Response({'detail': 'Not a group member'}, status=403)
+    notifications = GroupNotification.objects.filter(group=group).order_by('-created_at')[:50]
+    data = [
+        {
+            'id': n.id,
+            'message': n.message,
+            'created_at': n.created_at
+        } for n in notifications
+    ]
+    return Response(data)
+
+@api_view(['GET'])
 @permission_classes([AllowAny])
 def stats_summary(request):
     now = timezone.now()
     from .models import User, Group, GroupSession
-
-    # Delete past sessions (date+time in the past)
-    GroupSession.objects.filter(
-        Q(date__lt=now.date()) |
-        Q(date=now.date(), time__lt=now.time())
-    ).delete()
-
     active_students = User.objects.count()
     active_sessions = GroupSession.objects.filter(
         Q(date__gt=now.date()) |
@@ -233,12 +268,11 @@ def stats_summary(request):
     new_groups_today = Group.objects.filter(created_at__date=now.date()).count()
     unimelb_students = User.objects.filter(email__iendswith='@unimelb.edu.au').count()
     groups_created = Group.objects.count()
-    # Sessions completed: date+time in the past
-    sessions_completed = GroupSession.objects.filter(
-        Q(date__lt=now.date()) |
-        Q(date=now.date(), time__lt=now.time())
-    ).count()
-
+    # Use CompletedSessionCounter for sessions_completed
+    try:
+        sessions_completed = CompletedSessionCounter.objects.get(pk=1).count
+    except CompletedSessionCounter.DoesNotExist:
+        sessions_completed = 0
     return Response({
         "active_students": active_students,
         "active_sessions": active_sessions,
