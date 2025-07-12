@@ -68,6 +68,22 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [newFileName, setNewFileName] = useState("")
   const [favorites, setFavorites] = useState<Set<number>>(new Set())
+  const [loadingActions, setLoadingActions] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState({
+    group_name: '',
+    subject_code: '',
+    course_name: '',
+    description: '',
+    year_level: '',
+    meeting_format: '',
+    primary_language: '',
+    meeting_schedule: '',
+    location: '',
+    tags: '',
+    group_guidelines: '',
+    group_personality: ''
+  })
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -190,6 +206,130 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [hasRequested, setHasRequested] = useState(false)
   const [newFlashcard, setNewFlashcard] = useState({ front: "", back: "" })
   const [chatMessage, setChatMessage] = useState("")
+
+  const handleLeaveGroup = async () => {
+    if (!group?.id) return
+    if (!window.confirm(`Are you sure you want to leave "${group.group_name}"?`)) return
+    
+    setLoadingActions(true)
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/leave/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+      })
+      
+      if (res.ok) {
+        toast({ title: 'Successfully left the group!' })
+        // Redirect to dashboard
+        window.location.href = '/dashboard'
+      } else {
+        const data = await res.json()
+        toast({ title: 'Error leaving group', description: data.detail, variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error leaving group', variant: 'destructive' })
+    } finally {
+      setLoadingActions(false)
+    }
+  }
+
+  const handleDeleteGroup = async () => {
+    if (!group?.id) return
+    if (!window.confirm(`Are you sure you want to delete "${group.group_name}"? This action cannot be undone and will remove all group data, sessions, and files.`)) return
+    
+    setLoadingActions(true)
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/delete/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+      })
+      
+      if (res.ok) {
+        toast({ title: 'Group deleted successfully!' })
+        // Redirect to dashboard
+        window.location.href = '/dashboard'
+      } else {
+        const data = await res.json()
+        toast({ title: 'Error deleting group', description: data.detail, variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error deleting group', variant: 'destructive' })
+    } finally {
+      setLoadingActions(false)
+    }
+  }
+
+  const handleEditGroup = () => {
+    if (!group) return
+    setEditForm({
+      group_name: group.group_name || '',
+      subject_code: group.subject_code || '',
+      course_name: group.course_name || '',
+      description: group.description || '',
+      year_level: group.year_level || '',
+      meeting_format: group.meeting_format || '',
+      primary_language: group.primary_language || '',
+      meeting_schedule: group.meeting_schedule || '',
+      location: group.location || '',
+      tags: group.tags || '',
+      group_guidelines: group.group_guidelines || '',
+      group_personality: group.group_personality || ''
+    })
+    setIsEditing(true)
+  }
+
+  const handleUpdateGroup = async () => {
+    if (!group?.id) return
+    
+    setLoadingActions(true)
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/update/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+        body: JSON.stringify(editForm)
+      })
+      
+      if (res.ok) {
+        const updatedGroup = await res.json()
+        setGroup(updatedGroup)
+        setIsEditing(false)
+        toast({ title: 'Group updated successfully!' })
+      } else {
+        const data = await res.json()
+        toast({ title: 'Error updating group', description: data.error || data.detail, variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error updating group', variant: 'destructive' })
+    } finally {
+      setLoadingActions(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setIsEditing(false)
+    setEditForm({
+      group_name: '',
+      subject_code: '',
+      course_name: '',
+      description: '',
+      year_level: '',
+      meeting_format: '',
+      primary_language: '',
+      meeting_schedule: '',
+      location: '',
+      tags: '',
+      group_guidelines: '',
+      group_personality: ''
+    })
+  }
 
   const getFormatIcon = (format: string) => {
     switch (format) {
@@ -823,25 +963,52 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       {group.creator_bio && <p className="text-xs text-gray-500 italic">{group.creator_bio}</p>}
                     </div>
                   </div>
-                  {isGroupCreator() ? (
-                    <Button className="bg-green-600 hover:bg-green-700 text-white font-serif" disabled>
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      You created this group
-                    </Button>
-                  ) : joined || hasRequested ? (
-                    <Button className="bg-gray-400 text-white font-serif" disabled>
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      You already joined this group
-                    </Button>
-                  ) : (
-                    <Button 
-                      className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif"
-                      onClick={handleJoinRequest}
-                    >
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      Join Group
-                    </Button>
-                  )}
+                  <div className="flex gap-2">
+                    {isGroupCreator() ? (
+                      <>
+                        <Button 
+                          variant="outline"
+                          className="border-deep-blue text-deep-blue hover:bg-deep-blue/10"
+                          onClick={handleEditGroup}
+                          disabled={loadingActions}
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit Group
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-600"
+                          onClick={handleDeleteGroup}
+                          disabled={loadingActions}
+                        >
+                          {loadingActions ? 'Deleting...' : 'Delete Group'}
+                        </Button>
+                      </>
+                    ) : joined || hasRequested ? (
+                      <>
+                        <Button className="bg-gray-400 text-white font-serif" disabled>
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          You already joined this group
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-600"
+                          onClick={handleLeaveGroup}
+                          disabled={loadingActions}
+                        >
+                          {loadingActions ? 'Leaving...' : 'Leave Group'}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button 
+                        className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif"
+                        onClick={handleJoinRequest}
+                      >
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Join Group
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1344,6 +1511,168 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   disabled={uploadingFile || !newFileName.trim()}
                 >
                   {uploadingFile ? 'Uploading...' : 'Upload'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Group Dialog */}
+      {isEditing && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-medium text-deep-blue mb-4">Edit Group Details</h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Group Name</label>
+                  <input
+                    type="text"
+                    value={editForm.group_name}
+                    onChange={(e) => setEditForm({...editForm, group_name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                    placeholder="Enter group name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Subject Code</label>
+                  <input
+                    type="text"
+                    value={editForm.subject_code}
+                    onChange={(e) => setEditForm({...editForm, subject_code: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                    placeholder="e.g., COMP20008"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Course Name</label>
+                  <input
+                    type="text"
+                    value={editForm.course_name}
+                    onChange={(e) => setEditForm({...editForm, course_name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                    placeholder="Enter course name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Year Level</label>
+                  <select
+                    value={editForm.year_level}
+                    onChange={(e) => setEditForm({...editForm, year_level: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                  >
+                    <option value="">Select year level</option>
+                    <option value="1st Year">1st Year</option>
+                    <option value="2nd Year">2nd Year</option>
+                    <option value="3rd Year">3rd Year</option>
+                    <option value="4th Year">4th Year</option>
+                    <option value="Graduate">Graduate</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Meeting Format</label>
+                  <select
+                    value={editForm.meeting_format}
+                    onChange={(e) => setEditForm({...editForm, meeting_format: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                  >
+                    <option value="">Select format</option>
+                    <option value="In-person">In-person</option>
+                    <option value="Virtual">Virtual</option>
+                    <option value="Hybrid">Hybrid</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Primary Language</label>
+                  <input
+                    type="text"
+                    value={editForm.primary_language}
+                    onChange={(e) => setEditForm({...editForm, primary_language: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                    placeholder="e.g., English"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Meeting Schedule</label>
+                  <input
+                    type="text"
+                    value={editForm.meeting_schedule}
+                    onChange={(e) => setEditForm({...editForm, meeting_schedule: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                    placeholder="e.g., Weekly"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                  <input
+                    type="text"
+                    value={editForm.location}
+                    onChange={(e) => setEditForm({...editForm, location: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                    placeholder="Enter location"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                  placeholder="Describe your study group..."
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tags (comma-separated)</label>
+                <input
+                  type="text"
+                  value={editForm.tags}
+                  onChange={(e) => setEditForm({...editForm, tags: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                  placeholder="e.g., Python, Programming, Algorithms"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Group Personality (comma-separated)</label>
+                <input
+                  type="text"
+                  value={editForm.group_personality}
+                  onChange={(e) => setEditForm({...editForm, group_personality: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                  placeholder="e.g., Focused, Collaborative, Technical"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Group Guidelines</label>
+                <textarea
+                  value={editForm.group_guidelines}
+                  onChange={(e) => setEditForm({...editForm, group_guidelines: e.target.value})}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                  placeholder="Enter group guidelines..."
+                />
+              </div>
+              
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={handleCancelEdit}
+                  disabled={loadingActions}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-deep-blue hover:bg-deep-blue/90 text-white"
+                  onClick={handleUpdateGroup}
+                  disabled={loadingActions || !editForm.group_name.trim()}
+                >
+                  {loadingActions ? 'Updating...' : 'Update Group'}
                 </Button>
               </div>
             </div>

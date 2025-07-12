@@ -18,7 +18,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from .views import RegisterView, LoginView, GroupListCreateView, GroupRetrieveView, UserProfileView, JoinGroupView, GroupChatView, GroupMembersView, GroupSessionListCreateView, GroupSessionRetrieveUpdateDeleteView, GroupFileListCreateView, GroupFileDownloadView, GroupFileDeleteView, GroupRatingView, stats_summary, group_notifications, trigger_cleanup, create_test_session, clear_group_notifications, test_moderation, create_sample_groups, create_sample_ratings, group_recommendations
+from .views import RegisterView, LoginView, GroupListCreateView, GroupRetrieveView, UserProfileView, JoinGroupView, GroupChatView, GroupMembersView, GroupSessionListCreateView, GroupSessionRetrieveUpdateDeleteView, GroupFileListCreateView, GroupFileDownloadView, GroupFileDeleteView, GroupRatingView, LeaveGroupView, DeleteGroupView, UpdateGroupView, stats_summary, group_notifications, trigger_cleanup, create_test_session, clear_group_notifications, test_moderation, create_sample_groups, create_sample_ratings, group_recommendations
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
@@ -28,6 +28,9 @@ urlpatterns = [
     path('api/groups/', GroupListCreateView.as_view(), name='groups'),
     path('api/groups/<int:pk>/', GroupRetrieveView.as_view(), name='group-detail'),
     path('api/groups/<int:group_id>/join/', JoinGroupView.as_view(), name='join-group'),
+    path('api/groups/<int:group_id>/leave/', LeaveGroupView.as_view(), name='leave-group'),
+    path('api/groups/<int:group_id>/delete/', DeleteGroupView.as_view(), name='delete-group'),
+    path('api/groups/<int:group_id>/update/', UpdateGroupView.as_view(), name='update-group'),
     path('api/profile/', UserProfileView.as_view(), name='user-profile'),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

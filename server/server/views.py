@@ -1080,3 +1080,104 @@ def group_recommendations(request):
             'languages_spoken': user.languages_spoken
         }
     }) 
+
+class LeaveGroupView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, group_id):
+        """Leave a group (for members only)"""
+        try:
+            group = Group.objects.get(id=group_id)
+            
+            # Check if user is a member (not the creator)
+            if group.creator == request.user:
+                return Response({'detail': 'Group creators cannot leave their own group. Use delete instead.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if request.user not in group.members.all():
+                return Response({'detail': 'You are not a member of this group'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Remove user from group
+            group.members.remove(request.user)
+            
+            # Create notification
+            GroupNotification.objects.create(
+                group=group,
+                message=f"{request.user.name} left the group."
+            )
+            
+            return Response({'detail': 'Successfully left the group'}, status=status.HTTP_200_OK)
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class DeleteGroupView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, group_id):
+        """Delete a group (for creators only)"""
+        try:
+            group = Group.objects.get(id=group_id)
+            
+            # Check if user is the creator
+            if group.creator != request.user:
+                return Response({'detail': 'Only the group creator can delete the group'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Delete the group (this will cascade to related objects)
+            group_name = group.group_name
+            group.delete()
+            
+            return Response({'detail': f'Group "{group_name}" has been deleted'}, status=status.HTTP_200_OK)
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND) 
+
+class UpdateGroupView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def put(self, request, group_id):
+        """Update a group (for creators only)"""
+        try:
+            group = Group.objects.get(id=group_id)
+            
+            # Check if user is the creator
+            if group.creator != request.user:
+                return Response({'detail': 'Only the group creator can update the group'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Content moderation for group updates
+            group_name_validation = perspective_moderator.validate_user_input('group name', request.data.get('group_name', ''))
+            description_validation = perspective_moderator.validate_user_input('description', request.data.get('description', ''))
+            tags_validation = perspective_moderator.validate_user_input('tags', request.data.get('tags', ''))
+            
+            if not group_name_validation['valid']:
+                return Response({
+                    'error': group_name_validation['message']
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not description_validation['valid']:
+                return Response({
+                    'error': description_validation['message']
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not tags_validation['valid']:
+                return Response({
+                    'error': tags_validation['message']
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update allowed fields
+            allowed_fields = [
+                'group_name', 'subject_code', 'course_name', 'description', 
+                'year_level', 'meeting_format', 'primary_language', 
+                'meeting_schedule', 'location', 'tags', 'group_guidelines', 
+                'group_personality'
+            ]
+            
+            for field in allowed_fields:
+                if field in request.data:
+                    setattr(group, field, request.data[field])
+            
+            group.save()
+            
+            # Return updated group data
+            serializer = GroupDetailSerializer(group, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)

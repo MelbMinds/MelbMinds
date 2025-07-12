@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useUser } from "@/components/UserContext"
 import { format } from "date-fns"
+import { toast } from "@/components/ui/use-toast"
 
 export default function DashboardPage() {
   const [notifications] = useState([
@@ -52,6 +53,7 @@ export default function DashboardPage() {
   const [loadingGroups, setLoadingGroups] = useState(true)
   const [recommendations, setRecommendations] = useState<any[]>([])
   const [loadingRecommendations, setLoadingRecommendations] = useState(true)
+  const [loadingActions, setLoadingActions] = useState(false)
   const { user, tokens } = useUser()
   
   useEffect(() => {
@@ -132,6 +134,61 @@ export default function DashboardPage() {
       setLoadingRecommendations(false)
     }
   }, [tokens]);
+
+  const handleLeaveGroup = async (groupId: number, groupName: string) => {
+    if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
+    
+    setLoadingActions(true)
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${groupId}/leave/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+      })
+      
+      if (res.ok) {
+        // Remove from joined groups
+        setJoinedGroups(prev => prev.filter(g => g.id !== groupId))
+        toast({ title: 'Successfully left the group!' })
+      } else {
+        const data = await res.json()
+        toast({ title: 'Error leaving group', description: data.detail, variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error leaving group', variant: 'destructive' })
+    } finally {
+      setLoadingActions(false)
+    }
+  }
+
+  const handleDeleteGroup = async (groupId: number, groupName: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action cannot be undone and will remove all group data, sessions, and files.`)) return
+    
+    setLoadingActions(true)
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${groupId}/delete/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+      })
+      
+      if (res.ok) {
+        // Remove from created groups
+        setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
+        toast({ title: 'Group deleted successfully!' })
+      } else {
+        const data = await res.json()
+        toast({ title: 'Error deleting group', description: data.detail, variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error deleting group', variant: 'destructive' })
+    } finally {
+      setLoadingActions(false)
+    }
+  }
 
   const getFormatIcon = (format: string) => {
     switch (format) {
@@ -238,6 +295,15 @@ export default function DashboardPage() {
                                   <Link href={`/group/${group.id}`}>
                                     <Button variant="outline">Manage Group</Button>
                                   </Link>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-600"
+                                    onClick={() => handleDeleteGroup(group.id, group.group_name)}
+                                    disabled={loadingActions}
+                                  >
+                                    {loadingActions ? 'Deleting...' : 'Delete Group'}
+                                  </Button>
                                 </div>
                               </CardContent>
                             </Card>
@@ -303,6 +369,15 @@ export default function DashboardPage() {
                                   <Link href={`/group/${group.id}`}>
                                     <Button variant="outline">View Group</Button>
                                   </Link>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-600"
+                                    onClick={() => handleLeaveGroup(group.id, group.group_name)}
+                                    disabled={loadingActions}
+                                  >
+                                    {loadingActions ? 'Leaving...' : 'Leave Group'}
+                                  </Button>
                                 </div>
                               </CardContent>
                             </Card>
