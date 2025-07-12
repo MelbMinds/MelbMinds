@@ -92,6 +92,26 @@ class GroupSession(models.Model):
     def __str__(self):
         return f"Session for {self.group.group_name} on {self.date} at {self.time}"
 
+class GroupFile(models.Model):
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='files')
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='uploaded_files')
+    file = models.FileField(upload_to='group_files/')
+    original_filename = models.CharField(max_length=255)
+    file_size = models.PositiveIntegerField()
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.original_filename} in {self.group.group_name}"
+
+    def get_file_size_display(self):
+        """Convert bytes to human readable format"""
+        size = self.file_size
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size < 1024.0:
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} TB"
+
 class CompletedSessionCounter(models.Model):
     count = models.PositiveIntegerField(default=0)
 

@@ -3,14 +3,16 @@ from rest_framework.response import Response
 from rest_framework import status, generics
 from django.contrib.auth import authenticate
 from django.db.models import Q
-from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer
-from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification
+from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer
+from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes
 from django.utils import timezone
 from django.db.models import Count
 from rest_framework.permissions import AllowAny
+from django.http import HttpResponse
+import os
 
 def cleanup_past_sessions():
     """
@@ -424,3 +426,94 @@ def create_test_session(request):
         "session_date": session.date,
         "session_time": session.time
     }) 
+
+class GroupFileListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, group_id):
+        """Get all files for a group"""
+        try:
+            group = Group.objects.get(id=group_id)
+            # Check if user is a member or creator
+            if not (request.user in group.members.all() or request.user == group.creator):
+                return Response({'detail': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+            
+            files = GroupFile.objects.filter(group=group).order_by('-uploaded_at')
+            serializer = GroupFileSerializer(files, many=True)
+            return Response(serializer.data)
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    def post(self, request, group_id):
+        """Upload a file to a group"""
+        try:
+            group = Group.objects.get(id=group_id)
+            # Check if user is a member or creator
+            if not (request.user in group.members.all() or request.user == group.creator):
+                return Response({'detail': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+            
+            if 'file' not in request.FILES:
+                return Response({'detail': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            uploaded_file = request.FILES['file']
+            
+            # Create the file record
+            file_obj = GroupFile.objects.create(
+                group=group,
+                uploaded_by=request.user,
+                file=uploaded_file,
+                original_filename=uploaded_file.name,
+                file_size=uploaded_file.size
+            )
+            
+            serializer = GroupFileSerializer(file_obj)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class GroupFileDownloadView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, file_id):
+        """Download a file"""
+        try:
+            file_obj = GroupFile.objects.get(id=file_id)
+            # Check if user is a member or creator of the group
+            if not (request.user in file_obj.group.members.all() or request.user == file_obj.group.creator):
+                return Response({'detail': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+            
+            if not file_obj.file:
+                return Response({'detail': 'File not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Open and serve the file
+            response = HttpResponse(file_obj.file, content_type='application/octet-stream')
+            response['Content-Disposition'] = f'attachment; filename="{file_obj.original_filename}"'
+            return response
+            
+        except GroupFile.DoesNotExist:
+            return Response({'detail': 'File not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class GroupFileDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, file_id):
+        """Delete a file (only by uploader or group creator)"""
+        try:
+            file_obj = GroupFile.objects.get(id=file_id)
+            # Check if user is the uploader or group creator
+            if not (request.user == file_obj.uploaded_by or request.user == file_obj.group.creator):
+                return Response({'detail': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Delete the file from storage
+            if file_obj.file:
+                if os.path.exists(file_obj.file.path):
+                    os.remove(file_obj.file.path)
+            
+            file_obj.delete()
+            return Response({'detail': 'File deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+            
+        except GroupFile.DoesNotExist:
+            return Response({'detail': 'File not found'}, status=status.HTTP_404_NOT_FOUND) 

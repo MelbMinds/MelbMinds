@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Group, Message, GroupSession
+from .models import User, Group, Message, GroupSession, GroupFile
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -84,3 +84,18 @@ class GroupSessionSerializer(serializers.ModelSerializer):
         model = GroupSession
         fields = ['id', 'group', 'creator', 'creator_name', 'date', 'time', 'location', 'description', 'created_at', 'updated_at']
         read_only_fields = ['group', 'creator', 'creator_name', 'created_at', 'updated_at'] 
+
+class GroupFileSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.CharField(source='uploaded_by.name', read_only=True)
+    file_size_display = serializers.CharField(source='get_file_size_display', read_only=True)
+    file_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = GroupFile
+        fields = ['id', 'group', 'uploaded_by', 'uploaded_by_name', 'file', 'original_filename', 'file_size', 'file_size_display', 'file_url', 'uploaded_at']
+        read_only_fields = ['group', 'uploaded_by', 'uploaded_by_name', 'file_size_display', 'file_url', 'uploaded_at']
+    
+    def get_file_url(self, obj):
+        if obj.file:
+            return obj.file.url
+        return None 

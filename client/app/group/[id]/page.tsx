@@ -55,6 +55,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   const [notifications, setNotifications] = useState<any[]>([])
   const [loadingNotifications, setLoadingNotifications] = useState(false)
+  const [files, setFiles] = useState<any[]>([])
+  const [loadingFiles, setLoadingFiles] = useState(false)
+  const [uploadingFile, setUploadingFile] = useState(false)
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -134,6 +137,23 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       const interval = setInterval(fetchNotifications, 30000)
       
       return () => clearInterval(interval)
+    }
+  }, [group?.id, joined, tokens])
+
+  // Fetch files
+  useEffect(() => {
+    if (group?.id && (joined || isGroupCreator())) {
+      const fetchFiles = () => {
+        setLoadingFiles(true)
+        fetch(`http://localhost:8000/api/groups/${group.id}/files/`, {
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        })
+          .then(res => res.json())
+          .then(setFiles)
+          .finally(() => setLoadingFiles(false))
+      }
+      
+      fetchFiles()
     }
   }, [group?.id, joined, tokens])
 
@@ -332,6 +352,124 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       toast({ title: 'All notifications cleared!' })
     } else {
       toast({ title: 'Error clearing notifications', variant: 'destructive' })
+    }
+  }
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploadingFile(true)
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/files/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+        body: formData,
+      })
+
+      if (res.ok) {
+        const newFile = await res.json()
+        setFiles(prev => [newFile, ...prev])
+        toast({ title: 'File uploaded successfully!' })
+        // Reset the input
+        event.target.value = ''
+      } else {
+        const error = await res.json()
+        toast({ title: 'Error uploading file', description: error.detail, variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error uploading file', variant: 'destructive' })
+    } finally {
+      setUploadingFile(false)
+    }
+  }
+
+  const handleFileDownload = async (file: any) => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/files/${file.id}/download/`, {
+        headers: {
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+      })
+
+      if (res.ok) {
+        const blob = await res.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = file.original_filename
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } else {
+        toast({ title: 'Error downloading file', variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error downloading file', variant: 'destructive' })
+    }
+  }
+
+  const handleFileDelete = async (file: any) => {
+    if (!window.confirm(`Delete "${file.original_filename}"?`)) return
+
+    try {
+      const res = await fetch(`http://localhost:8000/api/files/${file.id}/delete/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+      })
+
+      if (res.ok) {
+        setFiles(prev => prev.filter(f => f.id !== file.id))
+        toast({ title: 'File deleted successfully!' })
+      } else {
+        toast({ title: 'Error deleting file', variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error deleting file', variant: 'destructive' })
+    }
+  }
+
+  const getFileIcon = (filename: string) => {
+    const extension = filename.split('.').pop()?.toLowerCase()
+    switch (extension) {
+      case 'pdf':
+        return '📄'
+      case 'doc':
+      case 'docx':
+        return '📝'
+      case 'xls':
+      case 'xlsx':
+        return '📊'
+      case 'ppt':
+      case 'pptx':
+        return '📈'
+      case 'txt':
+        return '📄'
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return '🖼️'
+      case 'mp4':
+      case 'avi':
+      case 'mov':
+        return '🎥'
+      case 'mp3':
+      case 'wav':
+        return '🎵'
+      case 'zip':
+      case 'rar':
+        return '📦'
+      default:
+        return '📄'
     }
   }
 
@@ -545,30 +683,86 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     <TabsContent value="files" className="space-y-4">
                       <div className="flex justify-between items-center">
                         <h3 className="text-lg font-serif font-medium text-deep-blue">Shared Files</h3>
-                        <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                          <Upload className="mr-2 h-4 w-4" />
-                          Upload File
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="file"
+                            id="file-upload"
+                            className="hidden"
+                            onChange={handleFileUpload}
+                            disabled={uploadingFile}
+                            accept="*/*"
+                          />
+                          <Button 
+                            className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif cursor-pointer"
+                            disabled={uploadingFile}
+                            onClick={() => document.getElementById('file-upload')?.click()}
+                          >
+                            <Upload className="mr-2 h-4 w-4" />
+                            {uploadingFile ? 'Uploading...' : 'Upload File'}
+                          </Button>
+                        </div>
                       </div>
 
-                      <div className="space-y-3">
-                        {(Array.isArray(group.files) ? group.files : []).map((file: any, index: number) => (
-                          <div key={index} className="flex items-center justify-between p-4 bg-white rounded-lg border">
-                            <div className="flex items-center space-x-3">
-                              <FileText className="h-8 w-8 text-deep-blue" />
-                              <div>
-                                <p className="font-medium text-deep-blue">{file.name}</p>
-                                <p className="text-sm text-gray-600">
-                                  {file.size} • Uploaded by {file.uploadedBy} • {file.date}
+                      {loadingFiles ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="text-gray-500">Loading files...</div>
+                        </div>
+                      ) : files.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                          <FileText className="h-16 w-16 mb-4 opacity-50" />
+                          <p className="text-lg">No files uploaded</p>
+                          <p className="text-sm">Upload files to share with your group members</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                          {files.map((file: any) => (
+                            <div 
+                              key={file.id} 
+                              className="flex flex-col items-center p-4 bg-white rounded-lg border hover:shadow-md transition-shadow cursor-pointer group"
+                              onClick={() => handleFileDownload(file)}
+                            >
+                              <div className="text-4xl mb-2">{getFileIcon(file.original_filename)}</div>
+                              <div className="text-center w-full">
+                                <p className="text-sm font-medium text-deep-blue break-words leading-tight" title={file.original_filename}>
+                                  {file.original_filename}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {file.file_size_display}
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                  by {file.uploaded_by_name}
                                 </p>
                               </div>
+                              <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="h-6 px-2 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleFileDownload(file)
+                                  }}
+                                >
+                                  Download
+                                </Button>
+                                {(user?.email === file.uploaded_by || isGroupCreator()) && (
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-6 px-2 text-xs text-red-600 hover:text-red-700"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleFileDelete(file)
+                                    }}
+                                  >
+                                    Delete
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                            <Button variant="outline" size="sm" className="bg-transparent">
-                              Download
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </TabsContent>
                   )}
 
