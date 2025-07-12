@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from .views import RegisterView, LoginView, GroupListCreateView, GroupRetrieveView, UserProfileView, JoinGroupView, GroupChatView, GroupMembersView, GroupSessionListCreateView, GroupSessionRetrieveUpdateDeleteView, stats_summary, group_notifications, trigger_cleanup, create_test_session, clear_group_notifications
+from .views import RegisterView, LoginView, GroupListCreateView, GroupRetrieveView, UserProfileView, JoinGroupView, GroupChatView, GroupMembersView, GroupSessionListCreateView, GroupSessionRetrieveUpdateDeleteView, stats_summary, group_notifications, trigger_cleanup, create_test_session, clear_group_notifications, test_moderation, create_sample_groups
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
@@ -38,4 +38,6 @@ urlpatterns = [
     path('api/groups/<int:group_id>/notifications/clear/', clear_group_notifications, name='clear-group-notifications'),
     path('api/cleanup/', trigger_cleanup, name='trigger-cleanup'),
     path('api/test-session/', create_test_session, name='create-test-session'),
+    path('api/test-moderation/', test_moderation, name='test-moderation'),
+    path('api/create-sample-groups/', create_sample_groups, name='create-sample-groups'),
 ]

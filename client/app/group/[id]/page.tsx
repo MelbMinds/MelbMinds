@@ -772,20 +772,56 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                 <CardTitle className="font-serif font-medium text-deep-blue">Similar Groups</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  <div className="p-3 bg-soft-gray rounded-lg">
-                    <p className="font-medium text-sm text-deep-blue">Advanced Python Programming</p>
-                    <p className="text-xs text-gray-600">COMP20008 • 8 members</p>
+                {group.similar_groups && group.similar_groups.length > 0 ? (
+                  <div className="space-y-3">
+                    {group.similar_groups.map((similar: any, index: number) => (
+                      <div 
+                        key={index} 
+                        className="p-3 bg-soft-gray rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                        onClick={() => window.location.href = `/group/${similar.group.id}`}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="font-medium text-sm text-deep-blue">{similar.group.group_name}</p>
+                          <Badge variant="secondary" className="text-xs">
+                            {Math.round(similar.similarity_score)}% match
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-gray-600 mb-2">
+                          {similar.group.subject_code} • {similar.group.member_count || 0} members
+                        </p>
+                        <div className="text-xs text-gray-500">
+                          {similar.matching_factors.subject_code && (
+                            <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded mr-1 mb-1">
+                              Same subject
+                            </span>
+                          )}
+                          {similar.matching_factors.year_level && (
+                            <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded mr-1 mb-1">
+                              Same year
+                            </span>
+                          )}
+                          {similar.matching_factors.meeting_format && (
+                            <span className="inline-block bg-purple-100 text-purple-800 px-2 py-1 rounded mr-1 mb-1">
+                              Same format
+                            </span>
+                          )}
+                          {similar.matching_factors.tags_overlap && (
+                            <span className="inline-block bg-orange-100 text-orange-800 px-2 py-1 rounded mr-1 mb-1">
+                              Similar tags
+                            </span>
+                          )}
+                          {similar.matching_factors.personality_overlap && (
+                            <span className="inline-block bg-pink-100 text-pink-800 px-2 py-1 rounded mr-1 mb-1">
+                              Similar personality
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="p-3 bg-soft-gray rounded-lg">
-                    <p className="font-medium text-sm text-deep-blue">Data Structures & Algorithms</p>
-                    <p className="text-xs text-gray-600">COMP20003 • 12 members</p>
-                  </div>
-                  <div className="p-3 bg-soft-gray rounded-lg">
-                    <p className="font-medium text-sm text-deep-blue">Software Engineering</p>
-                    <p className="text-xs text-gray-600">SWEN20003 • 15 members</p>
-                  </div>
-                </div>
+                ) : (
+                  <div className="text-gray-500 text-sm">No similar groups found.</div>
+                )}
               </CardContent>
             </Card>
           </div>

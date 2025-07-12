@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, generics
+from rest_framework import status, generics, serializers
 from django.contrib.auth import authenticate
 from django.db.models import Q
 from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer
@@ -11,6 +11,7 @@ from rest_framework.decorators import api_view, permission_classes
 from django.utils import timezone
 from django.db.models import Count
 from rest_framework.permissions import AllowAny
+from .perspective_moderation import perspective_moderator
 
 def cleanup_past_sessions():
     """
@@ -57,9 +58,100 @@ def cleanup_past_sessions():
     
     return deleted_count
 
+def find_similar_groups(group, limit=3):
+    """
+    Find similar groups based on multiple factors:
+    - Subject code (highest weight)
+    - Tags overlap
+    - Group personality overlap
+    - Year level
+    - Meeting format
+    """
+    from django.db.models import Q, Count
+    from difflib import SequenceMatcher
+    
+    similar_groups = []
+    
+    # Get all other groups (excluding the current one)
+    all_groups = Group.objects.exclude(id=group.id)
+    
+    for other_group in all_groups:
+        score = 0
+        factors = {}
+        
+        # 1. Subject code match (highest weight: 40 points)
+        if group.subject_code == other_group.subject_code:
+            score += 40
+            factors['subject_code'] = True
+        
+        # 2. Tags overlap (up to 25 points)
+        if group.tags and other_group.tags:
+            group_tags = set([tag.strip().lower() for tag in group.tags.split(',')])
+            other_tags = set([tag.strip().lower() for tag in other_group.tags.split(',')])
+            
+            if group_tags and other_tags:
+                overlap = len(group_tags.intersection(other_tags))
+                total_unique = len(group_tags.union(other_tags))
+                if total_unique > 0:
+                    tag_similarity = overlap / total_unique
+                    score += tag_similarity * 25
+                    factors['tags_overlap'] = tag_similarity
+        
+        # 3. Group personality overlap (up to 20 points)
+        if group.group_personality and other_group.group_personality:
+            group_personality = set([p.strip().lower() for p in group.group_personality.split(',')])
+            other_personality = set([p.strip().lower() for p in other_group.group_personality.split(',')])
+            
+            if group_personality and other_personality:
+                overlap = len(group_personality.intersection(other_personality))
+                total_unique = len(group_personality.union(other_personality))
+                if total_unique > 0:
+                    personality_similarity = overlap / total_unique
+                    score += personality_similarity * 20
+                    factors['personality_overlap'] = personality_similarity
+        
+        # 4. Year level match (10 points)
+        if group.year_level == other_group.year_level:
+            score += 10
+            factors['year_level'] = True
+        
+        # 5. Meeting format match (5 points)
+        if group.meeting_format == other_group.meeting_format:
+            score += 5
+            factors['meeting_format'] = True
+        
+        # Only include groups with some similarity (score > 10)
+        if score > 10:
+            similar_groups.append({
+                'group': other_group,
+                'score': score,
+                'factors': factors
+            })
+    
+    # Sort by score and return top results
+    similar_groups.sort(key=lambda x: x['score'], reverse=True)
+    return similar_groups[:limit]
+
 class RegisterView(APIView):
     def post(self, request):
-        serializer = UserSerializer(data=request.data)
+        # Content moderation for user registration
+        name_validation = perspective_moderator.validate_user_input('name', request.data.get('name', ''))
+        bio_validation = perspective_moderator.validate_user_input('bio', request.data.get('bio', ''))
+        
+        if not name_validation['valid']:
+            return Response({
+                'error': name_validation['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not bio_validation['valid']:
+            return Response({
+                'error': bio_validation['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Use original values (Perspective API doesn't sanitize, it blocks)
+        data = request.data.copy()
+        
+        serializer = UserSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -132,6 +224,26 @@ class GroupListCreateView(generics.ListCreateAPIView):
         return context
 
     def perform_create(self, serializer):
+        # Content moderation for group creation
+        group_name_validation = perspective_moderator.validate_user_input('group name', serializer.validated_data.get('group_name', ''))
+        description_validation = perspective_moderator.validate_user_input('description', serializer.validated_data.get('description', ''))
+        tags_validation = perspective_moderator.validate_user_input('tags', serializer.validated_data.get('tags', ''))
+        
+        if not group_name_validation['valid']:
+            raise serializers.ValidationError({
+                'group_name': group_name_validation['message']
+            })
+        
+        if not description_validation['valid']:
+            raise serializers.ValidationError({
+                'description': description_validation['message']
+            })
+        
+        if not tags_validation['valid']:
+            raise serializers.ValidationError({
+                'tags': tags_validation['message']
+            })
+        
         serializer.save(creator=self.request.user)
 
 class GroupRetrieveView(generics.RetrieveAPIView):
@@ -146,7 +258,31 @@ class GroupRetrieveView(generics.RetrieveAPIView):
     def get(self, request, *args, **kwargs):
         # Clean up past sessions when viewing a group
         cleanup_past_sessions()
-        return super().get(request, *args, **kwargs)
+        
+        # Get the group
+        group = self.get_object()
+        
+        # Find similar groups
+        similar_groups_data = find_similar_groups(group, limit=3)
+        
+        # Serialize the main group
+        serializer = self.get_serializer(group)
+        data = serializer.data
+        
+        # Add similar groups to the response
+        similar_groups_serialized = []
+        for similar_data in similar_groups_data:
+            similar_group = similar_data['group']
+            similar_serializer = GroupSerializer(similar_group)
+            similar_groups_serialized.append({
+                'group': similar_serializer.data,
+                'similarity_score': similar_data['score'],
+                'matching_factors': similar_data['factors']
+            })
+        
+        data['similar_groups'] = similar_groups_serialized
+        
+        return Response(data)
 
 class JoinGroupView(APIView):
     permission_classes = [IsAuthenticated]
@@ -179,6 +315,20 @@ class UserProfileView(APIView):
     def put(self, request):
         user = request.user
         data = request.data.copy()
+        
+        # Content moderation for profile updates
+        name_validation = perspective_moderator.validate_user_input('name', data.get('name', ''))
+        bio_validation = perspective_moderator.validate_user_input('bio', data.get('bio', ''))
+        
+        if not name_validation['valid']:
+            return Response({
+                'error': name_validation['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not bio_validation['valid']:
+            return Response({
+                'error': bio_validation['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         # Convert languages array back to string for storage
         if 'languages' in data and isinstance(data['languages'], list):
@@ -215,7 +365,20 @@ class GroupChatView(APIView):
         group = Group.objects.get(id=group_id)
         if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
             return Response({'detail': 'Not a group member'}, status=403)
-        serializer = MessageSerializer(data=request.data)
+        
+        # Content moderation for chat messages
+        message_text = request.data.get('text', '')
+        message_validation = perspective_moderator.validate_user_input('message', message_text)
+        
+        if not message_validation['valid']:
+            return Response({
+                'error': message_validation['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Use original message text (Perspective API blocks instead of sanitizing)
+        data = request.data.copy()
+        
+        serializer = MessageSerializer(data=data)
         if serializer.is_valid():
             serializer.save(user=request.user, group=group)
             return Response(serializer.data, status=201)
@@ -423,4 +586,112 @@ def create_test_session(request):
         "session_id": session.id,
         "session_date": session.date,
         "session_time": session.time
+    })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def test_moderation(request):
+    """Test endpoint for content moderation using Perspective API"""
+    text = request.data.get('text', '')
+    validation = perspective_moderator.validate_user_input('test field', text)
+    
+    return Response({
+        'text': text,
+        'is_toxic': not validation['valid'],
+        'message': validation['message'],
+        'analysis': validation.get('analysis', {}),
+        'highest_attribute': validation.get('highest_attribute'),
+        'score': validation.get('score')
+    })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_sample_groups(request):
+    """Create sample groups for testing similar groups functionality"""
+    from .models import User, Group
+    
+    # Get or create test user
+    user, _ = User.objects.get_or_create(
+        email='test@example.com',
+        defaults={
+            'name': 'Test User',
+            'major': 'Computer Science',
+            'year_level': '2nd Year',
+            'preferred_study_format': 'In-person',
+            'languages_spoken': 'English'
+        }
+    )
+    
+    # Create sample groups with different similarities
+    sample_groups = [
+        {
+            'group_name': 'Advanced Python Programming',
+            'subject_code': 'COMP20008',
+            'course_name': 'Advanced Programming Techniques',
+            'description': 'Advanced Python programming concepts and techniques',
+            'year_level': '2nd Year',
+            'meeting_format': 'In-person',
+            'primary_language': 'English',
+            'meeting_schedule': 'Weekly',
+            'location': 'Engineering Building',
+            'tags': 'Python, Programming, Algorithms, Data Structures',
+            'group_personality': 'Focused, Collaborative, Technical'
+        },
+        {
+            'group_name': 'Data Structures & Algorithms',
+            'subject_code': 'COMP20008',
+            'course_name': 'Data Structures and Algorithms',
+            'description': 'Study of fundamental data structures and algorithms',
+            'year_level': '2nd Year',
+            'meeting_format': 'Virtual',
+            'primary_language': 'English',
+            'meeting_schedule': 'Bi-weekly',
+            'location': 'Online',
+            'tags': 'Algorithms, Data Structures, Programming, Python',
+            'group_personality': 'Technical, Analytical, Problem-solving'
+        },
+        {
+            'group_name': 'Software Engineering Principles',
+            'subject_code': 'SWEN20003',
+            'course_name': 'Software Engineering',
+            'description': 'Software development methodologies and practices',
+            'year_level': '2nd Year',
+            'meeting_format': 'Hybrid',
+            'primary_language': 'English',
+            'meeting_schedule': 'Weekly',
+            'location': 'Engineering Building',
+            'tags': 'Software Engineering, Development, Teamwork, Design',
+            'group_personality': 'Collaborative, Creative, Professional'
+        },
+        {
+            'group_name': 'Machine Learning Fundamentals',
+            'subject_code': 'COMP30024',
+            'course_name': 'Machine Learning',
+            'description': 'Introduction to machine learning concepts and algorithms',
+            'year_level': '3rd Year',
+            'meeting_format': 'In-person',
+            'primary_language': 'English',
+            'meeting_schedule': 'Weekly',
+            'location': 'Engineering Building',
+            'tags': 'Machine Learning, AI, Python, Mathematics',
+            'group_personality': 'Technical, Research-oriented, Innovative'
+        }
+    ]
+    
+    created_groups = []
+    for group_data in sample_groups:
+        group, created = Group.objects.get_or_create(
+            group_name=group_data['group_name'],
+            defaults={
+                **group_data,
+                'creator': user
+            }
+        )
+        if created:
+            created_groups.append(group.group_name)
+    
+    return Response({
+        'message': f'Created {len(created_groups)} new sample groups',
+        'created_groups': created_groups,
+        'total_groups': Group.objects.count()
     }) 
