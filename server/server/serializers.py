@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Group, Message, GroupSession, GroupFile
+from .models import User, Group, Message, GroupSession, GroupFile, GroupRating
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -20,6 +20,9 @@ class GroupSerializer(serializers.ModelSerializer):
     creator_email = serializers.CharField(source='creator.email', read_only=True)
     member_count = serializers.SerializerMethodField()
     joined = serializers.SerializerMethodField()
+    average_rating = serializers.SerializerMethodField()
+    rating_count = serializers.SerializerMethodField()
+    user_rating = serializers.SerializerMethodField()
     
     class Meta:
         model = Group
@@ -33,6 +36,24 @@ class GroupSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.members.filter(id=request.user.id).exists()
         return False
+    
+    def get_average_rating(self, obj):
+        from .models import GroupRating
+        return GroupRating.get_average_rating(obj)
+    
+    def get_rating_count(self, obj):
+        from .models import GroupRating
+        return GroupRating.get_rating_count(obj)
+    
+    def get_user_rating(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            try:
+                rating = GroupRating.objects.get(user=request.user, group=obj)
+                return float(rating.rating)
+            except GroupRating.DoesNotExist:
+                return None
+        return None
 
 class GroupDetailSerializer(serializers.ModelSerializer):
     creator_name = serializers.CharField(source='creator.name', read_only=True)
@@ -40,6 +61,9 @@ class GroupDetailSerializer(serializers.ModelSerializer):
     member_count = serializers.SerializerMethodField()
     # course_name is a direct field, not a relation
     joined = serializers.SerializerMethodField()
+    average_rating = serializers.SerializerMethodField()
+    rating_count = serializers.SerializerMethodField()
+    user_rating = serializers.SerializerMethodField()
     
     class Meta:
         model = Group
@@ -53,6 +77,24 @@ class GroupDetailSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.members.filter(id=request.user.id).exists()
         return False
+    
+    def get_average_rating(self, obj):
+        from .models import GroupRating
+        return GroupRating.get_average_rating(obj)
+    
+    def get_rating_count(self, obj):
+        from .models import GroupRating
+        return GroupRating.get_rating_count(obj)
+    
+    def get_user_rating(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            try:
+                rating = GroupRating.objects.get(user=request.user, group=obj)
+                return float(rating.rating)
+            except GroupRating.DoesNotExist:
+                return None
+        return None
 
 class UserProfileSerializer(serializers.ModelSerializer):
     languages = serializers.SerializerMethodField()
@@ -98,4 +140,20 @@ class GroupFileSerializer(serializers.ModelSerializer):
     def get_file_url(self, obj):
         if obj.file:
             return obj.file.url
-        return None 
+        return None
+
+class GroupRatingSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.name', read_only=True)
+    average_rating = serializers.SerializerMethodField()
+    rating_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = GroupRating
+        fields = ['id', 'user', 'user_name', 'group', 'rating', 'created_at', 'updated_at', 'average_rating', 'rating_count']
+        read_only_fields = ['user', 'user_name', 'created_at', 'updated_at', 'average_rating', 'rating_count']
+    
+    def get_average_rating(self, obj):
+        return GroupRating.get_average_rating(obj.group)
+    
+    def get_rating_count(self, obj):
+        return GroupRating.get_rating_count(obj.group) 

@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status, generics, serializers
 from django.contrib.auth import authenticate
 from django.db.models import Q
-from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer
-from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile
+from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer
+from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile, GroupRating
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -696,7 +696,54 @@ def create_sample_groups(request):
         'message': f'Created {len(created_groups)} new sample groups',
         'created_groups': created_groups,
         'total_groups': Group.objects.count()
-    }) 
+    })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_sample_ratings(request):
+    """Create sample ratings for testing the rating system"""
+    from .models import User, Group, GroupRating
+    import random
+    
+    # Get or create test users
+    users = []
+    for i in range(5):
+        user, _ = User.objects.get_or_create(
+            email=f'test{i}@example.com',
+            defaults={
+                'name': f'Test User {i}',
+                'major': 'Computer Science',
+                'year_level': '2nd Year',
+                'preferred_study_format': 'In-person',
+                'languages_spoken': 'English'
+            }
+        )
+        users.append(user)
+    
+    # Get all groups
+    groups = Group.objects.all()
+    
+    # Create random ratings
+    ratings_created = 0
+    for group in groups:
+        for user in users:
+            # 70% chance to create a rating
+            if random.random() < 0.7:
+                rating_value = random.choice([1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0])
+                rating, created = GroupRating.objects.get_or_create(
+                    user=user,
+                    group=group,
+                    defaults={'rating': rating_value}
+                )
+                if created:
+                    ratings_created += 1
+    
+    return Response({
+        'message': f'Created {ratings_created} sample ratings',
+        'total_ratings': GroupRating.objects.count(),
+        'total_groups': groups.count(),
+        'total_users': users.__len__()
+    })
 
 class GroupFileListCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -847,3 +894,62 @@ class GroupFileDeleteView(APIView):
             
         except GroupFile.DoesNotExist:
             return Response({'detail': 'File not found'}, status=status.HTTP_404_NOT_FOUND) 
+
+class GroupRatingView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, group_id):
+        """Get rating for a group by the current user"""
+        try:
+            group = Group.objects.get(id=group_id)
+            try:
+                rating = GroupRating.objects.get(user=request.user, group=group)
+                serializer = GroupRatingSerializer(rating)
+                return Response(serializer.data)
+            except GroupRating.DoesNotExist:
+                return Response({'rating': None}, status=status.HTTP_404_NOT_FOUND)
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    def post(self, request, group_id):
+        """Create or update a rating for a group"""
+        try:
+            group = Group.objects.get(id=group_id)
+            rating_value = request.data.get('rating')
+            
+            if not rating_value:
+                return Response({'detail': 'Rating value is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate rating value
+            try:
+                rating_float = float(rating_value)
+                if rating_float < 1.0 or rating_float > 5.0 or rating_float % 0.5 != 0:
+                    return Response({'detail': 'Rating must be between 1.0 and 5.0 in 0.5 increments'}, status=status.HTTP_400_BAD_REQUEST)
+            except ValueError:
+                return Response({'detail': 'Invalid rating value'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create or update rating
+            rating, created = GroupRating.objects.update_or_create(
+                user=request.user,
+                group=group,
+                defaults={'rating': rating_value}
+            )
+            
+            serializer = GroupRatingSerializer(rating)
+            return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+            
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    def delete(self, request, group_id):
+        """Delete a rating for a group"""
+        try:
+            group = Group.objects.get(id=group_id)
+            try:
+                rating = GroupRating.objects.get(user=request.user, group=group)
+                rating.delete()
+                return Response({'detail': 'Rating deleted'}, status=status.HTTP_204_NO_CONTENT)
+            except GroupRating.DoesNotExist:
+                return Response({'detail': 'Rating not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND) 

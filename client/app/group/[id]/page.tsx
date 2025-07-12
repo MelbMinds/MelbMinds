@@ -35,6 +35,7 @@ import { useUser } from "@/components/UserContext"
 import { use } from "react"
 import { toast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
+import { StarRating } from "@/components/ui/star-rating"
 
 export default function StudyGroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -58,6 +59,8 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [files, setFiles] = useState<any[]>([])
   const [loadingFiles, setLoadingFiles] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
+  const [userRating, setUserRating] = useState<number | null>(null)
+  const [ratingLoading, setRatingLoading] = useState(false)
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -156,6 +159,25 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       fetchFiles()
     }
   }, [group?.id, joined, tokens])
+
+  // Fetch user's rating
+  useEffect(() => {
+    if (group?.id && tokens?.access) {
+      fetch(`http://localhost:8000/api/groups/${group.id}/rating/`, {
+        headers: { 'Authorization': `Bearer ${tokens.access}` },
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.rating) {
+            setUserRating(data.rating)
+          }
+        })
+        .catch(() => {
+          // User hasn't rated yet
+          setUserRating(null)
+        })
+    }
+  }, [group?.id, tokens])
 
   const [message, setMessage] = useState("")
   const [hasRequested, setHasRequested] = useState(false)
@@ -462,6 +484,41 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  const handleRatingChange = async (newRating: number) => {
+    if (!group?.id || !tokens?.access) return
+    
+    setRatingLoading(true)
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/rating/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokens.access}`,
+        },
+        body: JSON.stringify({ rating: newRating }),
+      })
+
+      if (res.ok) {
+        setUserRating(newRating)
+        // Refresh group data to update average rating
+        const groupRes = await fetch(`http://localhost:8000/api/groups/${group.id}/`, {
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        })
+        if (groupRes.ok) {
+          const updatedGroup = await groupRes.json()
+          setGroup(updatedGroup)
+        }
+        toast({ title: 'Rating submitted successfully!' })
+      } else {
+        toast({ title: 'Error submitting rating', variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error submitting rating', variant: 'destructive' })
+    } finally {
+      setRatingLoading(false)
+    }
+  }
+
   const getFileIcon = (filename: string) => {
     const extension = filename.split('.').pop()?.toLowerCase()
     switch (extension) {
@@ -528,8 +585,8 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       {group.member_count || 0} members
                     </div>
                     <div className="flex items-center">
-                      <Star className="mr-1 h-4 w-4 text-gold fill-current" />
-                      {group.rating || "New"}
+                      <Star className="mr-1 h-4 w-4 text-yellow-400 fill-current" />
+                      {group.average_rating ? `${group.average_rating.toFixed(1)} (${group.rating_count || 0})` : "No ratings"}
                     </div>
                     <Badge className={`${getFormatColor(group.meeting_format)} flex items-center gap-1 border`}>
                       {getFormatIcon(group.meeting_format)}
@@ -555,6 +612,43 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
               </CardHeader>
               <CardContent>
                 <p className="text-gray-700 mb-6 leading-relaxed">{group.description}</p>
+
+                {/* Rating Section */}
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-medium text-deep-blue">Rate this group</h3>
+                    {group.average_rating && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Average:</span>
+                        <StarRating 
+                          rating={group.average_rating} 
+                          readonly 
+                          size="sm" 
+                          showValue 
+                        />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                    <StarRating 
+                      rating={userRating || 0} 
+                      onRatingChange={handleRatingChange}
+                      size="lg"
+                      showValue
+                      className="flex-1"
+                    />
+                    {ratingLoading && (
+                      <div className="text-sm text-gray-500">Submitting...</div>
+                    )}
+                  </div>
+                  
+                  {!userRating && (
+                    <p className="text-sm text-gray-500 mt-2">
+                      Click on the stars to rate this group
+                    </p>
+                  )}
+                </div>
 
                 <div className="grid md:grid-cols-2 gap-4 mb-6">
                   <div className="flex items-center text-sm text-gray-600">

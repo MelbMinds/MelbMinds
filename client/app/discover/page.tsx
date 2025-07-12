@@ -313,8 +313,10 @@ export default function DiscoverPage() {
                         <CardTitle className="text-lg font-serif text-deep-blue">{group.group_name}</CardTitle>
                         <div className="flex items-center mt-2 space-x-4">
                           <div className="flex items-center">
-                            <Star className="h-4 w-4 text-gold fill-current mr-1" />
-                            <span className="text-sm font-medium">{group.rating || "N/A"}</span>
+                            <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
+                            <span className="text-sm font-medium">
+                              {group.average_rating ? `${group.average_rating.toFixed(1)} (${group.rating_count || 0})` : "No ratings"}
+                            </span>
                           </div>
                           <div className="flex items-center text-sm text-gray-600">
                             <Clock className="h-4 w-4 mr-1" />
@@ -384,13 +386,9 @@ export default function DiscoverPage() {
                         <Link href={`/group/${group.id}`}>
                           <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">View Your Group</Button>
                         </Link>
-                      ) : group.joined ? (
-                        <Link href={`/group/${group.id}`}>
-                          <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">View Group</Button>
-                        </Link>
                       ) : (
                         <Link href={`/group/${group.id}`}>
-                          <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">Join Group</Button>
+                          <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">View Group</Button>
                         </Link>
                       )}
                     </div>
