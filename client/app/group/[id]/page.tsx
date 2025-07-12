@@ -28,6 +28,7 @@ import {
   Calendar as CalendarIcon,
   Edit,
   Trash2,
+  Bell,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
@@ -51,6 +52,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [sessionForm, setSessionForm] = useState({ date: '', time: '', location: '', description: '' })
   const [editingSession, setEditingSession] = useState<any>(null)
   const [sessionLoading, setSessionLoading] = useState(false)
+
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [loadingNotifications, setLoadingNotifications] = useState(false)
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -95,11 +99,41 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   // Fetch sessions
   useEffect(() => {
     if (group?.id && (joined || isGroupCreator())) {
-      fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
-        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
-      })
-        .then(res => res.json())
-        .then(setSessions)
+      const fetchSessions = () => {
+        fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        })
+          .then(res => res.json())
+          .then(setSessions)
+      }
+      
+      fetchSessions()
+      
+      // Refresh sessions every 30 seconds to catch auto-deleted sessions
+      const interval = setInterval(fetchSessions, 30000)
+      
+      return () => clearInterval(interval)
+    }
+  }, [group?.id, joined, tokens])
+
+  useEffect(() => {
+    if (group?.id && (joined || isGroupCreator())) {
+      const fetchNotifications = () => {
+        setLoadingNotifications(true)
+        fetch(`http://localhost:8000/api/groups/${group.id}/notifications/`, {
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        })
+          .then(res => res.json())
+          .then(setNotifications)
+          .finally(() => setLoadingNotifications(false))
+      }
+      
+      fetchNotifications()
+      
+      // Refresh notifications every 30 seconds to catch new notifications
+      const interval = setInterval(fetchNotifications, 30000)
+      
+      return () => clearInterval(interval)
     }
   }, [group?.id, joined, tokens])
 
@@ -677,23 +711,30 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
               </CardContent>
             </Card>
 
-            {/* Contact Admin */}
+            {/* Notifications Panel */}
             <Card className="shadow-lg border-0">
               <CardHeader>
-                <CardTitle className="font-serif font-medium text-deep-blue">Contact Admin</CardTitle>
+                <CardTitle className="font-serif font-medium text-deep-blue flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-gold" /> Notifications
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <Textarea
-                    placeholder="Introduce yourself and explain why you'd like to join this study group..."
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    rows={4}
-                  />
-                  <Button className="w-full bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                    Send Message
-                  </Button>
-                </div>
+                {loadingNotifications ? (
+                  <div className="text-gray-500">Loading notifications...</div>
+                ) : notifications.length === 0 ? (
+                  <div className="text-gray-500">No notifications yet.</div>
+                ) : (
+                  <ul className="space-y-3">
+                    {notifications.map((n) => (
+                      <li key={n.id} className="bg-soft-gray rounded p-3 text-sm text-deep-blue">
+                        <span>{n.message}</span>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {new Date(n.created_at).toLocaleString()}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
 

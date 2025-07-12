@@ -12,6 +12,67 @@ from django.utils import timezone
 from django.db.models import Count
 from rest_framework.permissions import AllowAny
 
+def cleanup_past_sessions():
+    """
+    Utility function to clean up past sessions, create notifications, and update counter.
+    This should be called periodically or when sessions are accessed.
+    """
+    # Get current time in local timezone (Australia)
+    from django.utils import timezone
+    import pytz
+    
+    # Get current time in Australia/Sydney timezone
+    australia_tz = pytz.timezone('Australia/Sydney')
+    now_local = timezone.now().astimezone(australia_tz)
+    current_date = now_local.date()
+    current_time = now_local.time().replace(microsecond=0)
+    current_seconds = current_time.hour * 3600 + current_time.minute * 60 + current_time.second
+    
+    print(f"Cleanup: Current time (local): {now_local} (date: {current_date}, time: {current_time}, seconds: {current_seconds})")
+    
+    # Get ALL sessions and check each one individually
+    all_sessions = GroupSession.objects.all()
+    past_sessions = []
+    
+    for session in all_sessions:
+        session_time = session.time.replace(microsecond=0)
+        session_seconds = session_time.hour * 3600 + session_time.minute * 60 + session_time.second
+        print(f"Checking session: {session} (date: {session.date}, time: {session_time}, seconds: {session_seconds}) vs now {current_date} {current_time} ({current_seconds})")
+        
+        # Check if session is in the past
+        if session.date < current_date:
+            print(f"  -> Session date {session.date} is before current date {current_date}")
+            past_sessions.append(session)
+        elif session.date == current_date and session_seconds < current_seconds:
+            print(f"  -> Session time {session_time} ({session_seconds}) is before current time {current_time} ({current_seconds})")
+            past_sessions.append(session)
+        else:
+            print(f"  -> Session is in the future")
+    
+    deleted_count = len(past_sessions)
+    print(f"Cleanup: Found {deleted_count} past sessions to delete")
+    
+    # Create notifications for each past session before deleting
+    for session in past_sessions:
+        print(f"Deleting session: {session} (date: {session.date}, time: {session.time})")
+        GroupNotification.objects.create(
+            group=session.group,
+            message=f"Session at {session.location} on {session.date} {session.time} has finished."
+        )
+        # Delete the session
+        session.delete()
+    
+    # Update the completed sessions counter
+    if deleted_count > 0:
+        CompletedSessionCounter.increment(deleted_count)
+        try:
+            counter = CompletedSessionCounter.objects.get(pk=1)
+            print(f"Updated counter: {counter.count}")
+        except CompletedSessionCounter.DoesNotExist:
+            print("Counter object doesn't exist yet")
+    
+    return deleted_count
+
 class RegisterView(APIView):
     def post(self, request):
         serializer = UserSerializer(data=request.data)
@@ -97,6 +158,11 @@ class GroupRetrieveView(generics.RetrieveAPIView):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+    
+    def get(self, request, *args, **kwargs):
+        # Clean up past sessions when viewing a group
+        cleanup_past_sessions()
+        return super().get(request, *args, **kwargs)
 
 class JoinGroupView(APIView):
     permission_classes = [IsAuthenticated]
@@ -191,28 +257,16 @@ class GroupSessionListCreateView(APIView):
         group = Group.objects.get(id=group_id)
         if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
             return Response({'detail': 'Not a group member'}, status=403)
+        
+        # Always clean up past sessions on every request
+        deleted_count = cleanup_past_sessions()
+        
+        # Return only upcoming sessions for this group
         now = timezone.now()
-        # Delete past sessions, increment counter, and notify
-        past_sessions = GroupSession.objects.filter(
-            group=group,
-            Q(date__lt=now.date()) |
-            Q(date=now.date(), time__lt=now.time())
-        )
-        deleted_count = past_sessions.count()
-        for session in past_sessions:
-            GroupNotification.objects.create(
-                group=group,
-                message=f"Session at {session.location} on {session.date} {session.time} has finished."
-            )
-        past_sessions.delete()
-        if deleted_count:
-            CompletedSessionCounter.increment(deleted_count)
-        # Return only upcoming sessions
         sessions = GroupSession.objects.filter(
-            group=group
-        ).filter(
             Q(date__gt=now.date()) |
-            Q(date=now.date(), time__gte=now.time())
+            Q(date=now.date(), time__gte=now.time()),
+            group=group
         ).order_by('date', 'time')
         serializer = GroupSessionSerializer(sessions, many=True)
         return Response(serializer.data)
@@ -268,6 +322,10 @@ def group_notifications(request, group_id):
     group = Group.objects.get(id=group_id)
     if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
         return Response({'detail': 'Not a group member'}, status=403)
+    
+    # Clean up past sessions before fetching notifications
+    cleanup_past_sessions()
+    
     notifications = GroupNotification.objects.filter(group=group).order_by('-created_at')[:50]
     data = [
         {
@@ -281,6 +339,9 @@ def group_notifications(request, group_id):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def stats_summary(request):
+    # Clean up past sessions before calculating stats
+    cleanup_past_sessions()
+    
     now = timezone.now()
     from .models import User, Group, GroupSession
     active_students = User.objects.count()
@@ -306,4 +367,67 @@ def stats_summary(request):
         "groups_created": groups_created,
         "sessions_completed": sessions_completed,
         "grade_improvement": 12,
+    })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def trigger_cleanup(request):
+    """Manual trigger for session cleanup (for testing)"""
+    deleted_count = cleanup_past_sessions()
+    return Response({
+        "message": f"Cleanup completed. {deleted_count} session(s) deleted.",
+        "deleted_count": deleted_count
+    })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_test_session(request):
+    """Create a test session in the past (for testing cleanup)"""
+    from datetime import datetime, timedelta
+    from .models import User, Group
+    
+    # Get or create test user and group
+    user, _ = User.objects.get_or_create(
+        email='test@example.com',
+        defaults={
+            'name': 'Test User',
+            'major': 'Computer Science',
+            'year_level': '2nd Year',
+            'preferred_study_format': 'In-person',
+            'languages_spoken': 'English'
+        }
+    )
+    
+    group, _ = Group.objects.get_or_create(
+        group_name='Test Group',
+        defaults={
+            'subject_code': 'TEST101',
+            'course_name': 'Test Course',
+            'description': 'A test group',
+            'year_level': '2nd Year',
+            'meeting_format': 'In-person',
+            'primary_language': 'English',
+            'meeting_schedule': 'Weekly',
+            'location': 'Test Location',
+            'creator': user
+        }
+    )
+    
+    # Create a session from 2 hours ago (today but past time)
+    past_time = datetime.now() - timedelta(hours=2)
+    
+    session = GroupSession.objects.create(
+        group=group,
+        creator=user,
+        date=past_time.date(),
+        time=past_time.time(),
+        location='Past Test Location',
+        description='This session should be deleted by cleanup'
+    )
+    
+    return Response({
+        "message": f"Created test session: {session}",
+        "session_id": session.id,
+        "session_date": session.date,
+        "session_time": session.time
     }) 
