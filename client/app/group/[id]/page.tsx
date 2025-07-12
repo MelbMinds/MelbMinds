@@ -81,9 +81,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         .then(setMembers)
     }
   }, [group?.id])
-  // Fetch chat messages if joined
+  // Fetch chat messages if joined or is creator
   useEffect(() => {
-    if (group?.id && joined) {
+    if (group?.id && (joined || isGroupCreator())) {
       fetch(`http://localhost:8000/api/groups/${group.id}/chat/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
@@ -451,25 +451,29 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
                 <CardContent>
                   {/* Chat Tab */}
-                  {joined && (
+                  {(joined || isGroupCreator()) && (
                     <TabsContent value="chat" className="space-y-4">
                       <div className="h-96 overflow-y-auto space-y-4 p-4 bg-soft-gray rounded-lg">
-                        {messages.map((msg: any) => (
-                          <div key={msg.id} className="flex space-x-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback className="bg-deep-blue text-white text-xs">
-                                {msg.user_name?.split(" ").map((n: string) => n[0]).join("")}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-2 mb-1">
-                                <span className="font-medium text-deep-blue text-sm">{msg.user_name}</span>
-                                <span className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleString()}</span>
+                        {Array.isArray(messages) && messages.length > 0 ? (
+                          messages.map((msg: any) => (
+                            <div key={msg.id} className="flex space-x-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="bg-deep-blue text-white text-xs">
+                                  {msg.user_name?.split(" ").map((n: string) => n[0]).join("")}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-1">
+                                  <span className="font-medium text-deep-blue text-sm">{msg.user_name}</span>
+                                  <span className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleString()}</span>
+                                </div>
+                                <p className="text-sm text-gray-700 bg-white p-3 rounded-lg shadow-sm">{msg.text}</p>
                               </div>
-                              <p className="text-sm text-gray-700 bg-white p-3 rounded-lg shadow-sm">{msg.text}</p>
                             </div>
-                          </div>
-                        ))}
+                          ))
+                        ) : (
+                          <div className="text-gray-500">No messages yet.</div>
+                        )}
                       </div>
                       <div className="flex space-x-2">
                         <Input
@@ -487,7 +491,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   )}
 
                   {/* Files Tab */}
-                  {joined && (
+                  {(joined || isGroupCreator()) && (
                     <TabsContent value="files" className="space-y-4">
                       <div className="flex justify-between items-center">
                         <h3 className="text-lg font-serif font-medium text-deep-blue">Shared Files</h3>
@@ -519,7 +523,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   )}
 
                   {/* Flashcards Tab */}
-                  {joined && (
+                  {(joined || isGroupCreator()) && (
                     <TabsContent value="flashcards" className="space-y-4">
                       <div className="flex justify-between items-center">
                         <h3 className="text-lg font-serif font-medium text-deep-blue">Study Flashcards</h3>

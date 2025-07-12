@@ -18,10 +18,21 @@ class UserSerializer(serializers.ModelSerializer):
 class GroupSerializer(serializers.ModelSerializer):
     creator_name = serializers.CharField(source='creator.name', read_only=True)
     creator_email = serializers.CharField(source='creator.email', read_only=True)
-    # course_name is a direct field, not a relation
+    member_count = serializers.SerializerMethodField()
+    joined = serializers.SerializerMethodField()
+    
     class Meta:
         model = Group
         fields = '__all__'
+    
+    def get_member_count(self, obj):
+        return obj.members.count()
+    
+    def get_joined(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.members.filter(id=request.user.id).exists()
+        return False
 
 class GroupDetailSerializer(serializers.ModelSerializer):
     creator_name = serializers.CharField(source='creator.name', read_only=True)

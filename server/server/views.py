@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, generics
 from django.contrib.auth import authenticate
+from django.db.models import Q
 from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer
 from .models import Group, Message, GroupSession
 from rest_framework.permissions import IsAuthenticated
@@ -27,13 +28,60 @@ class LoginView(APIView):
         return Response({'detail': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
 
 class GroupListCreateView(generics.ListCreateAPIView):
-    queryset = Group.objects.all().order_by('-created_at')
     serializer_class = GroupSerializer
 
     def get_permissions(self):
         if self.request.method == 'POST':
             return [IsAuthenticated()]
         return []
+
+    def get_queryset(self):
+        queryset = Group.objects.all().order_by('-created_at')
+        
+        # Get filter parameters
+        search = self.request.query_params.get('search', '')
+        subject = self.request.query_params.get('subject', '')
+        year_level = self.request.query_params.get('year_level', '')
+        meeting_format = self.request.query_params.get('meeting_format', '')
+        primary_language = self.request.query_params.get('primary_language', '')
+        personality_tags = self.request.query_params.get('personality_tags', '')
+        
+        # Apply filters
+        if search:
+            queryset = queryset.filter(
+                Q(group_name__icontains=search) |
+                Q(subject_code__icontains=search) |
+                Q(course_name__icontains=search) |
+                Q(description__icontains=search)
+            )
+        
+        if subject and subject != 'all':
+            queryset = queryset.filter(subject_code=subject)
+        
+        if year_level and year_level != 'all':
+            queryset = queryset.filter(year_level=year_level)
+        
+        if meeting_format and meeting_format != 'all':
+            queryset = queryset.filter(meeting_format=meeting_format)
+        
+        if primary_language and primary_language != 'all':
+            queryset = queryset.filter(primary_language=primary_language)
+        
+        if personality_tags:
+            # Split personality tags and filter by any matching tag
+            tags = [tag.strip() for tag in personality_tags.split(',') if tag.strip()]
+            if tags:
+                personality_filter = Q()
+                for tag in tags:
+                    personality_filter |= Q(group_personality__icontains=tag)
+                queryset = queryset.filter(personality_filter)
+        
+        return queryset
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
     def perform_create(self, serializer):
         serializer.save(creator=self.request.user)
@@ -80,7 +128,7 @@ class GroupChatView(APIView):
 
     def get(self, request, group_id):
         group = Group.objects.get(id=group_id)
-        if not group.members.filter(id=request.user.id).exists():
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
             return Response({'detail': 'Not a group member'}, status=403)
         messages = Message.objects.filter(group=group).order_by('timestamp')
         serializer = MessageSerializer(messages, many=True)
@@ -88,7 +136,7 @@ class GroupChatView(APIView):
 
     def post(self, request, group_id):
         group = Group.objects.get(id=group_id)
-        if not group.members.filter(id=request.user.id).exists():
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
             return Response({'detail': 'Not a group member'}, status=403)
         serializer = MessageSerializer(data=request.data)
         if serializer.is_valid():
