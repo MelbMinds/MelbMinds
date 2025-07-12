@@ -49,10 +49,14 @@ export default function DashboardPage() {
   const [sessions, setSessions] = useState<any[]>([])
   const [showCreatedGroups, setShowCreatedGroups] = useState(true)
   const [showJoinedGroups, setShowJoinedGroups] = useState(true)
+  const [loadingGroups, setLoadingGroups] = useState(true)
+  const [recommendations, setRecommendations] = useState<any[]>([])
+  const [loadingRecommendations, setLoadingRecommendations] = useState(true)
   const { user, tokens } = useUser()
   
   useEffect(() => {
     if (tokens?.access && user?.email) {
+      setLoadingGroups(true)
       // Fetch all groups and filter them properly
       fetch("http://localhost:8000/api/groups/", {
         headers: { "Authorization": `Bearer ${tokens.access}` },
@@ -65,6 +69,7 @@ export default function DashboardPage() {
           const joined = data.filter((group: any) => group.joined && group.creator_email !== user.email)
           setCreatedGroups(created)
           setJoinedGroups(joined)
+          setLoadingGroups(false)
         })
         .catch(() => {
           // Fallback to profile endpoint for joined groups
@@ -72,8 +77,16 @@ export default function DashboardPage() {
             headers: { "Authorization": `Bearer ${tokens.access}` },
           })
             .then(res => res.json())
-            .then(data => setJoinedGroups(data.joined_groups || []));
+            .then(data => {
+              setJoinedGroups(data.joined_groups || [])
+              setLoadingGroups(false)
+            })
+            .catch(() => {
+              setLoadingGroups(false)
+            });
         });
+    } else {
+      setLoadingGroups(false)
     }
   }, [tokens, user]);
 
@@ -99,35 +112,26 @@ export default function DashboardPage() {
     if (createdGroups.length || joinedGroups.length) fetchSessions()
   }, [createdGroups, joinedGroups, tokens])
 
-  const recommendedGroups = [
-    {
-      id: 4,
-      subject: "COMP30024",
-      name: "AI Project Collaboration",
-      members: 10,
-      format: "In-person",
-      match: 95,
-      reason: "Based on your Computer Science major",
-    },
-    {
-      id: 5,
-      subject: "MAST20004",
-      name: "Probability Theory Masters",
-      members: 6,
-      format: "Hybrid",
-      match: 88,
-      reason: "Popular with 3rd year students",
-    },
-    {
-      id: 6,
-      subject: "COMP20003",
-      name: "Algorithms & Data Structures",
-      members: 14,
-      format: "Online",
-      match: 82,
-      reason: "Matches your study preferences",
-    },
-  ]
+  // Fetch recommendations
+  useEffect(() => {
+    if (tokens?.access) {
+      setLoadingRecommendations(true)
+      fetch("http://localhost:8000/api/recommendations/", {
+        headers: { "Authorization": `Bearer ${tokens.access}` },
+      })
+        .then(res => res.json())
+        .then(data => {
+          setRecommendations(data.recommendations || [])
+          setLoadingRecommendations(false)
+        })
+        .catch(() => {
+          setRecommendations([])
+          setLoadingRecommendations(false)
+        });
+    } else {
+      setLoadingRecommendations(false)
+    }
+  }, [tokens]);
 
   const getFormatIcon = (format: string) => {
     switch (format) {
@@ -201,7 +205,12 @@ export default function DashboardPage() {
                     
                     {showCreatedGroups && (
                       <div className="space-y-4">
-                        {createdGroups.length > 0 ? (
+                        {loadingGroups ? (
+                          <div className="text-center py-8 bg-gray-50 rounded-lg">
+                            <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                            <p className="text-gray-600 mb-4">Loading created groups...</p>
+                          </div>
+                        ) : createdGroups.length > 0 ? (
                           createdGroups.map((group: any) => (
                             <Card key={group.id} className="hover:shadow-lg transition-shadow border-l-4 border-l-[#003366]">
                               <CardContent className="p-6">
@@ -261,7 +270,12 @@ export default function DashboardPage() {
                     
                     {showJoinedGroups && (
                       <div className="space-y-4">
-                        {joinedGroups.length > 0 ? (
+                        {loadingGroups ? (
+                          <div className="text-center py-8 bg-gray-50 rounded-lg">
+                            <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                            <p className="text-gray-600 mb-4">Loading joined groups...</p>
+                          </div>
+                        ) : joinedGroups.length > 0 ? (
                           joinedGroups.map((group: any) => (
                             <Card key={group.id} className="hover:shadow-lg transition-shadow">
                               <CardContent className="p-6">
@@ -380,37 +394,65 @@ export default function DashboardPage() {
                 <h2 className="text-2xl font-bold text-[#003366]">Recommended for You</h2>
 
                 <div className="space-y-4">
-                  {recommendedGroups.map((group) => (
-                    <Card key={group.id} className="hover:shadow-lg transition-shadow">
-                      <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <Badge variant="outline" className="mb-2 text-[#003366] border-[#003366]">
-                              {group.subject}
-                            </Badge>
-                            <h3 className="text-lg font-semibold">{group.name}</h3>
-                            <p className="text-sm text-gray-600">{group.members} members</p>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <div className="flex items-center">
-                              <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                              <span className="text-sm font-medium">{group.match}% match</span>
+                  {loadingRecommendations ? (
+                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                      <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                      <p className="text-gray-600 mb-4">Loading recommended groups...</p>
+                    </div>
+                  ) : recommendations.length === 0 ? (
+                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                      <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                      <p className="text-gray-600 mb-4">No recommended groups found.</p>
+                      <Link href="/discover">
+                        <Button className="bg-[#003366] hover:bg-[#002244] text-white">
+                          <Users className="mr-2 h-4 w-4" />
+                          Find More Groups
+                        </Button>
+                      </Link>
+                    </div>
+                  ) : (
+                    recommendations.map((recommendation) => (
+                      <Card key={recommendation.group.id} className="hover:shadow-lg transition-shadow">
+                        <CardContent className="p-6">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <Badge variant="outline" className="mb-2 text-[#003366] border-[#003366]">
+                                {recommendation.group.subject_code}
+                              </Badge>
+                              <h3 className="text-lg font-semibold">{recommendation.group.group_name}</h3>
+                              <p className="text-sm text-gray-600">{recommendation.member_count} members</p>
                             </div>
-                            <Badge className={getFormatColor(group.format)}>{group.format}</Badge>
+                            <div className="flex items-center space-x-2">
+                              <div className="flex items-center">
+                                <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                                <span className="text-sm font-medium">{recommendation.match_percentage}% match</span>
+                              </div>
+                              <Badge className={getFormatColor(recommendation.group.meeting_format)}>{recommendation.group.meeting_format}</Badge>
+                            </div>
                           </div>
-                        </div>
 
-                        <p className="text-sm text-gray-600 mb-4">{group.reason}</p>
+                          <p className="text-sm text-gray-600 mb-4">{recommendation.group.description}</p>
 
-                        <div className="flex justify-between items-center">
-                          <Link href={`/group/${group.id}`}>
-                            <Button variant="outline">Learn More</Button>
-                          </Link>
-                          <Button className="bg-[#003366] hover:bg-[#002244] text-white">Request to Join</Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          <div className="space-y-2 mb-4">
+                            <div className="flex flex-wrap gap-1">
+                              {recommendation.reasons.map((reason: string, index: number) => (
+                                <Badge key={index} variant="secondary" className="text-xs">
+                                  {reason}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600 font-medium">{recommendation.group.year_level}</span>
+                            <Link href={`/group/${recommendation.group.id}`}>
+                              <Button className="bg-[#003366] hover:bg-[#002244] text-white font-serif">View Group</Button>
+                            </Link>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
               </TabsContent>
             </Tabs>

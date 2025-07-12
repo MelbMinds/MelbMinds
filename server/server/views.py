@@ -979,3 +979,104 @@ class GroupRatingView(APIView):
                 return Response({'detail': 'Rating not found'}, status=status.HTTP_404_NOT_FOUND)
         except Group.DoesNotExist:
             return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND) 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def group_recommendations(request):
+    """Get personalized group recommendations for the user"""
+    user = request.user
+    
+    # Get all groups the user hasn't joined or created
+    user_groups = set()
+    user_groups.update(user.joined_groups.values_list('id', flat=True))
+    user_groups.add(user.created_groups.values_list('id', flat=True))
+    
+    # Get all available groups excluding user's groups
+    available_groups = Group.objects.exclude(id__in=user_groups)
+    
+    recommendations = []
+    
+    for group in available_groups:
+        score = 0
+        reasons = []
+        
+        # 1. Major match (highest weight: 40 points)
+        if user.major and group.subject_code:
+            # Check if major relates to subject code
+            major_keywords = user.major.lower().split()
+            subject_keywords = group.subject_code.lower().split()
+            
+            # Simple keyword matching
+            for major_word in major_keywords:
+                for subject_word in subject_keywords:
+                    if major_word in subject_word or subject_word in major_word:
+                        score += 40
+                        reasons.append("Matches your major")
+                        break
+                if score >= 40:  # Only add reason once
+                    break
+        
+        # 2. Year level match (30 points)
+        if user.year_level == group.year_level:
+            score += 30
+            reasons.append("Same year level")
+        
+        # 3. Study format preference (20 points)
+        if user.preferred_study_format and group.meeting_format:
+            if user.preferred_study_format.lower() in group.meeting_format.lower() or group.meeting_format.lower() in user.preferred_study_format.lower():
+                score += 20
+                reasons.append("Matches your study preference")
+        
+        # 4. Language preference (15 points)
+        if user.languages_spoken and group.primary_language:
+            user_languages = [lang.strip().lower() for lang in user.languages_spoken.split(',')]
+            if group.primary_language.lower() in user_languages:
+                score += 15
+                reasons.append("Matches your language preference")
+        
+        # 5. Popular groups bonus (10 points)
+        member_count = group.members.count()
+        if member_count >= 5:
+            score += 10
+            reasons.append("Popular group")
+        
+        # 6. High rating bonus (10 points)
+        from .models import GroupRating
+        avg_rating = GroupRating.get_average_rating(group)
+        if avg_rating and avg_rating >= 4.0:
+            score += 10
+            reasons.append("Highly rated")
+        
+        # 7. Subject area diversity (5 points)
+        # If user has joined groups in different subjects, recommend variety
+        user_subjects = set(user.joined_groups.values_list('subject_code', flat=True))
+        if group.subject_code not in user_subjects:
+            score += 5
+            reasons.append("New subject area")
+        
+        # Only include groups with some relevance (score > 20)
+        if score > 20:
+            # Calculate match percentage
+            match_percentage = min(score, 100)
+            
+            recommendations.append({
+                'group': GroupSerializer(group, context={'request': request}).data,
+                'score': score,
+                'match_percentage': match_percentage,
+                'reasons': reasons[:3],  # Top 3 reasons
+                'member_count': member_count,
+                'avg_rating': avg_rating
+            })
+    
+    # Sort by score and return top 6 recommendations
+    recommendations.sort(key=lambda x: x['score'], reverse=True)
+    
+    return Response({
+        'recommendations': recommendations[:6],
+        'user_profile': {
+            'major': user.major,
+            'year_level': user.year_level,
+            'preferred_study_format': user.preferred_study_format,
+            'languages_spoken': user.languages_spoken
+        }
+    }) 
