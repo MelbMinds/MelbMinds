@@ -752,6 +752,10 @@ class GroupFileDownloadView(APIView):
         """Download a file"""
         try:
             file_obj = GroupFile.objects.get(id=file_id)
+            print(f"DEBUG: File object found: {file_obj.original_filename}")
+            print(f"DEBUG: File storage: {file_obj.file}")
+            print(f"DEBUG: File URL: {file_obj.file.url if hasattr(file_obj.file, 'url') else 'No URL'}")
+            
             # Check if user is a member or creator of the group
             if not (request.user in file_obj.group.members.all() or request.user == file_obj.group.creator):
                 return Response({'detail': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
@@ -759,10 +763,65 @@ class GroupFileDownloadView(APIView):
             if not file_obj.file:
                 return Response({'detail': 'File not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            # Open and serve the file
-            response = HttpResponse(file_obj.file, content_type='application/octet-stream')
-            response['Content-Disposition'] = f'attachment; filename="{file_obj.original_filename}"'
-            return response
+            # For S3 files, stream the file directly
+            if hasattr(file_obj.file, 'url'):
+                try:
+                    import boto3
+                    from django.conf import settings
+                    
+                    # Create S3 client
+                    s3_client = boto3.client(
+                        's3',
+                        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                        region_name=settings.AWS_S3_REGION_NAME
+                    )
+                    
+                    # Get the file path from the storage
+                    file_path = file_obj.file.name
+                    print(f"DEBUG: File path: {file_path}")
+                    
+                    # Get the file object from S3
+                    response = s3_client.get_object(
+                        Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                        Key=file_path
+                    )
+                    
+                    # Stream the file content
+                    file_content = response['Body'].read()
+                    
+                    # Create HTTP response with the file content
+                    http_response = HttpResponse(file_content, content_type='application/octet-stream')
+                    http_response['Content-Disposition'] = f'attachment; filename="{file_obj.original_filename}"'
+                    
+                    print(f"DEBUG: Streaming file directly from S3")
+                    return http_response
+                    
+                except Exception as e:
+                    print(f"DEBUG: Error streaming from S3: {e}")
+                    # Fallback to URL method
+                    file_url = file_obj.file.url
+                    if file_url.startswith('/'):
+                        bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'melbmindsbucket')
+                        region = getattr(settings, 'AWS_S3_REGION_NAME', 'ap-southeast-2')
+                        file_path = file_url.lstrip('/')
+                        file_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{file_path}"
+                    
+                    return Response({
+                        'download_url': file_url,
+                        'filename': file_obj.original_filename
+                    })
+            else:
+                # For local files, try to serve directly
+                try:
+                    with file_obj.file.open('rb') as f:
+                        file_content = f.read()
+                    
+                    response = HttpResponse(file_content, content_type='application/octet-stream')
+                    response['Content-Disposition'] = f'attachment; filename="{file_obj.original_filename}"'
+                    return response
+                except Exception as e:
+                    return Response({'detail': 'File not accessible'}, status=status.HTTP_404_NOT_FOUND)
             
         except GroupFile.DoesNotExist:
             return Response({'detail': 'File not found'}, status=status.HTTP_404_NOT_FOUND)
