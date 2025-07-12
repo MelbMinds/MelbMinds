@@ -319,6 +319,22 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  const handleClearNotifications = async () => {
+    if (!window.confirm('Clear all notifications?')) return
+    setLoadingNotifications(true)
+    const res = await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/clear/`, {
+      method: 'DELETE',
+      headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+    })
+    setLoadingNotifications(false)
+    if (res.ok) {
+      setNotifications([])
+      toast({ title: 'All notifications cleared!' })
+    } else {
+      toast({ title: 'Error clearing notifications', variant: 'destructive' })
+    }
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
   if (!group) return null
@@ -714,9 +730,21 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             {/* Notifications Panel */}
             <Card className="shadow-lg border-0">
               <CardHeader>
-                <CardTitle className="font-serif font-medium text-deep-blue flex items-center gap-2">
-                  <Bell className="h-5 w-5 text-gold" /> Notifications
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="font-serif font-medium text-deep-blue flex items-center gap-2">
+                    <Bell className="h-5 w-5 text-gold" /> Notifications
+                  </CardTitle>
+                  {notifications.length > 0 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleClearNotifications}
+                      className="text-xs ml-4"
+                    >
+                      Clear All
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {loadingNotifications ? (

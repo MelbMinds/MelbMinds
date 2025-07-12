@@ -320,6 +320,15 @@ def group_notifications(request, group_id):
     ]
     return Response(data)
 
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def clear_group_notifications(request, group_id):
+    group = Group.objects.get(id=group_id)
+    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        return Response({'detail': 'Not a group member'}, status=403)
+    GroupNotification.objects.filter(group=group).delete()
+    return Response({'detail': 'All notifications cleared.'}, status=204)
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def stats_summary(request):
