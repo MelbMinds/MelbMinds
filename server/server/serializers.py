@@ -87,13 +87,22 @@ class GroupSessionSerializer(serializers.ModelSerializer):
 
 class GroupFileSerializer(serializers.ModelSerializer):
     uploaded_by_name = serializers.CharField(source='uploaded_by.name', read_only=True)
+    uploaded_by_email = serializers.CharField(source='uploaded_by.email', read_only=True)
     file_size_display = serializers.CharField(source='get_file_size_display', read_only=True)
     file_url = serializers.SerializerMethodField()
     
     class Meta:
         model = GroupFile
-        fields = ['id', 'group', 'uploaded_by', 'uploaded_by_name', 'file', 'original_filename', 'file_size', 'file_size_display', 'file_url', 'uploaded_at']
-        read_only_fields = ['group', 'uploaded_by', 'uploaded_by_name', 'file_size_display', 'file_url', 'uploaded_at']
+        fields = ['id', 'group', 'uploaded_by', 'uploaded_by_name', 'uploaded_by_email', 'file', 'original_filename', 'file_size', 'file_size_display', 'file_url', 'uploaded_at']
+        read_only_fields = ['group', 'uploaded_by', 'uploaded_by_name', 'uploaded_by_email', 'file_size_display', 'file_url', 'uploaded_at']
+    
+    def to_representation(self, instance):
+        """Custom representation to ensure uploaded_by_email is included"""
+        data = super().to_representation(instance)
+        # Ensure uploaded_by_email is always included
+        if instance.uploaded_by:
+            data['uploaded_by_email'] = instance.uploaded_by.email
+        return data
     
     def get_file_url(self, obj):
         if obj.file:

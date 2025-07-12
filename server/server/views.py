@@ -778,13 +778,35 @@ class GroupFileDeleteView(APIView):
             if not (request.user == file_obj.uploaded_by or request.user == file_obj.group.creator):
                 return Response({'detail': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
             
-            # Delete the file from storage
+            # Delete the file from storage (works with both local and S3 storage)
             if file_obj.file:
-                if os.path.exists(file_obj.file.path):
-                    os.remove(file_obj.file.path)
+                file_obj.file.delete(save=False)
             
             file_obj.delete()
             return Response({'detail': 'File deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+            
+        except GroupFile.DoesNotExist:
+            return Response({'detail': 'File not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class GroupFileReportView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, file_id):
+        """Report a file"""
+        try:
+            file_obj = GroupFile.objects.get(id=file_id)
+            # Check if user is a member or creator of the group
+            if not (request.user in file_obj.group.members.all() or request.user == file_obj.group.creator):
+                return Response({'detail': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # For now, just log the report. In a real application, you might want to:
+            # 1. Store reports in a database
+            # 2. Send notifications to administrators
+            # 3. Flag the file for review
+            print(f"File reported: {file_obj.original_filename} by {request.user.email}")
+            print(f"Reason: {request.data.get('reason', 'No reason provided')}")
+            
+            return Response({'detail': 'File reported successfully'}, status=status.HTTP_200_OK)
             
         except GroupFile.DoesNotExist:
             return Response({'detail': 'File not found'}, status=status.HTTP_404_NOT_FOUND) 

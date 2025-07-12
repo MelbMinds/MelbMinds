@@ -29,6 +29,8 @@ import {
   Edit,
   Trash2,
   Bell,
+  Download,
+  Heart,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
@@ -58,6 +60,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [files, setFiles] = useState<any[]>([])
   const [loadingFiles, setLoadingFiles] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
+  const [showRenameDialog, setShowRenameDialog] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [newFileName, setNewFileName] = useState("")
+  const [favorites, setFavorites] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -355,13 +361,34 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
+    setSelectedFile(file)
+    // Set the initial filename without extension for editing
+    const nameWithoutExtension = file.name.replace(/\.[^/.]+$/, "")
+    setNewFileName(nameWithoutExtension)
+    setShowRenameDialog(true)
+    // Reset the input
+    event.target.value = ''
+  }
+
+  const handleFileUpload = async () => {
+    if (!selectedFile) return
+
     setUploadingFile(true)
+    setShowRenameDialog(false)
+    
+    // Get the file extension from the original file
+    const fileExtension = selectedFile.name.split('.').pop()
+    const finalFileName = newFileName.trim() + (fileExtension ? `.${fileExtension}` : '')
+    
+    // Create a new File object with the renamed filename
+    const renamedFile = new File([selectedFile], finalFileName, { type: selectedFile.type })
+    
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('file', renamedFile)
 
     try {
       const res = await fetch(`http://localhost:8000/api/groups/${group.id}/files/`, {
@@ -376,8 +403,6 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         const newFile = await res.json()
         setFiles(prev => [newFile, ...prev])
         toast({ title: 'File uploaded successfully!' })
-        // Reset the input
-        event.target.value = ''
       } else {
         const error = await res.json()
         toast({ title: 'Error uploading file', description: error.detail, variant: 'destructive' })
@@ -386,7 +411,15 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       toast({ title: 'Error uploading file', variant: 'destructive' })
     } finally {
       setUploadingFile(false)
+      setSelectedFile(null)
+      setNewFileName("")
     }
+  }
+
+  const handleCancelUpload = () => {
+    setShowRenameDialog(false)
+    setSelectedFile(null)
+    setNewFileName("")
   }
 
   const handleFileDownload = async (file: any) => {
@@ -435,6 +468,66 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     } catch (error) {
       toast({ title: 'Error deleting file', variant: 'destructive' })
     }
+  }
+
+  const handleFileReport = async (file: any) => {
+    if (!window.confirm(`Report "${file.original_filename}"? This will notify administrators.`)) return
+
+    try {
+      const res = await fetch(`http://localhost:8000/api/files/${file.id}/report/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${tokens?.access}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reason: 'Inappropriate content'
+        })
+      })
+
+      if (res.ok) {
+        toast({ title: 'File reported successfully!' })
+      } else {
+        toast({ title: 'Error reporting file', variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error reporting file', variant: 'destructive' })
+    }
+  }
+
+  const handleToggleFavorite = (fileId: number) => {
+    setFavorites(prev => {
+      const newFavorites = new Set(prev)
+      if (newFavorites.has(fileId)) {
+        newFavorites.delete(fileId)
+      } else {
+        newFavorites.add(fileId)
+      }
+      return newFavorites
+    })
+  }
+
+  const getSortedFiles = () => {
+    return [...files].sort((a, b) => {
+      const aFavorited = favorites.has(a.id)
+      const bFavorited = favorites.has(b.id)
+      
+      if (aFavorited && !bFavorited) return -1
+      if (!aFavorited && bFavorited) return 1
+      return 0
+    })
+  }
+
+  const truncateFilename = (filename: string, maxLength: number = 20) => {
+    if (filename.length <= maxLength) return filename
+    
+    const extension = filename.split('.').pop()
+    const nameWithoutExt = filename.replace(/\.[^/.]+$/, "")
+    const maxNameLength = maxLength - (extension ? extension.length + 1 : 0) - 3 // -3 for "..."
+    
+    if (nameWithoutExt.length <= maxNameLength) return filename
+    
+    return `${nameWithoutExt.substring(0, maxNameLength)}...${extension ? `.${extension}` : ''}`
   }
 
   const getFileIcon = (filename: string) => {
@@ -688,7 +781,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                             type="file"
                             id="file-upload"
                             className="hidden"
-                            onChange={handleFileUpload}
+                            onChange={handleFileSelect}
                             disabled={uploadingFile}
                             accept="*/*"
                           />
@@ -715,16 +808,47 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                         </div>
                       ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                          {files.map((file: any) => (
+                          {getSortedFiles().map((file: any) => (
                             <div 
                               key={file.id} 
-                              className="flex flex-col items-center p-4 bg-white rounded-lg border hover:shadow-md transition-shadow cursor-pointer group"
-                              onClick={() => handleFileDownload(file)}
+                              className="relative flex flex-col items-center p-4 bg-white rounded-lg border hover:shadow-md transition-shadow group"
                             >
-                              <div className="text-4xl mb-2">{getFileIcon(file.original_filename)}</div>
-                              <div className="text-center w-full">
-                                <p className="text-sm font-medium text-deep-blue break-words leading-tight" title={file.original_filename}>
-                                  {file.original_filename}
+                              {/* Report Button - Left Upper Corner */}
+                              <button
+                                className="absolute top-2 left-2 z-10 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleFileReport(file)
+                                }}
+                                title="Report file"
+                              >
+                                <Flag className="h-4 w-4 text-gray-400 hover:text-red-600 transition-colors" />
+                              </button>
+
+                              {/* Favorite Star - Right Upper Corner */}
+                              <button
+                                className="absolute top-2 right-2 z-10 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleToggleFavorite(file.id)
+                                }}
+                                title={favorites.has(file.id) ? "Remove from favorites" : "Add to favorites"}
+                              >
+                                <Star 
+                                  className={`h-4 w-4 ${favorites.has(file.id) ? 'fill-yellow-400 text-yellow-500' : 'text-gray-400 hover:text-yellow-500'}`} 
+                                />
+                              </button>
+
+                              {/* File Icon */}
+                              <div className="text-4xl mb-2 mt-2">{getFileIcon(file.original_filename)}</div>
+                              
+                              {/* File Info */}
+                              <div className="text-center w-full flex-1">
+                                <p 
+                                  className="text-sm font-medium text-deep-blue leading-tight line-clamp-2" 
+                                  title={file.original_filename}
+                                >
+                                  {truncateFilename(file.original_filename, 25)}
                                 </p>
                                 <p className="text-xs text-gray-500 mt-1">
                                   {file.file_size_display}
@@ -733,29 +857,36 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                   by {file.uploaded_by_name}
                                 </p>
                               </div>
-                              <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                              {/* Action Buttons */}
+                              <div className="flex gap-1 mt-3 w-full justify-center">
                                 <Button 
                                   size="sm" 
-                                  variant="outline" 
-                                  className="h-6 px-2 text-xs"
+                                  variant="ghost" 
+                                  className="h-8 w-8 p-0 hover:bg-blue-50"
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleFileDownload(file)
                                   }}
+                                  title="Download file"
                                 >
-                                  Download
+                                  <Download className="h-4 w-4 text-blue-600" />
                                 </Button>
-                                {(user?.email === file.uploaded_by || isGroupCreator()) && (
+                                
+
+                                
+                                {(user?.email === file.uploaded_by_email || isGroupCreator()) && (
                                   <Button 
                                     size="sm" 
-                                    variant="outline" 
-                                    className="h-6 px-2 text-xs text-red-600 hover:text-red-700"
+                                    variant="ghost" 
+                                    className="h-8 w-8 p-0 hover:bg-red-50"
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       handleFileDelete(file)
                                     }}
+                                    title="Delete file"
                                   >
-                                    Delete
+                                    <Trash2 className="h-4 w-4 text-red-600" />
                                   </Button>
                                 )}
                               </div>
@@ -1021,6 +1152,53 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
       </div>
+
+      {/* File Rename Dialog */}
+      {showRenameDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-medium text-deep-blue mb-4">Rename File</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  File Name (extension will be preserved)
+                </label>
+                <div className="flex items-stretch">
+                  <input
+                    type="text"
+                    value={newFileName}
+                    onChange={(e) => setNewFileName(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-deep-blue focus:border-transparent"
+                    placeholder="Enter file name"
+                  />
+                  <span className="px-3 py-2 bg-gray-100 border border-l-0 border-gray-300 rounded-r-md text-gray-600 text-sm flex items-center">
+                    {selectedFile?.name.split('.').pop() ? `.${selectedFile.name.split('.').pop()}` : ''}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Original: {selectedFile?.name}
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={handleCancelUpload}
+                  disabled={uploadingFile}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-deep-blue hover:bg-deep-blue/90 text-white"
+                  onClick={handleFileUpload}
+                  disabled={uploadingFile || !newFileName.trim()}
+                >
+                  {uploadingFile ? 'Uploading...' : 'Upload'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
