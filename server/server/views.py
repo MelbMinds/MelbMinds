@@ -903,10 +903,9 @@ class GroupFileDeleteView(APIView):
             if not (request.user == file_obj.uploaded_by or request.user == file_obj.group.creator):
                 return Response({'detail': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
             
-            # Delete the file from storage
+            # Delete the file from storage (works with both local and S3 storage)
             if file_obj.file:
-                if os.path.exists(file_obj.file.path):
-                    os.remove(file_obj.file.path)
+                file_obj.file.delete(save=False)
             
             file_obj.delete()
             return Response({'detail': 'File deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
