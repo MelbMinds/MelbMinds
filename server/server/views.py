@@ -17,7 +17,6 @@ def cleanup_past_sessions():
     Utility function to clean up past sessions, create notifications, and update counter.
     This should be called periodically or when sessions are accessed.
     """
-    # Get current time in local timezone (Australia)
     from django.utils import timezone
     import pytz
     
@@ -28,8 +27,6 @@ def cleanup_past_sessions():
     current_time = now_local.time().replace(microsecond=0)
     current_seconds = current_time.hour * 3600 + current_time.minute * 60 + current_time.second
     
-    print(f"Cleanup: Current time (local): {now_local} (date: {current_date}, time: {current_time}, seconds: {current_seconds})")
-    
     # Get ALL sessions and check each one individually
     all_sessions = GroupSession.objects.all()
     past_sessions = []
@@ -37,27 +34,19 @@ def cleanup_past_sessions():
     for session in all_sessions:
         session_time = session.time.replace(microsecond=0)
         session_seconds = session_time.hour * 3600 + session_time.minute * 60 + session_time.second
-        print(f"Checking session: {session} (date: {session.date}, time: {session_time}, seconds: {session_seconds}) vs now {current_date} {current_time} ({current_seconds})")
-        
         # Check if session is in the past
         if session.date < current_date:
-            print(f"  -> Session date {session.date} is before current date {current_date}")
             past_sessions.append(session)
         elif session.date == current_date and session_seconds < current_seconds:
-            print(f"  -> Session time {session_time} ({session_seconds}) is before current time {current_time} ({current_seconds})")
             past_sessions.append(session)
-        else:
-            print(f"  -> Session is in the future")
     
     deleted_count = len(past_sessions)
-    print(f"Cleanup: Found {deleted_count} past sessions to delete")
     
     # Create notifications for each past session before deleting
     for session in past_sessions:
-        print(f"Deleting session: {session} (date: {session.date}, time: {session.time})")
         GroupNotification.objects.create(
             group=session.group,
-            message=f"Session at {session.location} on {session.date} {session.time} has finished."
+            message=f"Session at {session.location} on {session.date} {session.time} just started."
         )
         # Delete the session
         session.delete()
@@ -65,11 +54,6 @@ def cleanup_past_sessions():
     # Update the completed sessions counter
     if deleted_count > 0:
         CompletedSessionCounter.increment(deleted_count)
-        try:
-            counter = CompletedSessionCounter.objects.get(pk=1)
-            print(f"Updated counter: {counter.count}")
-        except CompletedSessionCounter.DoesNotExist:
-            print("Counter object doesn't exist yet")
     
     return deleted_count
 
