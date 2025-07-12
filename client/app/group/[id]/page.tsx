@@ -613,6 +613,41 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // Add this function to handle rating changes
+  const handleRatingChange = async (newRating: number) => {
+    if (!group?.id || !tokens?.access) return
+    setRatingLoading(true)
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/rating/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokens.access}`,
+        },
+        body: JSON.stringify({ rating: newRating })
+      })
+      if (res.ok) {
+        setUserRating(newRating)
+        toast({ title: 'Thank you for rating!' })
+        // Optionally, refetch group data to update average rating
+        const groupRes = await fetch(`http://localhost:8000/api/groups/${group.id}/`, {
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        })
+        if (groupRes.ok) {
+          const data = await groupRes.json()
+          setGroup(data)
+        }
+      } else {
+        const err = await res.json()
+        toast({ title: 'Error submitting rating', description: err.detail, variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error submitting rating', variant: 'destructive' })
+    } finally {
+      setRatingLoading(false)
+    }
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
   if (!group) return null
