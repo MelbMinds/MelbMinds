@@ -14,8 +14,10 @@ import { Badge } from "@/components/ui/badge"
 import { BookOpen, Users, MapPin, Video, Clock, Plus, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useUser } from "@/components/UserContext"
 
 export default function CreateGroupPage() {
+  const { tokens } = useUser()
   const [groupName, setGroupName] = useState("")
   const [subject, setSubject] = useState("")
   const [description, setDescription] = useState("")
@@ -30,6 +32,29 @@ export default function CreateGroupPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [courseName, setCourseName] = useState("")
+
+  const personalityOptions = [
+    "Quiet",
+    "Talkative",
+    "Fast-paced",
+    "Patient",
+    "Collaborative",
+    "Analytical",
+    "Creative",
+    "Visual learner",
+    "Hands-on",
+    "Discussion-focused",
+    "Detail-oriented",
+  ]
+  const [personalities, setPersonalities] = useState<string[]>([])
+  const handlePersonalityChange = (personality: string) => {
+    setPersonalities((prev) =>
+      prev.includes(personality)
+        ? prev.filter((p) => p !== personality)
+        : [...prev, personality]
+    )
+  }
 
   const subjects = [
     "COMP10001",
@@ -97,10 +122,14 @@ export default function CreateGroupPage() {
     try {
       const res = await fetch("http://localhost:8000/api/groups/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(tokens?.access && { "Authorization": `Bearer ${tokens.access}` })
+        },
         body: JSON.stringify({
           group_name: groupName,
           subject_code: subject,
+          course_name: courseName,
           description,
           year_level: yearLevel,
           meeting_format: format,
@@ -109,6 +138,7 @@ export default function CreateGroupPage() {
           location,
           tags: tags.join(", "),
           group_guidelines: "Respectful, Attendance, Academic Integrity, Moderation", // or collect from checkboxes
+          group_personality: personalities.join(", "),
         }),
       })
       if (!res.ok) {
@@ -128,29 +158,6 @@ export default function CreateGroupPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
-      <nav className="border-b border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2">
-              <BookOpen className="h-8 w-8 text-[#003366]" />
-              <span className="text-2xl font-bold text-[#003366]">MelbMinds</span>
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Link href="/dashboard">
-                <Button variant="ghost" className="text-[#003366] hover:bg-blue-50">
-                  Dashboard
-                </Button>
-              </Link>
-              <Link href="/discover">
-                <Button variant="ghost" className="text-[#003366] hover:bg-blue-50">
-                  Discover Groups
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -193,6 +200,17 @@ export default function CreateGroupPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="courseName">Course Name *</Label>
+                    <Input
+                      id="courseName"
+                      placeholder="e.g., Introduction to Programming"
+                      value={courseName}
+                      onChange={(e) => setCourseName(e.target.value)}
+                      required
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -411,6 +429,33 @@ export default function CreateGroupPage() {
                       </Label>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Group Personality */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Group Personality</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex flex-wrap gap-4">
+                    {personalityOptions.map((personality) => (
+                      <label key={personality} className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                          checked={personalities.includes(personality)}
+                          onCheckedChange={() => handlePersonalityChange(personality)}
+                        />
+                        <span className="text-sm">{personality}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {personalities.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {personalities.map((p) => (
+                        <Badge key={p} className="bg-gold/10 text-amber-700 border-gold/20 text-xs">{p}</Badge>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

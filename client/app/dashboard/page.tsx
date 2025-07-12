@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +8,16 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Users, Calendar, Bell, BookOpen, Clock, MapPin, Video, Plus, Settings, Star, TrendingUp } from "lucide-react"
 import Link from "next/link"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useUser } from "@/components/UserContext"
+import { format } from "date-fns"
 
 export default function DashboardPage() {
   const [notifications] = useState([
@@ -34,35 +44,39 @@ export default function DashboardPage() {
     },
   ])
 
-  const joinedGroups = [
-    {
-      id: 1,
-      subject: "COMP10001",
-      name: "Python Programming Fundamentals",
-      members: 12,
-      nextSession: "Today, 6:00 PM",
-      format: "Hybrid",
-      progress: 75,
-    },
-    {
-      id: 2,
-      subject: "BIOL10004",
-      name: "Biology Study Circle",
-      members: 8,
-      nextSession: "Tomorrow, 4:00 PM",
-      format: "In-person",
-      progress: 60,
-    },
-    {
-      id: 3,
-      subject: "LAWS10001",
-      name: "Legal Foundations Group",
-      members: 15,
-      nextSession: "Sunday, 7:00 PM",
-      format: "Online",
-      progress: 40,
-    },
-  ]
+  const [groups, setGroups] = useState<any[]>([])
+  const [sessions, setSessions] = useState<any[]>([])
+  const { tokens } = useUser()
+  useEffect(() => {
+    if (tokens?.access) {
+      fetch("http://localhost:8000/api/profile/", {
+        headers: { "Authorization": `Bearer ${tokens.access}` },
+      })
+        .then(res => res.json())
+        .then(data => setGroups(data.joined_groups || []))
+    }
+  }, [tokens])
+
+  // Fetch all sessions for joined groups
+  useEffect(() => {
+    async function fetchSessions() {
+      if (!groups.length) return setSessions([])
+      let allSessions: any[] = []
+      for (const group of groups) {
+        const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        })
+        if (res.ok) {
+          const data = await res.json()
+          allSessions = allSessions.concat(data.map((s: any) => ({ ...s, group })))
+        }
+      }
+      // Sort sessions by date+time ascending
+      allSessions.sort((a, b) => new Date(a.date + 'T' + a.time).getTime() - new Date(b.date + 'T' + b.time).getTime())
+      setSessions(allSessions)
+    }
+    if (groups.length) fetchSessions()
+  }, [groups, tokens])
 
   const recommendedGroups = [
     {
@@ -94,30 +108,6 @@ export default function DashboardPage() {
     },
   ]
 
-  const upcomingSessions = [
-    {
-      group: "Python Programming Fundamentals",
-      subject: "COMP10001",
-      time: "Today, 6:00 PM - 8:00 PM",
-      location: "Doug McDonell Building + Online",
-      type: "Hybrid",
-    },
-    {
-      group: "Biology Study Circle",
-      subject: "BIOL10004",
-      time: "Tomorrow, 4:00 PM - 6:00 PM",
-      location: "Bio21 Institute",
-      type: "In-person",
-    },
-    {
-      group: "Legal Foundations Group",
-      subject: "LAWS10001",
-      time: "Sunday, 7:00 PM - 9:00 PM",
-      location: "Virtual Room",
-      type: "Online",
-    },
-  ]
-
   const getFormatIcon = (format: string) => {
     switch (format) {
       case "Online":
@@ -146,94 +136,14 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
-      <nav className="border-b border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2">
-              <BookOpen className="h-8 w-8 text-[#003366]" />
-              <span className="text-2xl font-bold text-[#003366]">MelbMinds</span>
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Link href="/discover">
-                <Button variant="ghost" className="text-[#003366] hover:bg-blue-50">
-                  Discover
-                </Button>
-              </Link>
-              <Button variant="ghost" className="relative">
-                <Bell className="h-5 w-5 text-[#003366]" />
-                {notifications.length > 0 && (
-                  <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
-                    {notifications.length}
-                  </Badge>
-                )}
-              </Button>
-              <Avatar className="h-8 w-8">
-                <AvatarImage src="/placeholder.svg?height=32&width=32" />
-                <AvatarFallback>JD</AvatarFallback>
-              </Avatar>
-            </div>
-          </div>
-        </div>
-      </nav>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-[#003366] mb-2">Welcome back, John!</h1>
+          <h1 className="text-4xl font-bold text-[#003366] mb-2">Welcome back!</h1>
           <p className="text-xl text-gray-600">Here's what's happening with your study groups</p>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Groups Joined</p>
-                  <p className="text-3xl font-bold text-[#003366]">{joinedGroups.length}</p>
-                </div>
-                <Users className="h-8 w-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Sessions This Week</p>
-                  <p className="text-3xl font-bold text-[#003366]">5</p>
-                </div>
-                <Calendar className="h-8 w-8 text-green-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Study Hours</p>
-                  <p className="text-3xl font-bold text-[#003366]">24</p>
-                </div>
-                <Clock className="h-8 w-8 text-purple-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Avg. Score Improvement</p>
-                  <p className="text-3xl font-bold text-[#003366]">+18%</p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-orange-500" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Remove Quick Stats section (the grid with Study Hours, Avg. Score Improvement, etc.) */}
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main Content */}
@@ -258,52 +168,44 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="space-y-4">
-                  {joinedGroups.map((group) => (
-                    <Card key={group.id} className="hover:shadow-lg transition-shadow">
-                      <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <Badge variant="outline" className="mb-2 text-[#003366] border-[#003366]">
-                              {group.subject}
+                  {groups.length > 0 ? (
+                    groups.map((group: any) => (
+                      <Card key={group.id} className="hover:shadow-lg transition-shadow">
+                        <CardContent className="p-6">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <Badge variant="outline" className="mb-2 text-[#003366] border-[#003366]">
+                                {group.subject_code}
+                              </Badge>
+                              <h3 className="text-lg font-semibold">{group.group_name}</h3>
+                              <p className="text-sm text-gray-600">{group.members?.length || 0} members</p>
+                            </div>
+                            <Badge className="bg-gray-100 text-gray-800 flex items-center gap-1">
+                              {/* Optionally show group format if available */}
+                              {group.format || "Group"}
                             </Badge>
-                            <h3 className="text-lg font-semibold">{group.name}</h3>
-                            <p className="text-sm text-gray-600">{group.members} members</p>
-                          </div>
-                          <Badge className={`${getFormatColor(group.format)} flex items-center gap-1`}>
-                            {getFormatIcon(group.format)}
-                            {group.format}
-                          </Badge>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div className="flex items-center text-sm text-gray-600">
-                            <Clock className="mr-2 h-4 w-4" />
-                            Next session: {group.nextSession}
                           </div>
 
-                          <div>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span>Progress</span>
-                              <span>{group.progress}%</span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div
-                                className="bg-[#003366] h-2 rounded-full"
-                                style={{ width: `${group.progress}%` }}
-                              ></div>
+                          <div className="space-y-3">
+                            <div className="flex items-center text-sm text-gray-600">
+                              <Clock className="mr-2 h-4 w-4" />
+                              {/* Optionally show next session info if available */}
+                              Next session: {group.next_session || "TBA"}
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex justify-between items-center mt-4">
-                          <Link href={`/group/${group.id}`}>
-                            <Button variant="outline">View Group</Button>
-                          </Link>
-                          <Button className="bg-[#003366] hover:bg-[#002244] text-white">Join Session</Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          <div className="flex justify-between items-center mt-4">
+                            <Link href={`/group/${group.id}`}>
+                              <Button variant="outline">View Group</Button>
+                            </Link>
+                            {/* Optionally show Join Session button if relevant */}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <p className="text-gray-600">You haven't joined any groups yet.</p>
+                  )}
                 </div>
               </TabsContent>
 
@@ -312,31 +214,35 @@ export default function DashboardPage() {
                 <h2 className="text-2xl font-bold text-[#003366]">Upcoming Sessions</h2>
 
                 <div className="space-y-4">
-                  {upcomingSessions.map((session, index) => (
-                    <Card key={index}>
+                  {sessions.length === 0 && <div className="text-gray-600">No upcoming sessions.</div>}
+                  {sessions.map((session, index) => (
+                    <Card key={session.id || index}>
                       <CardContent className="p-6">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            <h3 className="font-semibold text-lg">{session.group}</h3>
+                            <h3 className="font-semibold text-lg">{session.group.group_name}</h3>
                             <Badge variant="outline" className="mb-2 text-[#003366] border-[#003366]">
-                              {session.subject}
+                              {session.group.subject_code}
                             </Badge>
                             <div className="space-y-2 mt-3">
                               <div className="flex items-center text-sm text-gray-600">
                                 <Clock className="mr-2 h-4 w-4" />
-                                {session.time}
+                                {format(new Date(session.date + 'T' + session.time), 'eeee, MMM d, yyyy h:mm a')}
                               </div>
                               <div className="flex items-center text-sm text-gray-600">
                                 <MapPin className="mr-2 h-4 w-4" />
                                 {session.location}
                               </div>
+                              {session.description && (
+                                <div className="flex items-center text-sm text-gray-600">
+                                  <span className="mr-2">Description:</span>{session.description}
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="flex flex-col items-end space-y-2">
-                            <Badge className={getFormatColor(session.type)}>{session.type}</Badge>
-                            <Button size="sm" className="bg-[#003366] hover:bg-[#002244] text-white">
-                              Join
-                            </Button>
+                            <Badge className={getFormatColor(session.group.meeting_format)}>{session.group.meeting_format}</Badge>
+                            {/* Optionally add a Join button if session is live */}
                           </div>
                         </div>
                       </CardContent>

@@ -25,10 +25,15 @@ import {
   CalendarPlus,
   Send,
   Plus,
+  Calendar as CalendarIcon,
+  Edit,
+  Trash2,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
 import { use } from "react"
+import { toast } from "@/components/ui/use-toast"
+import { format } from "date-fns"
 
 export default function StudyGroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -36,17 +41,29 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAlert, setShowAlert] = useState(false)
-  const { user } = useUser()
+  const { user, tokens } = useUser()
+  const [joined, setJoined] = useState(false)
+  const [members, setMembers] = useState<any[]>([])
+  const [messages, setMessages] = useState<any[]>([])
+
+  // Add state for sessions
+  const [sessions, setSessions] = useState<any[]>([])
+  const [sessionForm, setSessionForm] = useState({ date: '', time: '', location: '', description: '' })
+  const [editingSession, setEditingSession] = useState<any>(null)
+  const [sessionLoading, setSessionLoading] = useState(false)
 
   useEffect(() => {
     const fetchGroup = async () => {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`http://localhost:8000/api/groups/${id}/`)
+        const res = await fetch(`http://localhost:8000/api/groups/${id}/`, {
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        })
         if (!res.ok) throw new Error("Failed to fetch group")
         const data = await res.json()
         setGroup(data)
+        setJoined(!!data.joined)
       } catch (err) {
         setError("Could not load group.")
       } finally {
@@ -54,7 +71,37 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       }
     }
     fetchGroup()
-  }, [id])
+  }, [id, tokens])
+
+  // Fetch members
+  useEffect(() => {
+    if (group?.id) {
+      fetch(`http://localhost:8000/api/groups/${group.id}/members/`)
+        .then(res => res.json())
+        .then(setMembers)
+    }
+  }, [group?.id])
+  // Fetch chat messages if joined or is creator
+  useEffect(() => {
+    if (group?.id && (joined || isGroupCreator())) {
+      fetch(`http://localhost:8000/api/groups/${group.id}/chat/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      })
+        .then(res => res.json())
+        .then(setMessages)
+    }
+  }, [group?.id, joined, tokens])
+
+  // Fetch sessions
+  useEffect(() => {
+    if (group?.id && (joined || isGroupCreator())) {
+      fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      })
+        .then(res => res.json())
+        .then(setSessions)
+    }
+  }, [group?.id, joined, tokens])
 
   const [message, setMessage] = useState("")
   const [hasRequested, setHasRequested] = useState(false)
@@ -87,18 +134,62 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const handleJoinRequest = () => {
+  const handleJoinRequest = async () => {
     if (user && group && user.email === group.creator_email) {
       setShowAlert(true)
       return
     }
-    setHasRequested(true)
+    
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${id}/join/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+        },
+      })
+      
+      if (res.ok) {
+        setHasRequested(true)
+        setJoined(true)
+        toast({
+          title: 'Congratulations!',
+          description: 'You have successfully joined the group.',
+        })
+        // Optionally refresh the group data to show updated member count
+        window.setTimeout(() => window.location.reload(), 1200)
+      } else {
+        const data = await res.json()
+        setError(data?.detail || 'Failed to join group')
+      }
+    } catch (err) {
+      setError('Network error. Please try again.')
+    }
   }
 
-  const handleSendMessage = () => {
-    if (chatMessage.trim()) {
-      // Add message to chat
+  const isGroupCreator = () => {
+    return user && group && user.email === group.creator_email
+  }
+
+  // Update handleSendMessage to POST to the chat API
+  const handleSendMessage = async () => {
+    if (!chatMessage.trim()) return
+    if (!group?.id) return
+    const res = await fetch(`http://localhost:8000/api/groups/${group.id}/chat/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+      },
+      body: JSON.stringify({ text: chatMessage })
+    })
+    if (res.ok) {
       setChatMessage("")
+      // Refresh messages
+      const data = await fetch(`http://localhost:8000/api/groups/${group.id}/chat/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      }).then(r => r.json())
+      setMessages(data)
     }
   }
 
@@ -109,35 +200,97 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // Session CRUD handlers
+  const handleSessionFormChange = (e: any) => {
+    setSessionForm({ ...sessionForm, [e.target.name]: e.target.value })
+  }
+  const handleCreateSession = async (e: any) => {
+    e.preventDefault()
+    setSessionLoading(true)
+    let { date, time, location, description } = sessionForm
+    // Ensure time is in HH:MM:SS format
+    if (time && time.length === 5) time = time + ':00'
+    const payload = { date, time, location, description }
+    console.log('Session creation payload:', payload)
+    const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+      },
+      body: JSON.stringify(payload)
+    })
+    setSessionLoading(false)
+    if (res.ok) {
+      setSessionForm({ date: '', time: '', location: '', description: '' })
+      fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      })
+        .then(res => res.json())
+        .then(setSessions)
+      toast({ title: 'Session created!' })
+    } else {
+      const err = await res.json()
+      console.error('Session creation error:', err)
+      toast({ title: 'Error creating session', variant: 'destructive' })
+    }
+  }
+  const handleEditSession = (session: any) => {
+    setEditingSession(session)
+    setSessionForm({
+      date: session.date,
+      time: session.time,
+      location: session.location,
+      description: session.description || ''
+    })
+  }
+  const handleUpdateSession = async (e: any) => {
+    e.preventDefault()
+    setSessionLoading(true)
+    const res = await fetch(`http://localhost:8000/api/sessions/${editingSession.id}/`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+      },
+      body: JSON.stringify(sessionForm)
+    })
+    setSessionLoading(false)
+    if (res.ok) {
+      setEditingSession(null)
+      setSessionForm({ date: '', time: '', location: '', description: '' })
+      fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      })
+        .then(res => res.json())
+        .then(setSessions)
+      toast({ title: 'Session updated!' })
+    } else {
+      toast({ title: 'Error updating session', variant: 'destructive' })
+    }
+  }
+  const handleDeleteSession = async (sessionId: number) => {
+    if (!window.confirm('Delete this session?')) return
+    setSessionLoading(true)
+    const res = await fetch(`http://localhost:8000/api/sessions/${sessionId}/`, {
+      method: 'DELETE',
+      headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+    })
+    setSessionLoading(false)
+    if (res.ok) {
+      setSessions(sessions.filter(s => s.id !== sessionId))
+      toast({ title: 'Session deleted!' })
+    } else {
+      toast({ title: 'Error deleting session', variant: 'destructive' })
+    }
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
   if (!group) return null
 
   return (
     <div className="min-h-screen bg-soft-gray">
-      {/* Navigation */}
-      <nav className="border-b border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center">
-              <h1 className="text-2xl font-serif font-bold text-deep-blue">MelbMinds</h1>
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Link href="/discover">
-                <Button variant="ghost" className="text-deep-blue hover:bg-soft-gray">
-                  Back to Discover
-                </Button>
-              </Link>
-              <Link href="/dashboard">
-                <Button variant="ghost" className="text-deep-blue hover:bg-soft-gray">
-                  Dashboard
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
       {showAlert && (
         <div className="max-w-xl mx-auto mt-6 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded shadow">
           <strong>Notice:</strong> You can't join the group you created, you are already in it.
@@ -151,38 +304,40 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             {/* Group Header */}
             <Card className="shadow-lg border-0 mb-6">
               <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <Badge variant="outline" className="mb-2 text-deep-blue border-deep-blue">
-                      {group.subject}
-                    </Badge>
-                    <CardTitle className="text-2xl lg:text-3xl font-serif text-deep-blue mb-2">{group.name}</CardTitle>
-                    <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
-                      <div className="flex items-center">
-                        <Users className="mr-1 h-4 w-4" />
-                        {group.members}/{group.maxMembers} members
-                      </div>
-                      <div className="flex items-center">
-                        <Star className="mr-1 h-4 w-4 text-gold fill-current" />
-                        {group.rating}
-                      </div>
-                      <Badge className={`${getFormatColor(group.format)} flex items-center gap-1 border`}>
-                        {getFormatIcon(group.format)}
-                        {group.format}
-                      </Badge>
-                      <span>{group.yearLevel}</span>
+                <div className="flex flex-col gap-2 mb-4">
+                  <Badge variant="outline" className="w-fit mb-2 text-deep-blue border-deep-blue">
+                    {group.subject_code}
+                  </Badge>
+                  <CardTitle className="text-3xl font-serif text-deep-blue mb-2">{group.group_name}</CardTitle>
+                  <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
+                    <div className="flex items-center">
+                      <Users className="mr-1 h-4 w-4" />
+                      {group.member_count || 0} members
                     </div>
+                    <div className="flex items-center">
+                      <Star className="mr-1 h-4 w-4 text-gold fill-current" />
+                      {group.rating || "New"}
+                    </div>
+                    <Badge className={`${getFormatColor(group.meeting_format)} flex items-center gap-1 border`}>
+                      {getFormatIcon(group.meeting_format)}
+                      {group.meeting_format}
+                    </Badge>
+                    <span>{group.year_level}</span>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="bg-transparent">
-                      <Share2 className="h-4 w-4 mr-1" />
-                      Share
-                    </Button>
-                    <Button variant="outline" size="sm" className="bg-transparent">
-                      <Flag className="h-4 w-4 mr-1" />
-                      Report
-                    </Button>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-base text-gray-700">Course Code: {group.subject_code}</span>
+                    <span className="text-base text-gray-700">Course Name: {group.course_name}</span>
                   </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="bg-transparent">
+                    <Share2 className="h-4 w-4 mr-1" />
+                    Share
+                  </Button>
+                  <Button variant="outline" size="sm" className="bg-transparent">
+                    <Flag className="h-4 w-4 mr-1" />
+                    Report
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -217,7 +372,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   <div>
                     <span className="text-sm font-medium text-gray-700 mr-2">Group Personality:</span>
                     <div className="flex flex-wrap gap-2 mt-1">
-                      {(Array.isArray(group.personalityTags) ? group.personalityTags : []).map((tag: string, index: number) => (
+                      {(group.group_personality ? group.group_personality.split(',').map((tag: string) => tag.trim()) : []).map((tag: string, index: number) => (
                         <Badge key={index} className="bg-gold/10 text-amber-700 border-gold/20">
                           {tag}
                         </Badge>
@@ -226,51 +381,51 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   </div>
                 </div>
 
+                {/* Admin Info at the bottom */}
                 <div className="flex items-center justify-between p-4 bg-soft-gray rounded-lg">
                   <div className="flex items-center space-x-3">
                     <Avatar className="h-12 w-12">
-                      {group.admin ? (
-                        <>
-                          <AvatarImage src={group.admin.avatar || "/placeholder.svg"} />
-                          <AvatarFallback className="bg-deep-blue text-white font-serif">
-                            {group.admin.name
-                              .split(" ")
-                              .map((n: string) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </>
-                      ) : (
-                        <AvatarFallback className="bg-deep-blue text-white font-serif">?</AvatarFallback>
-                      )}
+                      <AvatarImage src={group.creator_avatar || "/placeholder.svg"} />
+                      <AvatarFallback className="bg-deep-blue text-white font-serif">
+                        {group.creator_name ? group.creator_name.split(" ").map((n: string) => n[0]).join("") : "?"}
+                      </AvatarFallback>
                     </Avatar>
                     <div>
-                      {group.admin ? (
-                        <>
-                          <p className="font-medium text-deep-blue">{group.admin.name}</p>
-                          <p className="text-sm text-gray-600">
-                            Group Admin • {group.admin.major} • {group.admin.year}
-                          </p>
-                          <p className="text-xs text-gray-500 italic">{group.admin.bio}</p>
-                        </>
-                      ) : (
-                        <p className="text-gray-500 italic">No admin info available</p>
-                      )}
+                      <p className="font-medium text-deep-blue">{group.creator_name}</p>
+                      <p className="text-sm text-gray-600">
+                        Group Admin{group.creator_major ? ` • ${group.creator_major}` : ""}{group.creator_year_level ? ` • ${group.creator_year_level}` : ""}
+                      </p>
+                      {group.creator_bio && <p className="text-xs text-gray-500 italic">{group.creator_bio}</p>}
                     </div>
                   </div>
-
-                  <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Join Group
-                  </Button>
+                  {isGroupCreator() ? (
+                    <Button className="bg-green-600 hover:bg-green-700 text-white font-serif" disabled>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      You created this group
+                    </Button>
+                  ) : joined || hasRequested ? (
+                    <Button className="bg-gray-400 text-white font-serif" disabled>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      You already joined this group
+                    </Button>
+                  ) : (
+                    <Button 
+                      className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif"
+                      onClick={handleJoinRequest}
+                    >
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Join Group
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
             {/* Tabbed Content */}
             <Card className="shadow-lg border-0">
-              <Tabs defaultValue="chat" className="w-full">
+              <Tabs defaultValue={joined ? "chat" : "members"} className="w-full">
                 <CardHeader>
-                  <TabsList className="grid w-full grid-cols-5">
+                  <TabsList className={`grid w-full grid-cols-5`}>
                     <TabsTrigger value="chat" className="flex items-center gap-2">
                       <MessageCircle className="h-4 w-4" />
                       Chat
@@ -283,9 +438,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       <Brain className="h-4 w-4" />
                       Flashcards
                     </TabsTrigger>
-                    <TabsTrigger value="meetups" className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      Meetups
+                    <TabsTrigger value="sessions" className="flex items-center gap-2">
+                      <CalendarIcon className="h-4 w-4" />
+                      Sessions
                     </TabsTrigger>
                     <TabsTrigger value="members" className="flex items-center gap-2">
                       <Users className="h-4 w-4" />
@@ -296,168 +451,169 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
                 <CardContent>
                   {/* Chat Tab */}
-                  <TabsContent value="chat" className="space-y-4">
-                    <div className="h-96 overflow-y-auto space-y-4 p-4 bg-soft-gray rounded-lg">
-                      {(Array.isArray(group.chat_messages) ? group.chat_messages : []).map((msg: any) => (
-                        <div key={msg.id} className="flex space-x-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={msg.avatar || "/placeholder.svg"} />
-                            <AvatarFallback className="bg-deep-blue text-white text-xs">
-                              {msg.author
-                                .split(" ")
-                                .map((n: string) => n[0])
-                                .join("")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-1">
-                              <span className="font-medium text-deep-blue text-sm">{msg.author}</span>
-                              <span className="text-xs text-gray-500">{msg.time}</span>
+                  {(joined || isGroupCreator()) && (
+                    <TabsContent value="chat" className="space-y-4">
+                      <div className="h-96 overflow-y-auto space-y-4 p-4 bg-soft-gray rounded-lg">
+                        {Array.isArray(messages) && messages.length > 0 ? (
+                          messages.map((msg: any) => (
+                            <div key={msg.id} className="flex space-x-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="bg-deep-blue text-white text-xs">
+                                  {msg.user_name?.split(" ").map((n: string) => n[0]).join("")}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-1">
+                                  <span className="font-medium text-deep-blue text-sm">{msg.user_name}</span>
+                                  <span className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleString()}</span>
+                                </div>
+                                <p className="text-sm text-gray-700 bg-white p-3 rounded-lg shadow-sm">{msg.text}</p>
+                              </div>
                             </div>
-                            <p className="text-sm text-gray-700 bg-white p-3 rounded-lg shadow-sm">{msg.message}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex space-x-2">
-                      <Input
-                        placeholder="Type your message..."
-                        value={chatMessage}
-                        onChange={(e) => setChatMessage(e.target.value)}
-                        onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                        className="flex-1"
-                      />
-                      <Button onClick={handleSendMessage} className="bg-deep-blue hover:bg-deep-blue/90 text-white">
-                        <Send className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TabsContent>
+                          ))
+                        ) : (
+                          <div className="text-gray-500">No messages yet.</div>
+                        )}
+                      </div>
+                      <div className="flex space-x-2">
+                        <Input
+                          placeholder="Type your message..."
+                          value={chatMessage}
+                          onChange={(e) => setChatMessage(e.target.value)}
+                          onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                          className="flex-1"
+                        />
+                        <Button onClick={handleSendMessage} className="bg-deep-blue hover:bg-deep-blue/90 text-white">
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TabsContent>
+                  )}
 
                   {/* Files Tab */}
-                  <TabsContent value="files" className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-serif font-medium text-deep-blue">Shared Files</h3>
-                      <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload File
-                      </Button>
-                    </div>
+                  {(joined || isGroupCreator()) && (
+                    <TabsContent value="files" className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-serif font-medium text-deep-blue">Shared Files</h3>
+                        <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
+                          <Upload className="mr-2 h-4 w-4" />
+                          Upload File
+                        </Button>
+                      </div>
 
-                    <div className="space-y-3">
-                      {(Array.isArray(group.files) ? group.files : []).map((file: any, index: number) => (
-                        <div key={index} className="flex items-center justify-between p-4 bg-white rounded-lg border">
-                          <div className="flex items-center space-x-3">
-                            <FileText className="h-8 w-8 text-deep-blue" />
-                            <div>
-                              <p className="font-medium text-deep-blue">{file.name}</p>
-                              <p className="text-sm text-gray-600">
-                                {file.size} • Uploaded by {file.uploadedBy} • {file.date}
-                              </p>
+                      <div className="space-y-3">
+                        {(Array.isArray(group.files) ? group.files : []).map((file: any, index: number) => (
+                          <div key={index} className="flex items-center justify-between p-4 bg-white rounded-lg border">
+                            <div className="flex items-center space-x-3">
+                              <FileText className="h-8 w-8 text-deep-blue" />
+                              <div>
+                                <p className="font-medium text-deep-blue">{file.name}</p>
+                                <p className="text-sm text-gray-600">
+                                  {file.size} • Uploaded by {file.uploadedBy} • {file.date}
+                                </p>
+                              </div>
                             </div>
+                            <Button variant="outline" size="sm" className="bg-transparent">
+                              Download
+                            </Button>
                           </div>
-                          <Button variant="outline" size="sm" className="bg-transparent">
-                            Download
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </TabsContent>
+                        ))}
+                      </div>
+                    </TabsContent>
+                  )}
 
                   {/* Flashcards Tab */}
-                  <TabsContent value="flashcards" className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-serif font-medium text-deep-blue">Study Flashcards</h3>
-                      <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create Flashcard
-                      </Button>
-                    </div>
-
-                    {/* Create New Flashcard */}
-                    <div className="p-4 bg-soft-gray rounded-lg space-y-3">
-                      <h4 className="font-medium text-deep-blue">Create New Flashcard</h4>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-sm font-medium mb-1 block">Front (Question)</label>
-                          <Textarea
-                            placeholder="Enter the question or term..."
-                            value={newFlashcard.front}
-                            onChange={(e) => setNewFlashcard({ ...newFlashcard, front: e.target.value })}
-                            rows={3}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium mb-1 block">Back (Answer)</label>
-                          <Textarea
-                            placeholder="Enter the answer or definition..."
-                            value={newFlashcard.back}
-                            onChange={(e) => setNewFlashcard({ ...newFlashcard, back: e.target.value })}
-                            rows={3}
-                          />
-                        </div>
+                  {(joined || isGroupCreator()) && (
+                    <TabsContent value="flashcards" className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-serif font-medium text-deep-blue">Study Flashcards</h3>
+                        <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
+                          <Plus className="mr-2 h-4 w-4" />
+                          Create Flashcard
+                        </Button>
                       </div>
-                      <Button onClick={handleCreateFlashcard} className="bg-deep-blue hover:bg-deep-blue/90 text-white">
-                        Add Flashcard
-                      </Button>
-                    </div>
 
-                    {/* Existing Flashcards */}
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {(Array.isArray(group.flashcards) ? group.flashcards : []).map((card: any) => (
-                        <div key={card.id} className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow">
-                          <div className="mb-3">
-                            <div className="text-sm font-medium text-deep-blue mb-2">Question:</div>
-                            <div className="text-gray-700">{card.front}</div>
+                      {/* Create New Flashcard */}
+                      <div className="p-4 bg-soft-gray rounded-lg space-y-3">
+                        <h4 className="font-medium text-deep-blue">Create New Flashcard</h4>
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-medium mb-1 block">Front (Question)</label>
+                            <Textarea
+                              placeholder="Enter the question or term..."
+                              value={newFlashcard.front}
+                              onChange={(e) => setNewFlashcard({ ...newFlashcard, front: e.target.value })}
+                              rows={3}
+                            />
                           </div>
-                          <div className="mb-3">
-                            <div className="text-sm font-medium text-deep-blue mb-2">Answer:</div>
-                            <div className="text-gray-700">{card.back}</div>
+                          <div>
+                            <label className="text-sm font-medium mb-1 block">Back (Answer)</label>
+                            <Textarea
+                              placeholder="Enter the answer or definition..."
+                              value={newFlashcard.back}
+                              onChange={(e) => setNewFlashcard({ ...newFlashcard, back: e.target.value })}
+                              rows={3}
+                            />
                           </div>
-                          <div className="text-xs text-gray-500">Created by {card.createdBy}</div>
                         </div>
-                      ))}
-                    </div>
-                  </TabsContent>
+                        <Button onClick={handleCreateFlashcard} className="bg-deep-blue hover:bg-deep-blue/90 text-white">
+                          Add Flashcard
+                        </Button>
+                      </div>
 
-                  {/* Meetups Tab */}
-                  <TabsContent value="meetups" className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-serif font-medium text-deep-blue">Upcoming Sessions</h3>
-                      <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                        <CalendarPlus className="mr-2 h-4 w-4" />
-                        Schedule Session
-                      </Button>
-                    </div>
-
-                    <div className="space-y-4">
-                      {(Array.isArray(group.upcoming_sessions) ? group.upcoming_sessions : []).map((session: any, index: number) => (
-                        <div key={index} className="p-4 bg-white rounded-lg border">
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <h4 className="font-semibold text-deep-blue text-lg">{session.topic}</h4>
-                              <p className="text-gray-600">
-                                {session.date} • {session.time}
-                              </p>
+                      {/* Existing Flashcards */}
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {(Array.isArray(group.flashcards) ? group.flashcards : []).map((card: any) => (
+                          <div key={card.id} className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow">
+                            <div className="mb-3">
+                              <div className="text-sm font-medium text-deep-blue mb-2">Question:</div>
+                              <div className="text-gray-700">{card.front}</div>
                             </div>
-                            <Badge
-                              className={getFormatColor(session.type.includes("Virtual") ? "Virtual" : "In-person")}
-                            >
-                              {session.type}
-                            </Badge>
+                            <div className="mb-3">
+                              <div className="text-sm font-medium text-deep-blue mb-2">Answer:</div>
+                              <div className="text-gray-700">{card.back}</div>
+                            </div>
+                            <div className="text-xs text-gray-500">Created by {card.createdBy}</div>
                           </div>
-                          <div className="flex items-center text-sm text-gray-600 mb-3">
-                            <MapPin className="mr-2 h-4 w-4" />
-                            {session.location}
+                        ))}
+                      </div>
+                    </TabsContent>
+                  )}
+
+                  {/* Sessions Tab */}
+                  <TabsContent value="sessions" className="space-y-4">
+                    <h3 className="text-lg font-serif font-medium text-deep-blue mb-2">Upcoming Sessions</h3>
+                    {isGroupCreator() && (
+                      <form onSubmit={editingSession ? handleUpdateSession : handleCreateSession} className="mb-6 space-y-2 bg-white p-4 rounded-lg shadow">
+                        <div className="flex flex-wrap gap-2">
+                          <input type="date" name="date" value={sessionForm.date} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
+                          <input type="time" name="time" value={sessionForm.time} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
+                          <input type="text" name="location" value={sessionForm.location} onChange={handleSessionFormChange} required placeholder="Location" className="border rounded px-2 py-1" />
+                          <input type="text" name="description" value={sessionForm.description} onChange={handleSessionFormChange} placeholder="Description (optional)" className="border rounded px-2 py-1 flex-1" />
+                          <Button type="submit" className="bg-deep-blue text-white" disabled={sessionLoading}>
+                            {editingSession ? 'Update' : 'Create'}
+                          </Button>
+                          {editingSession && (
+                            <Button type="button" variant="outline" onClick={() => { setEditingSession(null); setSessionForm({ date: '', time: '', location: '', description: '' }) }}>Cancel</Button>
+                          )}
+                        </div>
+                      </form>
+                    )}
+                    <div className="space-y-2">
+                      {sessions.length === 0 && <div className="text-gray-500">No sessions scheduled.</div>}
+                      {sessions.map(session => (
+                        <div key={session.id} className="flex items-center justify-between bg-white p-3 rounded shadow">
+                          <div>
+                            <div className="font-medium text-deep-blue">{format(new Date(session.date + 'T' + session.time), 'eeee, MMM d, yyyy h:mm a')}</div>
+                            <div className="text-sm text-gray-600">{session.location}</div>
+                            {session.description && <div className="text-xs text-gray-500">{session.description}</div>}
                           </div>
-                          <div className="flex space-x-2">
-                            <Button size="sm" className="bg-deep-blue hover:bg-deep-blue/90 text-white">
-                              Join Session
-                            </Button>
-                            <Button size="sm" variant="outline" className="bg-transparent">
-                              Add to Calendar
-                            </Button>
-                          </div>
+                          {isGroupCreator() && (
+                            <div className="flex gap-2">
+                              <Button size="icon" variant="ghost" onClick={() => handleEditSession(session)}><Edit className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" onClick={() => handleDeleteSession(session.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -465,33 +621,19 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
                   {/* Members Tab */}
                   <TabsContent value="members" className="space-y-4">
-                    <h3 className="text-lg font-serif font-medium text-deep-blue">Group Members ({group.members})</h3>
+                    <h3 className="text-lg font-serif font-medium text-deep-blue">Group Members ({members.length})</h3>
 
                     <div className="grid md:grid-cols-2 gap-4">
-                      {(Array.isArray(group.members_list) ? group.members_list : []).map((member: any, index: number) => (
-                        <div key={index} className="flex items-center space-x-3 p-3 bg-white rounded-lg border">
-                          <div className="relative">
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={member.avatar || "/placeholder.svg"} />
-                              <AvatarFallback className="bg-deep-blue text-white">
-                                {member.name
-                                  .split(" ")
-                                  .map((n: string) => n[0])
-                                  .join("")}
-                              </AvatarFallback>
-                            </Avatar>
-                            {member.online && (
-                              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-                            )}
-                          </div>
+                      {members.map((member: any) => (
+                        <div key={member.id} className="flex items-center space-x-3 p-3 bg-white rounded-lg border">
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback className="bg-deep-blue text-white">
+                              {member.name.split(" ").map((n: string) => n[0]).join("")}
+                            </AvatarFallback>
+                          </Avatar>
                           <div className="flex-1">
                             <p className="font-medium text-deep-blue">{member.name}</p>
-                            <div className="flex items-center space-x-2">
-                              <Badge variant={member.role === "Admin" ? "default" : "secondary"} className="text-xs">
-                                {member.role}
-                              </Badge>
-                              {member.online && <span className="text-xs text-green-600">Online</span>}
-                            </div>
+                            <span className="text-xs text-gray-500">{member.email}</span>
                           </div>
                         </div>
                       ))}

@@ -4,6 +4,7 @@ import { Inter, DM_Serif_Display } from "next/font/google"
 import "./globals.css"
 import { UserProvider } from "@/components/UserContext"
 import Header from "@/components/Header"
+import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 const dmSerifDisplay = DM_Serif_Display({
@@ -31,6 +32,7 @@ export default function RootLayout({
         <UserProvider>
           <Header />
           {children}
+          <Toaster />
         </UserProvider>
       </body>
     </html>

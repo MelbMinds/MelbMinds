@@ -53,6 +53,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 class Group(models.Model):
     group_name = models.CharField(max_length=255)
     subject_code = models.CharField(max_length=50)
+    course_name = models.CharField(max_length=255, default="")
     description = models.TextField()
     year_level = models.CharField(max_length=50)
     meeting_format = models.CharField(max_length=100)
@@ -61,7 +62,32 @@ class Group(models.Model):
     location = models.CharField(max_length=255)
     tags = models.CharField(max_length=255, blank=True)
     group_guidelines = models.TextField(blank=True)
+    group_personality = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
+    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_groups', null=True, blank=True)
+    members = models.ManyToManyField(User, related_name='joined_groups', blank=True)
 
     def __str__(self):
         return self.group_name
+
+class Message(models.Model):
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='messages')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    text = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.name}: {self.text[:30]}"
+
+class GroupSession(models.Model):
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='sessions')
+    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_sessions')
+    date = models.DateField()
+    time = models.TimeField()
+    location = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Session for {self.group.group_name} on {self.date} at {self.time}"

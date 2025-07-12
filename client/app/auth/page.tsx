@@ -68,7 +68,8 @@ export default function AuthPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch("http://localhost:8000/api/login/", {
+      // 1. Get JWT tokens
+      const tokenRes = await fetch("http://localhost:8000/api/token/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -76,14 +77,26 @@ export default function AuthPage() {
           password,
         }),
       })
-      if (!res.ok) {
-        const data = await res.json()
+      if (!tokenRes.ok) {
+        const data = await tokenRes.json()
         setError(data?.detail || "Login failed")
         setIsLoading(false)
         return
       }
-      const data = await res.json()
-      setUser({ name: data.name, email: data.email })
+      const tokens = await tokenRes.json() // { access, refresh }
+      // 2. Get user info using access token
+      const userRes = await fetch("http://localhost:8000/api/profile/", {
+        headers: {
+          "Authorization": `Bearer ${tokens.access}`,
+        },
+      })
+      if (!userRes.ok) {
+        setError("Failed to fetch user profile")
+        setIsLoading(false)
+        return
+      }
+      const userData = await userRes.json()
+      setUser(userData, tokens)
       setIsLoading(false)
       router.push("/")
     } catch (err) {
@@ -122,8 +135,34 @@ export default function AuthPage() {
         setIsLoading(false)
         return
       }
-      const data = await res.json()
-      setUser({ name: data.name, email: data.email })
+      // After successful registration, get JWT tokens
+      const tokenRes = await fetch("http://localhost:8000/api/token/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      })
+      if (!tokenRes.ok) {
+        setError("Failed to obtain token after registration")
+        setIsLoading(false)
+        return
+      }
+      const tokens = await tokenRes.json()
+      // Fetch user profile
+      const userRes = await fetch("http://localhost:8000/api/profile/", {
+        headers: {
+          "Authorization": `Bearer ${tokens.access}`,
+        },
+      })
+      if (!userRes.ok) {
+        setError("Failed to fetch user profile")
+        setIsLoading(false)
+        return
+      }
+      const userData = await userRes.json()
+      setUser(userData, tokens)
       setIsLoading(false)
       router.push("/")
     } catch (err) {
