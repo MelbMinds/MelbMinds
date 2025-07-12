@@ -30,7 +30,7 @@ import Link from "next/link"
 import { useUser } from "@/components/UserContext"
 
 export default function ProfilePage() {
-  const { tokens } = useUser()
+  const { tokens, setUser } = useUser()
   const [isEditing, setIsEditing] = useState(false)
   const [profileData, setProfileData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -175,23 +175,61 @@ export default function ProfilePage() {
     "Korean",
   ]
 
-  const handleSave = () => {
-    setIsEditing(false)
-    // Save profile data
+  const handleSave = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/profile/", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(tokens?.access && { "Authorization": `Bearer ${tokens.access}` }),
+        },
+        body: JSON.stringify(profileData),
+      })
+      
+      if (!res.ok) {
+        const errorData = await res.json()
+        console.error('Save error:', errorData)
+        setError('Failed to save profile changes')
+        return
+      }
+      
+      const updatedData = await res.json()
+      setProfileData(updatedData)
+      // Update the user context with the new data
+      setUser(updatedData, tokens)
+      setIsEditing(false)
+      setError(null)
+    } catch (err: any) {
+      console.error('Save error:', err)
+      setError('Network error. Please try again.')
+    }
   }
 
   const handleCancel = () => {
+    // Reset to original data by refetching
+    if (tokens?.access) {
+      fetch("http://127.0.0.1:8000/api/profile/", {
+        headers: { "Authorization": `Bearer ${tokens.access}` },
+      })
+        .then(res => res.json())
+        .then(data => setProfileData(data))
+        .catch(err => setError(err.message))
+    }
     setIsEditing(false)
-    // Reset any changes
   }
 
   const toggleLanguage = (language: string) => {
-    setProfileData((prev: any) => ({
-      ...prev,
-      languages: prev.languages.includes(language)
-        ? prev.languages.filter((l: string) => l !== language)
-        : [...prev.languages, language],
-    }))
+    setProfileData((prev: any) => {
+      const currentLanguages = prev.languages || []
+      const updatedLanguages = currentLanguages.includes(language)
+        ? currentLanguages.filter((l: string) => l !== language)
+        : [...currentLanguages, language]
+      
+      return {
+        ...prev,
+        languages: updatedLanguages,
+      }
+    })
   }
 
   return (
@@ -347,7 +385,7 @@ export default function ProfilePage() {
                         ) : (
                           <div className="flex items-center p-3 bg-soft-gray rounded-md">
                             <Calendar className="mr-2 h-4 w-4 text-gray-500" />
-                            <span>{profileData.year}</span>
+                            <span>{profileData.year || "Not specified"}</span>
                           </div>
                         )}
                       </div>
@@ -431,7 +469,7 @@ export default function ProfilePage() {
                               <MapPin className="mr-2 h-4 w-4 text-green-600" />
                             )}
                             {profileData.studyFormat === "Hybrid" && <Users className="mr-2 h-4 w-4 text-gold" />}
-                            <span>{profileData.studyFormat}</span>
+                            <span>{profileData.studyFormat || "Not specified"}</span>
                           </div>
                         )}
                       </div>
@@ -440,30 +478,38 @@ export default function ProfilePage() {
                         <Label>Languages Spoken</Label>
                         {isEditing ? (
                           <div className="flex flex-wrap gap-2">
-                            {availableLanguages.map((language) => (
-                              <Badge
-                                key={language}
-                                variant={profileData.languages.includes(language) ? "default" : "outline"}
-                                className={`cursor-pointer transition-all ${
-                                  profileData.languages.includes(language)
-                                    ? "bg-deep-blue text-white"
-                                    : "hover:bg-gray-100"
-                                }`}
-                                onClick={() => toggleLanguage(language)}
-                              >
-                                {language}
-                              </Badge>
-                            ))}
+                            {availableLanguages.map((language) => {
+                              const currentLanguages = profileData.languages || []
+                              const isSelected = currentLanguages.includes(language)
+                              return (
+                                <Badge
+                                  key={language}
+                                  variant={isSelected ? "default" : "outline"}
+                                  className={`cursor-pointer transition-all ${
+                                    isSelected
+                                      ? "bg-deep-blue text-white"
+                                      : "hover:bg-gray-100"
+                                  }`}
+                                  onClick={() => toggleLanguage(language)}
+                                >
+                                  {language}
+                                </Badge>
+                              )
+                            })}
                           </div>
                         ) : (
                           <div className="flex items-center p-3 bg-soft-gray rounded-md">
                             <Globe className="mr-2 h-4 w-4 text-gray-500" />
                             <div className="flex flex-wrap gap-2">
-                              {Array.isArray(profileData.languages) && profileData.languages.map((language: string) => (
-                                <Badge key={language} variant="secondary">
-                                  {language}
-                                </Badge>
-                              ))}
+                              {Array.isArray(profileData.languages) && profileData.languages.length > 0 ? (
+                                profileData.languages.map((language: string) => (
+                                  <Badge key={language} variant="secondary">
+                                    {language}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-gray-500">No languages specified</span>
+                              )}
                             </div>
                           </div>
                         )}

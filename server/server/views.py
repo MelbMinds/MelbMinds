@@ -121,7 +121,31 @@ class UserProfileView(APIView):
         serializer = UserProfileSerializer(user)
         data = serializer.data
         data['joined_groups'] = groups_data
-        return Response(data) 
+        return Response(data)
+    
+    def put(self, request):
+        user = request.user
+        data = request.data.copy()
+        
+        # Convert languages array back to string for storage
+        if 'languages' in data and isinstance(data['languages'], list):
+            data['languages_spoken'] = ', '.join(data['languages'])
+            del data['languages']
+        
+        # Map frontend field names to model field names
+        if 'year' in data:
+            data['year_level'] = data['year']
+            del data['year']
+        
+        if 'studyFormat' in data:
+            data['preferred_study_format'] = data['studyFormat']
+            del data['studyFormat']
+        
+        serializer = UserProfileSerializer(user, data=data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class GroupChatView(APIView):
     permission_classes = [IsAuthenticated]
