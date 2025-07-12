@@ -23,6 +23,7 @@ export default function DiscoverPage() {
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sort, setSort] = useState("newest")
 
   const fetchGroups = async () => {
     setSearching(true)
@@ -36,6 +37,7 @@ export default function DiscoverPage() {
       if (selectedFormat && selectedFormat !== 'all') params.append('meeting_format', selectedFormat)
       if (selectedLanguage && selectedLanguage !== 'all') params.append('primary_language', selectedLanguage)
       if (personalityFilters.length > 0) params.append('personality_tags', personalityFilters.join(','))
+      if (sort) params.append('sort', sort)
 
       const res = await fetch(`http://localhost:8000/api/groups/?${params.toString()}`)
       if (!res.ok) throw new Error("Failed to fetch groups")
@@ -56,7 +58,7 @@ export default function DiscoverPage() {
     }, 300) // 300ms delay
 
     return () => clearTimeout(timeoutId)
-  }, [searchTerm, selectedSubject, selectedYear, selectedFormat, selectedLanguage, personalityFilters])
+  }, [searchTerm, selectedSubject, selectedYear, selectedFormat, selectedLanguage, personalityFilters, sort])
 
   const subjects = ["COMP10001", "BIOL10004", "LAWS10001", "MAST20004", "PSYC10004"]
   const yearLevels = ["1st Year", "2nd Year", "3rd Year", "Masters", "PhD"]
@@ -285,7 +287,7 @@ export default function DiscoverPage() {
               <p className="text-gray-600">
                 Showing {groups.length} study groups
               </p>
-              <Select defaultValue="newest">
+              <Select value={sort} onValueChange={setSort}>
                 <SelectTrigger className="w-48">
                   <SelectValue />
                 </SelectTrigger>

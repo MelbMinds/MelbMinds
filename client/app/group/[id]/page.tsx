@@ -613,42 +613,66 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
               <CardContent>
                 <p className="text-gray-700 mb-6 leading-relaxed">{group.description}</p>
 
-                {/* Rating Section */}
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-medium text-deep-blue">Rate this group</h3>
-                    {group.average_rating && (
+                {/* Rating Section - Only show for group members who are not the creator */}
+                {(joined || isGroupCreator()) && !isGroupCreator() && (
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-lg font-medium text-deep-blue">Rate this group</h3>
+                      {group.average_rating && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600">Average:</span>
+                          <StarRating 
+                            rating={group.average_rating} 
+                            readonly 
+                            size="sm" 
+                            showValue 
+                          />
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                      <StarRating 
+                        rating={userRating || 0} 
+                        onRatingChange={handleRatingChange}
+                        size="lg"
+                        showValue
+                        className="flex-1"
+                      />
+                      {ratingLoading && (
+                        <div className="text-sm text-gray-500">Submitting...</div>
+                      )}
+                    </div>
+                    
+                    {!userRating && (
+                      <p className="text-sm text-gray-500 mt-2">
+                        Click on the stars to rate this group
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Show average rating for all users */}
+                {!joined && !isGroupCreator() && group.average_rating && (
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium text-deep-blue">Group Rating</h3>
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-gray-600">Average:</span>
                         <StarRating 
                           rating={group.average_rating} 
                           readonly 
-                          size="sm" 
+                          size="lg" 
                           showValue 
                         />
+                        <span className="text-sm text-gray-500">({group.rating_count || 0} ratings)</span>
                       </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <StarRating 
-                      rating={userRating || 0} 
-                      onRatingChange={handleRatingChange}
-                      size="lg"
-                      showValue
-                      className="flex-1"
-                    />
-                    {ratingLoading && (
-                      <div className="text-sm text-gray-500">Submitting...</div>
-                    )}
-                  </div>
-                  
-                  {!userRating && (
+                    </div>
                     <p className="text-sm text-gray-500 mt-2">
-                      Click on the stars to rate this group
+                      Join the group to rate it
                     </p>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 <div className="grid md:grid-cols-2 gap-4 mb-6">
                   <div className="flex items-center text-sm text-gray-600">

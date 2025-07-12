@@ -14,6 +14,7 @@ from rest_framework.permissions import AllowAny
 from django.http import HttpResponse
 import os
 from .perspective_moderation import perspective_moderator
+from django.db import models
 
 def cleanup_past_sessions():
     """
@@ -178,7 +179,7 @@ class GroupListCreateView(generics.ListCreateAPIView):
         return []
 
     def get_queryset(self):
-        queryset = Group.objects.all().order_by('-created_at')
+        queryset = Group.objects.all()
         
         # Get filter parameters
         search = self.request.query_params.get('search', '')
@@ -218,6 +219,17 @@ class GroupListCreateView(generics.ListCreateAPIView):
                     personality_filter |= Q(group_personality__icontains=tag)
                 queryset = queryset.filter(personality_filter)
         
+        # Sorting
+        sort = self.request.query_params.get('sort', 'newest')
+        if sort == 'newest':
+            queryset = queryset.order_by('-created_at')
+        elif sort == 'members':
+            queryset = queryset.annotate(num_members=Count('members')).order_by('-num_members', '-created_at')
+        elif sort == 'rating':
+            # Annotate with average rating, fallback to 0 if no ratings
+            queryset = queryset.annotate(avg_rating=models.Avg('ratings__rating')).order_by(models.F('avg_rating').desc(nulls_last=True), '-created_at')
+        elif sort == 'subject':
+            queryset = queryset.order_by('subject_code', '-created_at')
         return queryset
 
     def get_serializer_context(self):
@@ -567,7 +579,8 @@ def create_test_session(request):
             'primary_language': 'English',
             'meeting_schedule': 'Weekly',
             'location': 'Test Location',
-            'creator': user
+            'tags': 'Python, Programming, Algorithms, Data Structures',
+            'group_personality': 'Focused, Collaborative, Technical'
         }
     )
     
@@ -919,6 +932,14 @@ class GroupRatingView(APIView):
             
             if not rating_value:
                 return Response({'detail': 'Rating value is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if user is a member of the group
+            if not (request.user in group.members.all() or request.user == group.creator):
+                return Response({'detail': 'You must be a member of this group to rate it'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Prevent group creator from rating their own group
+            if request.user == group.creator:
+                return Response({'detail': 'Group creators cannot rate their own group'}, status=status.HTTP_403_FORBIDDEN)
             
             # Validate rating value
             try:

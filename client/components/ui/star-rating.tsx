@@ -41,16 +41,31 @@ export function StarRating({
     setHoverRating(newRating)
   }
 
+  const handleStarHover = (event: React.MouseEvent<HTMLDivElement>, starIndex: number) => {
+    if (readonly) return
+    
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const halfWidth = rect.width / 2
+    
+    const newRating = x < halfWidth ? starIndex + 0.5 : starIndex + 1
+    setHoverRating(newRating)
+  }
+
   const handleMouseLeave = () => {
     if (readonly) return
     setHoverRating(null)
     setIsHovering(false)
   }
 
-  const handleClick = (starIndex: number, isHalf: boolean) => {
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>, starIndex: number) => {
     if (readonly || !onRatingChange) return
     
-    const newRating = isHalf ? starIndex + 0.5 : starIndex + 1
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const halfWidth = rect.width / 2
+    
+    const newRating = x < halfWidth ? starIndex + 0.5 : starIndex + 1
     onRatingChange(newRating)
   }
 
@@ -72,8 +87,8 @@ export function StarRating({
             <div
               key={starIndex}
               className="relative cursor-pointer"
-              onMouseMove={(e) => handleMouseMove(e, starIndex)}
-              onClick={() => handleClick(starIndex, isHalfFilled)}
+              onMouseMove={(e) => handleStarHover(e, starIndex)}
+              onClick={(e) => handleClick(e, starIndex)}
             >
               <Star
                 className={cn(
