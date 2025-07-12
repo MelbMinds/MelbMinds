@@ -8,6 +8,9 @@ from .models import Group, Message, GroupSession
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes
+from django.utils import timezone
+from django.db.models import Count
+from rest_framework.permissions import AllowAny
 
 class RegisterView(APIView):
     def post(self, request):
@@ -208,3 +211,41 @@ class GroupSessionRetrieveUpdateDeleteView(APIView):
             return Response({'detail': 'Only the group creator can delete sessions'}, status=403)
         session.delete()
         return Response(status=204) 
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def stats_summary(request):
+    now = timezone.now()
+    from .models import User, Group, GroupSession
+
+    # Delete past sessions (date+time in the past)
+    GroupSession.objects.filter(
+        Q(date__lt=now.date()) |
+        Q(date=now.date(), time__lt=now.time())
+    ).delete()
+
+    active_students = User.objects.count()
+    active_sessions = GroupSession.objects.filter(
+        Q(date__gt=now.date()) |
+        Q(date=now.date(), time__gte=now.time())
+    ).count()
+    subject_areas = Group.objects.values('subject_code').distinct().count()
+    new_groups_today = Group.objects.filter(created_at__date=now.date()).count()
+    unimelb_students = User.objects.filter(email__iendswith='@unimelb.edu.au').count()
+    groups_created = Group.objects.count()
+    # Sessions completed: date+time in the past
+    sessions_completed = GroupSession.objects.filter(
+        Q(date__lt=now.date()) |
+        Q(date=now.date(), time__lt=now.time())
+    ).count()
+
+    return Response({
+        "active_students": active_students,
+        "active_sessions": active_sessions,
+        "subject_areas": subject_areas,
+        "new_groups_today": new_groups_today,
+        "unimelb_students": unimelb_students,
+        "groups_created": groups_created,
+        "sessions_completed": sessions_completed,
+        "grade_improvement": 12,
+    }) 

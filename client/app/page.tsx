@@ -5,9 +5,23 @@ import { Badge } from "@/components/ui/badge"
 import { Users, Video, MapPin, UserCheck, Star, ArrowRight, Clock, Globe, Quote } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
+import { useEffect, useState } from "react"
 
 export default function HomePage() {
   const { user } = useUser();
+  const [stats, setStats] = useState<any>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  useEffect(() => {
+    fetch("http://localhost:8000/api/stats/summary/")
+      .then((res) => res.json())
+      .then((data) => {
+        setStats(data);
+        setLoadingStats(false);
+      })
+      .catch(() => setLoadingStats(false));
+  }, []);
+
   const testimonials = [
     {
       name: "Sarah Chen",
@@ -56,13 +70,6 @@ export default function HomePage() {
     },
   ]
 
-  const stats = [
-    { number: "82%", label: "Grade improvement reported", subtext: "Average increase of 12 points" },
-    { number: "3,247", label: "Active UniMelb students", subtext: "Across all faculties" },
-    { number: "450+", label: "Study groups created", subtext: "This semester alone" },
-    { number: "15,000+", label: "Study sessions completed", subtext: "Since launch" },
-  ]
-
   return (
     <div className="min-h-screen bg-white">
       {/* Hero Section */}
@@ -81,11 +88,15 @@ export default function HomePage() {
               {/* Key Stats */}
               <div className="grid grid-cols-2 gap-6 mb-8">
                 <div className="text-center">
-                  <div className="text-3xl font-serif font-bold text-gold">82%</div>
+                  <div className="text-3xl font-serif font-bold text-gold">
+                    {loadingStats ? <span className="animate-pulse">...</span> : stats?.grade_improvement + "%"}
+                  </div>
                   <div className="text-sm text-blue-100">Grade improvement</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-serif font-bold text-gold">3,247</div>
+                  <div className="text-3xl font-serif font-bold text-gold">
+                    {loadingStats ? <span className="animate-pulse">...</span> : stats?.active_students?.toLocaleString()}
+                  </div>
                   <div className="text-sm text-blue-100">Active students</div>
                 </div>
               </div>
@@ -124,7 +135,7 @@ export default function HomePage() {
                       Active Study Sessions
                     </span>
                     <Badge variant="secondary" className="bg-gold text-deep-blue font-medium">
-                      127
+                      {loadingStats ? <span className="animate-pulse">...</span> : stats?.active_sessions}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
@@ -133,7 +144,7 @@ export default function HomePage() {
                       Subject Areas
                     </span>
                     <Badge variant="secondary" className="bg-gold text-deep-blue font-medium">
-                      85+
+                      {loadingStats ? <span className="animate-pulse">...</span> : stats?.subject_areas}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
@@ -142,7 +153,7 @@ export default function HomePage() {
                       New Groups Today
                     </span>
                     <Badge variant="secondary" className="bg-gold text-deep-blue font-medium">
-                      12
+                      {loadingStats ? <span className="animate-pulse">...</span> : stats?.new_groups_today}
                     </Badge>
                   </div>
                 </div>
@@ -194,13 +205,34 @@ export default function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {stats.map((stat, index) => (
-              <div key={index} className="text-center">
-                <div className="text-5xl font-serif font-bold text-deep-blue mb-2">{stat.number}</div>
-                <div className="text-lg font-medium text-gray-900 mb-1">{stat.label}</div>
-                <div className="text-sm text-gray-600">{stat.subtext}</div>
+            <div className="text-center">
+              <div className="text-5xl font-serif font-bold text-deep-blue mb-2">
+                {loadingStats ? <span className="animate-pulse">...</span> : stats?.grade_improvement + "%"}
               </div>
-            ))}
+              <div className="text-lg font-medium text-gray-900 mb-1">Grade improvement reported</div>
+              <div className="text-sm text-gray-600">Average increase of 12 points</div>
+            </div>
+            <div className="text-center">
+              <div className="text-5xl font-serif font-bold text-deep-blue mb-2">
+                {loadingStats ? <span className="animate-pulse">...</span> : stats?.unimelb_students?.toLocaleString()}
+              </div>
+              <div className="text-lg font-medium text-gray-900 mb-1">Active UniMelb students</div>
+              <div className="text-sm text-gray-600">Across all faculties</div>
+            </div>
+            <div className="text-center">
+              <div className="text-5xl font-serif font-bold text-deep-blue mb-2">
+                {loadingStats ? <span className="animate-pulse">...</span> : stats?.groups_created?.toLocaleString()}
+              </div>
+              <div className="text-lg font-medium text-gray-900 mb-1">Study groups created</div>
+              <div className="text-sm text-gray-600">This semester alone</div>
+            </div>
+            <div className="text-center">
+              <div className="text-5xl font-serif font-bold text-deep-blue mb-2">
+                {loadingStats ? <span className="animate-pulse">...</span> : stats?.sessions_completed?.toLocaleString()}
+              </div>
+              <div className="text-lg font-medium text-gray-900 mb-1">Study sessions completed</div>
+              <div className="text-sm text-gray-600">Since launch</div>
+            </div>
           </div>
         </div>
       </section>
