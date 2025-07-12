@@ -431,15 +431,40 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       })
 
       if (res.ok) {
-        const blob = await res.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = file.original_filename
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
+        const contentType = res.headers.get('content-type')
+        
+        // Check if it's a JSON response (S3 URL redirect)
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json()
+          if (data.download_url) {
+            // For S3 files, open the URL in a new tab (download attribute doesn't work cross-origin)
+            window.open(data.download_url, '_blank')
+          } else {
+            toast({ title: 'Error downloading file', variant: 'destructive' })
+          }
+        } else if (contentType && contentType.includes('application/octet-stream')) {
+          // For direct file downloads (streamed from S3)
+          const blob = await res.blob()
+          const url = window.URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = file.original_filename
+          document.body.appendChild(a)
+          a.click()
+          window.URL.revokeObjectURL(url)
+          document.body.removeChild(a)
+        } else {
+          // Fallback for other content types
+          const blob = await res.blob()
+          const url = window.URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = file.original_filename
+          document.body.appendChild(a)
+          a.click()
+          window.URL.revokeObjectURL(url)
+          document.body.removeChild(a)
+        }
       } else {
         toast({ title: 'Error downloading file', variant: 'destructive' })
       }
