@@ -1532,7 +1532,9 @@ def group_detail(request, group_id):
     """Get detailed information about a specific group"""
     view = GroupRetrieveView()
     view.request = request
+    view.args = ()
     view.kwargs = {'pk': group_id}
+    view.format_kwarg = None
     return view.get(request, pk=group_id)
 
 @api_view(['GET', 'POST'])
