@@ -16,6 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Mail, Lock, User, Globe, Video, MapPin, UserCheck } from "lucide-react"
 import Link from "next/link"
+import { toast } from "@/components/ui/use-toast"
+import { PopupAlert } from "@/components/ui/popup-alert"
 
 export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -131,7 +133,21 @@ export default function AuthPage() {
       })
       if (!res.ok) {
         const data = await res.json()
-        setError(data?.email?.[0] || data?.detail || "Registration failed")
+        // Find the first string error in the response
+        let errorMsg = data?.error || data?.detail || null;
+        if (!errorMsg && typeof data === 'object') {
+          for (const key in data) {
+            if (typeof data[key] === 'string') {
+              errorMsg = data[key];
+              break;
+            }
+            if (Array.isArray(data[key]) && typeof data[key][0] === 'string') {
+              errorMsg = data[key][0];
+              break;
+            }
+          }
+        }
+        setError(errorMsg || "Registration failed")
         setIsLoading(false)
         return
       }
@@ -177,6 +193,12 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-deep-blue to-deep-blue/80 flex items-center justify-center p-4">
+      {/* Popup Alert */}
+      <PopupAlert 
+        message={error} 
+        onClose={() => setError(null)} 
+      />
+      
       <div className="w-full max-w-2xl">
         {/* Logo */}
         <div className="text-center mb-8">

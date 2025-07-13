@@ -245,17 +245,17 @@ class GroupListCreateView(generics.ListCreateAPIView):
         
         if not group_name_validation['valid']:
             raise serializers.ValidationError({
-                'group_name': group_name_validation['message']
+                'error': group_name_validation['message']
             })
         
         if not description_validation['valid']:
             raise serializers.ValidationError({
-                'description': description_validation['message']
+                'error': description_validation['message']
             })
         
         if not tags_validation['valid']:
             raise serializers.ValidationError({
-                'tags': tags_validation['message']
+                'error': tags_validation['message']
             })
         
         serializer.save(creator=self.request.user)
@@ -442,6 +442,15 @@ class GroupSessionListCreateView(APIView):
         group = Group.objects.get(id=group_id)
         if group.creator != request.user:
             return Response({'detail': 'Only the group creator can create sessions'}, status=403)
+        
+        # Content moderation for session description
+        description_validation = perspective_moderator.validate_user_input('session description', request.data.get('description', ''))
+        
+        if not description_validation['valid']:
+            return Response({
+                'error': description_validation['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = GroupSessionSerializer(data=request.data)
         if serializer.is_valid():
             session = serializer.save(group=group, creator=request.user)
@@ -470,6 +479,15 @@ class GroupSessionRetrieveUpdateDeleteView(APIView):
         session = self.get_object(session_id)
         if session.creator != request.user:
             return Response({'detail': 'Only the group creator can edit sessions'}, status=403)
+        
+        # Content moderation for session description
+        description_validation = perspective_moderator.validate_user_input('session description', request.data.get('description', ''))
+        
+        if not description_validation['valid']:
+            return Response({
+                'error': description_validation['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = GroupSessionSerializer(session, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -793,6 +811,10 @@ class GroupFileListCreateView(APIView):
                 return Response({'detail': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
             
             uploaded_file = request.FILES['file']
+            # Moderation for file name
+            filename_validation = perspective_moderator.validate_user_input('file name', uploaded_file.name)
+            if not filename_validation['valid']:
+                return Response({'error': filename_validation['message']}, status=status.HTTP_400_BAD_REQUEST)
             
             # Create the file record
             file_obj = GroupFile.objects.create(

@@ -11,10 +11,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
+import { PopupAlert } from "@/components/ui/popup-alert"
 import { BookOpen, Users, MapPin, Video, Clock, Plus, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useUser } from "@/components/UserContext"
+import { toast } from "@/components/ui/use-toast"
 
 export default function CreateGroupPage() {
   const { tokens } = useUser()
@@ -33,6 +35,7 @@ export default function CreateGroupPage() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [courseName, setCourseName] = useState("")
+  const [popupMessage, setPopupMessage] = useState<string | null>(null)
 
   const personalityOptions = [
     "Quiet",
@@ -104,11 +107,20 @@ export default function CreateGroupPage() {
     "Casual",
   ]
 
+  const BAD_WORDS = ["badword1", "badword2", "badword3"] // Replace with your actual list
+  const containsBadWord = (text: string) => BAD_WORDS.some(word => text.toLowerCase().includes(word))
+
   const addTag = (tag: string) => {
-    if (tag && !tags.includes(tag)) {
+    if (!tag) return;
+    if (containsBadWord(tag)) {
+      setPopupMessage("You can't use bad words in tags!");
+      setNewTag("");
+      return;
+    }
+    if (!tags.includes(tag)) {
       setTags([...tags, tag])
     }
-    setNewTag("")
+    setNewTag("");
   }
 
   const removeTag = (tagToRemove: string) => {
@@ -143,7 +155,24 @@ export default function CreateGroupPage() {
       })
       if (!res.ok) {
         const data = await res.json()
-        setError(data?.detail || "Failed to create group")
+        // Find the first string error in the response
+        let errorMsg = data?.error || data?.detail || null;
+        if (!errorMsg && typeof data === 'object') {
+          for (const key in data) {
+            if (typeof data[key] === 'string') {
+              errorMsg = data[key];
+              break;
+            }
+            if (Array.isArray(data[key]) && typeof data[key][0] === 'string') {
+              errorMsg = data[key][0];
+              break;
+            }
+          }
+        }
+        setError(errorMsg || "Failed to create group")
+        if (errorMsg) {
+          toast({ title: 'Group Creation Error', description: errorMsg, variant: 'destructive' })
+        }
         setIsSubmitting(false)
         return
       }
@@ -157,6 +186,13 @@ export default function CreateGroupPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Popup Alert */}
+      <PopupAlert 
+        message={error} 
+        onClose={() => setError(null)} 
+      />
+      <PopupAlert message={popupMessage} onClose={() => setPopupMessage(null)} />
+      
       {/* Navigation */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}

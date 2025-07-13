@@ -39,6 +39,7 @@ import { use } from "react"
 import { toast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
 import { StarRating } from "@/components/ui/star-rating"
+import { PopupAlert } from "@/components/ui/popup-alert"
 
 export default function StudyGroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -84,6 +85,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     group_guidelines: '',
     group_personality: ''
   })
+  const [chatError, setChatError] = useState<string | null>(null)
+  const [updateError, setUpdateError] = useState<string | null>(null)
+  const [fileError, setFileError] = useState<string | null>(null)
+  const [sessionError, setSessionError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -304,7 +309,21 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         toast({ title: 'Group updated successfully!' })
       } else {
         const data = await res.json()
-        toast({ title: 'Error updating group', description: data.error || data.detail, variant: 'destructive' })
+        // Find the first string error in the response
+        let errorMsg = data?.error || data?.detail || null;
+        if (!errorMsg && typeof data === 'object') {
+          for (const key in data) {
+            if (typeof data[key] === 'string') {
+              errorMsg = data[key];
+              break;
+            }
+            if (Array.isArray(data[key]) && typeof data[key][0] === 'string') {
+              errorMsg = data[key][0];
+              break;
+            }
+          }
+        }
+        setUpdateError(errorMsg || data.error || data.detail)
       }
     } catch (error) {
       toast({ title: 'Error updating group', variant: 'destructive' })
@@ -413,6 +432,25 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       }).then(r => r.json())
       setMessages(data)
+    } else {
+      const data = await res.json()
+      // Find the first string error in the response
+      let errorMsg = data?.error || data?.detail || null;
+      if (!errorMsg && typeof data === 'object') {
+        for (const key in data) {
+          if (typeof data[key] === 'string') {
+            errorMsg = data[key];
+            break;
+          }
+          if (Array.isArray(data[key]) && typeof data[key][0] === 'string') {
+            errorMsg = data[key][0];
+            break;
+          }
+        }
+      }
+      if (errorMsg) {
+        setChatError(errorMsg)
+      }
     }
   }
 
@@ -455,7 +493,21 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     } else {
       const err = await res.json()
       console.error('Session creation error:', err)
-      toast({ title: 'Error creating session', variant: 'destructive' })
+      // Find the first string error in the response
+      let errorMsg = err?.error || err?.detail || null;
+      if (!errorMsg && typeof err === 'object') {
+        for (const key in err) {
+          if (typeof err[key] === 'string') {
+            errorMsg = err[key];
+            break;
+          }
+          if (Array.isArray(err[key]) && typeof err[key][0] === 'string') {
+            errorMsg = err[key][0];
+            break;
+          }
+        }
+      }
+      setSessionError(errorMsg || 'Error creating session')
     }
   }
   const handleEditSession = (session: any) => {
@@ -489,7 +541,22 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         .then(setSessions)
       toast({ title: 'Session updated!' })
     } else {
-      toast({ title: 'Error updating session', variant: 'destructive' })
+      const err = await res.json()
+      // Find the first string error in the response
+      let errorMsg = err?.error || err?.detail || null;
+      if (!errorMsg && typeof err === 'object') {
+        for (const key in err) {
+          if (typeof err[key] === 'string') {
+            errorMsg = err[key];
+            break;
+          }
+          if (Array.isArray(err[key]) && typeof err[key][0] === 'string') {
+            errorMsg = err[key][0];
+            break;
+          }
+        }
+      }
+      setSessionError(errorMsg || 'Error updating session')
     }
   }
   const handleDeleteSession = async (sessionId: number) => {
@@ -568,7 +635,21 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         toast({ title: 'File uploaded successfully!' })
       } else {
         const error = await res.json()
-        toast({ title: 'Error uploading file', description: error.detail, variant: 'destructive' })
+        // Find the first string error in the response
+        let errorMsg = error?.error || error?.detail || null;
+        if (!errorMsg && typeof error === 'object') {
+          for (const key in error) {
+            if (typeof error[key] === 'string') {
+              errorMsg = error[key];
+              break;
+            }
+            if (Array.isArray(error[key]) && typeof error[key][0] === 'string') {
+              errorMsg = error[key][0];
+              break;
+            }
+          }
+        }
+        setFileError(errorMsg || error.detail || error.error)
       }
     } catch (error) {
       toast({ title: 'Error uploading file', variant: 'destructive' })
@@ -795,6 +876,24 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="min-h-screen bg-soft-gray">
+      {/* Popup Alerts */}
+      <PopupAlert 
+        message={chatError} 
+        onClose={() => setChatError(null)} 
+      />
+      <PopupAlert 
+        message={updateError} 
+        onClose={() => setUpdateError(null)} 
+      />
+      <PopupAlert 
+        message={fileError} 
+        onClose={() => setFileError(null)} 
+      />
+      <PopupAlert 
+        message={sessionError} 
+        onClose={() => setSessionError(null)} 
+      />
+      
       {showAlert && (
         <div className="max-w-xl mx-auto mt-6 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded shadow">
           <strong>Notice:</strong> You can't join the group you created, you are already in it.

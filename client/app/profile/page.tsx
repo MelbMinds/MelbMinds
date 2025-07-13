@@ -28,6 +28,8 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
+import { toast } from "@/components/ui/use-toast"
+import { PopupAlert } from "@/components/ui/popup-alert"
 
 export default function ProfilePage() {
   const { tokens, setUser } = useUser()
@@ -188,8 +190,21 @@ export default function ProfilePage() {
       
       if (!res.ok) {
         const errorData = await res.json()
-        console.error('Save error:', errorData)
-        setError('Failed to save profile changes')
+        // Find the first string error in the response
+        let errorMsg = errorData?.error || errorData?.detail || null;
+        if (!errorMsg && typeof errorData === 'object') {
+          for (const key in errorData) {
+            if (typeof errorData[key] === 'string') {
+              errorMsg = errorData[key];
+              break;
+            }
+            if (Array.isArray(errorData[key]) && typeof errorData[key][0] === 'string') {
+              errorMsg = errorData[key][0];
+              break;
+            }
+          }
+        }
+        setError(errorMsg || 'Failed to save profile changes')
         return
       }
       
@@ -234,6 +249,12 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-soft-gray">
+      {/* Popup Alert */}
+      <PopupAlert 
+        message={error} 
+        onClose={() => setError(null)} 
+      />
+      
       {/* Navigation */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
