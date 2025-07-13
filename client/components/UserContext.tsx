@@ -1,6 +1,7 @@
 "use client"
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react"
 import { useRouter } from "next/navigation"
+import { apiClient } from "@/lib/api"
 
 export type User = {
   [key: string]: any;
@@ -40,7 +41,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const stored = localStorage.getItem("user")
     const storedTokens = localStorage.getItem("tokens")
     if (stored) setUserState(JSON.parse(stored))
-    if (storedTokens) setTokensState(JSON.parse(storedTokens))
+    if (storedTokens) {
+      const tokens = JSON.parse(storedTokens)
+      setTokensState(tokens)
+      apiClient.setTokens(tokens)
+    }
   }, [])
 
   const setUser = (user: User | null, tokensArg?: AuthTokens | null) => {
@@ -54,6 +59,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
   const setTokens = (tokens: AuthTokens | null) => {
     setTokensState(tokens)
+    apiClient.setTokens(tokens)
     if (tokens) localStorage.setItem("tokens", JSON.stringify(tokens))
     else localStorage.removeItem("tokens")
   }

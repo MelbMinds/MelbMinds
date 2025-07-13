@@ -4,7 +4,7 @@ from rest_framework import status, generics, serializers
 from django.contrib.auth import authenticate
 from django.db.models import Q
 from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer, FlashcardFolderSerializer, FlashcardSerializer
-from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile, GroupRating, FlashcardFolder, Flashcard
+from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile, GroupRating, FlashcardFolder, Flashcard, PendingRegistration
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -15,6 +15,32 @@ from django.http import HttpResponse
 import os
 from .perspective_moderation import perspective_moderator
 from django.db import models
+from django.shortcuts import render
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
+from django.conf import settings
+from django.utils import timezone
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from .models import Group, Message, GroupSession, GroupFile, CompletedSessionCounter, GroupNotification, GroupRating, EmailVerificationToken
+from .serializers import GroupSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer
+import json
+from datetime import datetime, timedelta
+import uuid
+import logging
+logger = logging.getLogger(__name__)
+
+User = get_user_model()
 
 def cleanup_past_sessions():
     """
@@ -135,6 +161,274 @@ def find_similar_groups(group, limit=3):
     similar_groups.sort(key=lambda x: x['score'], reverse=True)
     return similar_groups[:limit]
 
+def validate_unimelb_email(email):
+    """Validate that email is a University of Melbourne student email"""
+    return email.endswith('@student.unimelb.edu.au')
+
+def is_content_clean(field_name, value):
+    """Run moderation only if value is not empty and longer than 2 chars. Only block if high confidence."""
+    if not value or len(value.strip()) < 3:
+        return {'valid': True, 'message': ''}
+    result = perspective_moderator.validate_user_input(field_name, value)
+    # Only block if not valid and the message contains 'likely inappropriate' or 'high confidence'
+    if not result['valid'] and ('likely' in result['message'].lower() or 'high confidence' in result['message'].lower() or 'severe' in result['message'].lower()):
+        return result
+    return {'valid': True, 'message': ''}
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register(request):
+    """Register a new user with email verification (user is only created after verification)"""
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        # Validate email domain
+        if not validate_unimelb_email(email):
+            return Response({'error': 'Only University of Melbourne student emails (@student.unimelb.edu.au) are allowed.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Block if user or pending registration exists
+        if User.objects.filter(email__iexact=email).exists() or PendingRegistration.objects.filter(email__iexact=email).exists():
+            return Response({'error': 'A user with this email already exists or is pending verification.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Generate a unique token
+        token = str(uuid.uuid4())
+        # Store registration data in PendingRegistration
+        PendingRegistration.objects.create(
+            email=email,
+            password=data.get('password'),
+            name=data.get('name'),
+            major=data.get('major'),
+            year_level=data.get('year_level'),
+            preferred_study_format=data.get('preferred_study_format'),
+            languages_spoken=data.get('languages_spoken'),
+            bio=data.get('bio', ''),
+            token=token
+        )
+        # Send verification email
+        verification_url = f"http://localhost:3000/verify-email?token={token}"
+        email_subject = "🎓 Welcome to MelbMinds - Verify Your Account"
+        email_message = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='utf-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>Welcome to MelbMinds</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; background: #f4f6fb; color: #222; margin: 0; padding: 0; }}
+                .container {{ max-width: 600px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(30,58,138,0.08); overflow: hidden; }}
+                .header {{ background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); color: #fff; padding: 32px 0; text-align: center; }}
+                .header img {{ width: 60px; margin-bottom: 12px; }}
+                .content {{ padding: 32px; }}
+                .cta-btn {{ display: inline-block; background: #3b82f6; color: #fff; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 18px; margin: 24px 0; }}
+                .footer {{ background: #f1f5f9; color: #666; text-align: center; padding: 18px 0; font-size: 14px; }}
+                .warning {{ background: #fef3c7; border: 1px solid #f59e0b; padding: 15px; border-radius: 8px; margin: 20px 0; color: #b45309; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <img src='https://raw.githubusercontent.com/Serzh-byte/MelbMinds/main/client/public/placeholder-logo.png' alt='MelbMinds Logo' />
+                    <h1>Welcome to MelbMinds!</h1>
+                    <p>Your University of Melbourne Study Group Platform</p>
+                </div>
+                <div class='content'>
+                    <h2>Hello!</h2>
+                    <p>Thank you for joining <b>MelbMinds</b>! We're excited to have you as part of our community of University of Melbourne students.</p>
+                    <p>To complete your registration and start connecting with fellow students, please verify your email address by clicking the button below:</p>
+                    <div style='text-align: center;'>
+                        <a href='{verification_url}' class='cta-btn'>Verify My Email Address</a>
+                    </div>
+                    <div class='warning'>
+                        <strong>⚠️ Important:</strong> This verification link will expire in 24 hours for security reasons.
+                    </div>
+                    <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+                    <p style='word-break: break-all; color: #3b82f6;'>{verification_url}</p>
+                    <h3>What's next?</h3>
+                    <ul>
+                        <li>✅ Verify your email (you're here!)</li>
+                        <li>🔍 Discover study groups in your subjects</li>
+                        <li>👥 Join groups that match your study preferences</li>
+                        <li>📚 Connect with fellow University of Melbourne students</li>
+                    </ul>
+                    <p>If you didn't create this account, please ignore this email.</p>
+                </div>
+                <div class='footer'>
+                    <p>Best regards,<br><b>The MelbMinds Team</b></p>
+                    <p>University of Melbourne Student Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        try:
+            send_mail(
+                subject=email_subject,
+                message="Please use an HTML compatible email client to view this message.",
+                from_email="MelbMinds <melbminds@gmail.com>",
+                recipient_list=[email],
+                fail_silently=False,
+                html_message=email_message
+            )
+        except Exception as e:
+            PendingRegistration.objects.filter(email=email).delete()
+            return Response({'error': 'Failed to send verification email. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'message': 'Registration started! Please check your email to verify your account.'}, status=status.HTTP_201_CREATED)
+    except json.JSONDecodeError:
+        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_email(request):
+    """Verify user email with token and create the user account"""
+    try:
+        data = json.loads(request.body)
+        token = data.get('token')
+        if not token:
+            return Response({'error': 'Verification token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            pending = PendingRegistration.objects.get(token=token)
+        except PendingRegistration.DoesNotExist:
+            return Response({'error': 'Invalid or expired verification token.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if token is expired (24 hours)
+        if pending.created_at < timezone.now() - timedelta(hours=24):
+            pending.delete()
+            return Response({'error': 'Verification token has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if user already exists (shouldn't happen, but just in case)
+        if User.objects.filter(email__iexact=pending.email).exists():
+            pending.delete()
+            return Response({'error': 'A user with this email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Create the user
+        user = User.objects.create_user(
+            email=pending.email,
+            password=pending.password,
+            name=pending.name,
+            major=pending.major,
+            year_level=pending.year_level,
+            preferred_study_format=pending.preferred_study_format,
+            languages_spoken=pending.languages_spoken,
+            bio=pending.bio,
+            is_active=True,
+            is_email_verified=True,
+            email_verified_at=timezone.now()
+        )
+        pending.delete()
+        return Response({'message': 'Email verified successfully! Your account has been created. You can now log in.'}, status=status.HTTP_200_OK)
+    except json.JSONDecodeError:
+        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def resend_verification_email(request):
+    """Resend verification email"""
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            return Response({
+                'error': 'No user found with this email address.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        if user.is_email_verified:
+            return Response({
+                'error': 'Email is already verified.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Delete any existing unused tokens for this user
+        EmailVerificationToken.objects.filter(user=user, is_used=False).delete()
+        
+        # Create new verification token
+        verification_token = EmailVerificationToken.objects.create(user=user)
+        
+        # Send verification email
+        verification_url = f"http://localhost:3000/verify-email?token={verification_token.token}"
+        
+        email_subject = "🎓 Welcome to MelbMinds - Verify Your Account"
+        email_message = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='utf-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>Welcome to MelbMinds</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .content {{ background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }}
+                .button {{ display: inline-block; background: #3b82f6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }}
+                .footer {{ text-align: center; margin-top: 30px; color: #666; font-size: 14px; }}
+                .warning {{ background: #fef3c7; border: 1px solid #f59e0b; padding: 15px; border-radius: 8px; margin: 20px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>🎓 Welcome to MelbMinds!</h1>
+                    <p>Your University of Melbourne Study Group Platform</p>
+                </div>
+                <div class='content'>
+                    <h2>Hello {user.name}!</h2>
+                    <p>Thank you for joining MelbMinds! We're excited to have you as part of our community of University of Melbourne students.</p>
+                    <p>To complete your registration and start connecting with fellow students, please verify your email address by clicking the button below:</p>
+                    <div style='text-align: center;'>
+                        <a href='{verification_url}' class='button'>Verify My Email Address</a>
+                    </div>
+                    <div class='warning'>
+                        <strong>⚠️ Important:</strong> This verification link will expire in 24 hours for security reasons.
+                    </div>
+                    <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+                    <p style='word-break: break-all; color: #3b82f6;'>{verification_url}</p>
+                    <h3>What's next?</h3>
+                    <ul>
+                        <li>✅ Verify your email (you're here!)</li>
+                        <li>🔍 Discover study groups in your subjects</li>
+                        <li>👥 Join groups that match your study preferences</li>
+                        <li>📚 Connect with fellow University of Melbourne students</li>
+                    </ul>
+                    <p>If you didn't create this account, please ignore this email.</p>
+                </div>
+                <div class='footer'>
+                    <p>Best regards,<br>The MelbMinds Team</p>
+                    <p>University of Melbourne Student Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        try:
+            send_mail(
+                subject=email_subject,
+                message=email_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+                html_message=email_message
+            )
+        except Exception as e:
+            return Response({
+                'error': 'Failed to send verification email. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({
+            'message': 'Verification email sent successfully!'
+        }, status=status.HTTP_200_OK)
+        
+    except json.JSONDecodeError:
+        return Response({
+            'error': 'Invalid JSON data'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class RegisterView(APIView):
     def post(self, request):
         # Content moderation for user registration
@@ -169,6 +463,12 @@ class LoginView(APIView):
             data = UserSerializer(user).data
             return Response(data, status=status.HTTP_200_OK)
         return Response({'detail': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
+
+class LogoutView(APIView):
+    def post(self, request):
+        # For JWT tokens, logout is typically handled client-side by removing the token
+        # This endpoint can be used to invalidate tokens if needed
+        return Response({'detail': 'Logged out successfully'}, status=status.HTTP_200_OK)
 
 class GroupListCreateView(generics.ListCreateAPIView):
     serializer_class = GroupSerializer
@@ -239,24 +539,15 @@ class GroupListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         # Content moderation for group creation
-        group_name_validation = perspective_moderator.validate_user_input('group name', serializer.validated_data.get('group_name', ''))
-        description_validation = perspective_moderator.validate_user_input('description', serializer.validated_data.get('description', ''))
-        tags_validation = perspective_moderator.validate_user_input('tags', serializer.validated_data.get('tags', ''))
-        
-        if not group_name_validation['valid']:
-            raise serializers.ValidationError({
-                'group_name': group_name_validation['message']
-            })
-        
-        if not description_validation['valid']:
-            raise serializers.ValidationError({
-                'description': description_validation['message']
-            })
-        
-        if not tags_validation['valid']:
-            raise serializers.ValidationError({
-                'tags': tags_validation['message']
-            })
+        group_name_check = is_content_clean('group name', serializer.validated_data.get('group_name', ''))
+        description_check = is_content_clean('description', serializer.validated_data.get('description', ''))
+        tags_check = is_content_clean('tags', serializer.validated_data.get('tags', ''))
+        if not group_name_check['valid']:
+            raise serializers.ValidationError({'error': group_name_check['message']})
+        if not description_check['valid']:
+            raise serializers.ValidationError({'error': description_check['message']})
+        if not tags_check['valid']:
+            raise serializers.ValidationError({'error': tags_check['message']})
         
         serializer.save(creator=self.request.user)
 
@@ -331,18 +622,12 @@ class UserProfileView(APIView):
         data = request.data.copy()
         
         # Content moderation for profile updates
-        name_validation = perspective_moderator.validate_user_input('name', data.get('name', ''))
-        bio_validation = perspective_moderator.validate_user_input('bio', data.get('bio', ''))
-        
-        if not name_validation['valid']:
-            return Response({
-                'error': name_validation['message']
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if not bio_validation['valid']:
-            return Response({
-                'error': bio_validation['message']
-            }, status=status.HTTP_400_BAD_REQUEST)
+        name_check = is_content_clean('name', data.get('name', ''))
+        bio_check = is_content_clean('bio', data.get('bio', ''))
+        if not name_check['valid']:
+            return Response({'error': name_check['message']}, status=status.HTTP_400_BAD_REQUEST)
+        if not bio_check['valid']:
+            return Response({'error': bio_check['message']}, status=status.HTTP_400_BAD_REQUEST)
         
         # Convert languages array back to string for storage
         if 'languages' in data and isinstance(data['languages'], list):
@@ -382,12 +667,10 @@ class GroupChatView(APIView):
         
         # Content moderation for chat messages
         message_text = request.data.get('text', '')
-        message_validation = perspective_moderator.validate_user_input('message', message_text)
+        message_check = is_content_clean('message', message_text)
         
-        if not message_validation['valid']:
-            return Response({
-                'error': message_validation['message']
-            }, status=status.HTTP_400_BAD_REQUEST)
+        if not message_check['valid']:
+            return Response({'error': message_check['message']}, status=status.HTTP_400_BAD_REQUEST)
         
         # Use original message text (Perspective API blocks instead of sanitizing)
         data = request.data.copy()
@@ -442,6 +725,15 @@ class GroupSessionListCreateView(APIView):
         group = Group.objects.get(id=group_id)
         if group.creator != request.user:
             return Response({'detail': 'Only the group creator can create sessions'}, status=403)
+        
+        # Content moderation for session description
+        description_validation = perspective_moderator.validate_user_input('session description', request.data.get('description', ''))
+        
+        if not description_validation['valid']:
+            return Response({
+                'error': description_validation['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = GroupSessionSerializer(data=request.data)
         if serializer.is_valid():
             session = serializer.save(group=group, creator=request.user)
@@ -470,6 +762,15 @@ class GroupSessionRetrieveUpdateDeleteView(APIView):
         session = self.get_object(session_id)
         if session.creator != request.user:
             return Response({'detail': 'Only the group creator can edit sessions'}, status=403)
+        
+        # Content moderation for session description
+        description_validation = perspective_moderator.validate_user_input('session description', request.data.get('description', ''))
+        
+        if not description_validation['valid']:
+            return Response({
+                'error': description_validation['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = GroupSessionSerializer(session, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -793,6 +1094,10 @@ class GroupFileListCreateView(APIView):
                 return Response({'detail': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
             
             uploaded_file = request.FILES['file']
+            # Moderation for file name
+            filename_validation = perspective_moderator.validate_user_input('file name', uploaded_file.name)
+            if not filename_validation['valid']:
+                return Response({'error': filename_validation['message']}, status=status.HTTP_400_BAD_REQUEST)
             
             # Create the file record
             file_obj = GroupFile.objects.create(
@@ -1138,297 +1443,173 @@ class UpdateGroupView(APIView):
             if group.creator != request.user:
                 return Response({'error': 'Only the group creator can update the group'}, status=status.HTTP_403_FORBIDDEN)
             
-            serializer = GroupSerializer(group, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            # Content moderation for group updates
+            group_name_validation = perspective_moderator.validate_user_input('group name', request.data.get('group_name', ''))
+            description_validation = perspective_moderator.validate_user_input('description', request.data.get('description', ''))
+            tags_validation = perspective_moderator.validate_user_input('tags', request.data.get('tags', ''))
+            
+            if not group_name_validation['valid']:
+                return Response({
+                    'error': group_name_validation['message']
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not description_validation['valid']:
+                return Response({
+                    'error': description_validation['message']
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not tags_validation['valid']:
+                return Response({
+                    'error': tags_validation['message']
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update allowed fields
+            allowed_fields = [
+                'group_name', 'subject_code', 'course_name', 'description', 
+                'year_level', 'meeting_format', 'primary_language', 
+                'meeting_schedule', 'location', 'tags', 'group_guidelines', 
+                'group_personality'
+            ]
+            
+            for field in allowed_fields:
+                if field in request.data:
+                    setattr(group, field, request.data[field])
+            
+            group.save()
+            
+            # Return updated group data
+            serializer = GroupDetailSerializer(group, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
         except Group.DoesNotExist:
-            return Response({'error': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
 
-class FlashcardFolderView(APIView):
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request):
-        """Get all flashcard folders for the current user, optionally filtered by group"""
-        folders = FlashcardFolder.objects.filter(creator=request.user)
-        
-        # Filter by group if specified
-        group_id = request.query_params.get('group')
-        if group_id:
-            folders = folders.filter(group_id=group_id)
-        
-        folders = folders.order_by('-created_at')
-        serializer = FlashcardFolderSerializer(folders, many=True, context={'request': request})
-        return Response(serializer.data)
-    
-    def post(self, request):
-        """Create a new flashcard folder"""
-        serializer = FlashcardFolderSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = 'email'
 
-class FlashcardFolderDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request, folder_id):
-        """Get a specific flashcard folder with its flashcards"""
-        try:
-            folder = FlashcardFolder.objects.get(id=folder_id, creator=request.user)
-            folder_data = FlashcardFolderSerializer(folder, context={'request': request}).data
-            flashcards = Flashcard.objects.filter(folder=folder).order_by('created_at')
-            flashcard_data = FlashcardSerializer(flashcards, many=True, context={'request': request}).data
-            
-            return Response({
-                'folder': folder_data,
-                'flashcards': flashcard_data
+    def validate(self, attrs):
+        # Use 'email' instead of 'username' for authentication
+        credentials = {
+            'email': attrs.get('email', '').strip().lower(),
+            'password': attrs.get('password')
+        }
+        user = authenticate(**credentials)
+        if user is None:
+            logger.warning(f"Login failed: invalid credentials for email={credentials['email']}")
+            raise serializers.ValidationError('Invalid credentials')
+        self.user = user
+        logger.info(f"Login attempt: email={user.email}, is_active={user.is_active}, is_email_verified={getattr(user, 'is_email_verified', None)}")
+        if not user.is_active:
+            logger.warning(f"Login failed: inactive user {user.email}")
+            raise serializers.ValidationError('This account is inactive. Please contact support.')
+        if not getattr(user, 'is_email_verified', True):
+            logger.warning(f"Login failed: unverified email {user.email}")
+            raise serializers.ValidationError('Email not verified. Please check your inbox and verify your email before logging in.')
+        data = super().validate(attrs)
+        return data
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+
+# Function-based views for URL patterns
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def group_list(request):
+    """Get list of groups with filtering"""
+    view = GroupListCreateView()
+    view.request = request
+    view.args = ()
+    view.kwargs = {}
+    view.format_kwarg = None
+    return view.get(request)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def group_detail(request, group_id):
+    """Get detailed information about a specific group"""
+    view = GroupRetrieveView()
+    view.request = request
+    view.args = ()
+    view.kwargs = {'pk': group_id}
+    view.format_kwarg = None
+    return view.get(request, pk=group_id)
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def message_list(request, group_id):
+    """Get messages for a group or post a new message"""
+    view = GroupChatView()
+    view.request = request
+    view.kwargs = {'group_id': group_id}
+    if request.method == 'GET':
+        return view.get(request, group_id=group_id)
+    elif request.method == 'POST':
+        return view.post(request, group_id=group_id)
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def session_list(request, group_id):
+    """Get sessions for a group or create a new session"""
+    view = GroupSessionListCreateView()
+    view.request = request
+    view.kwargs = {'group_id': group_id}
+    if request.method == 'GET':
+        return view.get(request, group_id=group_id)
+    elif request.method == 'POST':
+        return view.post(request, group_id=group_id)
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def file_list(request, group_id):
+    """Get files for a group or upload a new file"""
+    view = GroupFileListCreateView()
+    view.request = request
+    view.kwargs = {'group_id': group_id}
+    if request.method == 'GET':
+        return view.get(request, group_id=group_id)
+    elif request.method == 'POST':
+        return view.post(request, group_id=group_id)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def notification_list(request, group_id):
+    """Get notifications for a group"""
+    return group_notifications(request, group_id)
+
+@api_view(['GET', 'POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def rating_list(request, group_id):
+    """Get ratings for a group, post a rating, or delete a rating"""
+    view = GroupRatingView()
+    view.request = request
+    view.kwargs = {'group_id': group_id}
+    if request.method == 'GET':
+        return view.get(request, group_id=group_id)
+    elif request.method == 'POST':
+        return view.post(request, group_id=group_id)
+    elif request.method == 'DELETE':
+        return view.delete(request, group_id=group_id)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def similar_groups(request, group_id):
+    """Get similar groups for a given group"""
+    try:
+        group = Group.objects.get(id=group_id)
+        similar_groups_data = find_similar_groups(group, limit=3)
+        
+        similar_groups_serialized = []
+        for similar_data in similar_groups_data:
+            similar_group = similar_data['group']
+            similar_serializer = GroupSerializer(similar_group)
+            similar_groups_serialized.append({
+                'group': similar_serializer.data,
+                'similarity_score': similar_data['score'],
+                'matching_factors': similar_data['factors']
             })
-        except FlashcardFolder.DoesNotExist:
-            return Response({'error': 'Folder not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    def put(self, request, folder_id):
-        """Update a flashcard folder"""
-        try:
-            folder = FlashcardFolder.objects.get(id=folder_id, creator=request.user)
-            serializer = FlashcardFolderSerializer(folder, data=request.data, partial=True, context={'request': request})
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except FlashcardFolder.DoesNotExist:
-            return Response({'error': 'Folder not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    def delete(self, request, folder_id):
-        """Delete a flashcard folder"""
-        try:
-            folder = FlashcardFolder.objects.get(id=folder_id, creator=request.user)
-            folder.delete()
-            return Response({'message': 'Folder deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
-        except FlashcardFolder.DoesNotExist:
-            return Response({'error': 'Folder not found'}, status=status.HTTP_404_NOT_FOUND)
-
-class FlashcardView(APIView):
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
-        """Create a new flashcard"""
-        try:
-            # Handle both FormData and JSON data
-            folder_id = request.data.get('folder')
-            if not folder_id:
-                return Response({'error': 'Folder ID is required'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            folder = FlashcardFolder.objects.get(id=folder_id, creator=request.user)
-            
-            # Create a new dict with the data to avoid deepcopy issues with files
-            data = dict(request.data)
-            data['folder'] = folder.id  # Pass the folder ID, not the object
-            
-            # Convert list values to strings for text fields
-            if isinstance(data.get('question'), list):
-                data['question'] = data['question'][0] if data['question'] else ''
-            if isinstance(data.get('answer'), list):
-                data['answer'] = data['answer'][0] if data['answer'] else ''
-            
-            # Convert list values to files for image fields
-            if isinstance(data.get('question_image'), list):
-                data['question_image'] = data['question_image'][0] if data['question_image'] else None
-            if isinstance(data.get('answer_image'), list):
-                data['answer_image'] = data['answer_image'][0] if data['answer_image'] else None
-
-            # Add more detailed debugging
-            print("Request data:", request.data)
-            print("Processed data:", data)
-            print("Folder ID:", folder_id)
-            print("Folder object:", folder)
-
-            serializer = FlashcardSerializer(data=data, context={'request': request})
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            # Add debugging to see what validation errors occur
-            print("Flashcard validation errors:", serializer.errors)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except FlashcardFolder.DoesNotExist:
-            return Response({'error': 'Folder not found'}, status=status.HTTP_404_NOT_FOUND)
-        except ValueError:
-            return Response({'error': 'Invalid folder ID'}, status=status.HTTP_400_BAD_REQUEST)
-
-class FlashcardDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request, flashcard_id):
-        """Get a specific flashcard"""
-        try:
-            flashcard = Flashcard.objects.get(id=flashcard_id, folder__creator=request.user)
-            serializer = FlashcardSerializer(flashcard, context={'request': request})
-            return Response(serializer.data)
-        except Flashcard.DoesNotExist:
-            return Response({'error': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    def put(self, request, flashcard_id):
-        """Update a flashcard"""
-        try:
-            flashcard = Flashcard.objects.get(id=flashcard_id, folder__creator=request.user)
-            
-            print(f"=== FLASHCARD UPDATE DEBUG ===")
-            print(f"Flashcard ID: {flashcard_id}")
-            print(f"Original question_image: {flashcard.question_image}")
-            print(f"Original answer_image: {flashcard.answer_image}")
-            print(f"Request data keys: {list(request.data.keys())}")
-            print(f"Request FILES keys: {list(request.FILES.keys())}")
-            
-            # Handle FormData for image updates
-            data = dict(request.data)
-            
-            # Convert list values to strings for text fields
-            if isinstance(data.get('question'), list):
-                data['question'] = data['question'][0] if data['question'] else ''
-            if isinstance(data.get('answer'), list):
-                data['answer'] = data['answer'][0] if data['answer'] else ''
-            
-            # Convert list values to files for image fields
-            if isinstance(data.get('question_image'), list):
-                data['question_image'] = data['question_image'][0] if data['question_image'] else None
-            if isinstance(data.get('answer_image'), list):
-                data['answer_image'] = data['answer_image'][0] if data['answer_image'] else None
-            
-            # Handle image removal (empty string means remove the image)
-            if data.get('question_image') == '':
-                data['question_image'] = None
-            if data.get('answer_image') == '':
-                data['answer_image'] = None
-            
-            print(f"Processed data: {data}")
-            print(f"Question image type: {type(data.get('question_image'))}")
-            print(f"Answer image type: {type(data.get('answer_image'))}")
-            if data.get('question_image'):
-                print(f"Question image name: {data['question_image'].name}")
-            if data.get('answer_image'):
-                print(f"Answer image name: {data['answer_image'].name}")
-            
-            serializer = FlashcardSerializer(flashcard, data=data, partial=True, context={'request': request})
-            if serializer.is_valid():
-                # Check if we're updating images and delete old ones
-                if data.get('question_image') and flashcard.question_image:
-                    print(f"Deleting old question image: {flashcard.question_image}")
-                    try:
-                        flashcard.question_image.delete(save=False)
-                    except Exception as e:
-                        print(f"Error deleting old question image: {e}")
-                
-                if data.get('answer_image') and flashcard.answer_image:
-                    print(f"Deleting old answer image: {flashcard.answer_image}")
-                    try:
-                        flashcard.answer_image.delete(save=False)
-                    except Exception as e:
-                        print(f"Error deleting old answer image: {e}")
-                
-                updated_flashcard = serializer.save()
-                print(f"Updated question_image: {updated_flashcard.question_image}")
-                print(f"Updated answer_image: {updated_flashcard.answer_image}")
-                return Response(serializer.data)
-            # Add debugging to see what validation errors occur
-            print("Flashcard update validation errors:", serializer.errors)
-            print("Flashcard update data:", data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Flashcard.DoesNotExist:
-            return Response({'error': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    def delete(self, request, flashcard_id):
-        """Delete a flashcard"""
-        try:
-            flashcard = Flashcard.objects.get(id=flashcard_id, folder__creator=request.user)
-            flashcard.delete()
-            return Response({'message': 'Flashcard deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
-        except Flashcard.DoesNotExist:
-            return Response({'error': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)
-
-class FlashcardImageView(APIView):
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request, flashcard_id, image_type):
-        """Serve flashcard images (question or answer)"""
-        try:
-            flashcard = Flashcard.objects.get(id=flashcard_id, folder__creator=request.user)
-            
-            # Determine which image to serve
-            if image_type == 'question':
-                image_field = flashcard.question_image
-            elif image_type == 'answer':
-                image_field = flashcard.answer_image
-            else:
-                return Response({'detail': 'Invalid image type'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            if not image_field:
-                return Response({'detail': 'Image not found'}, status=status.HTTP_404_NOT_FOUND)
-            
-            # For S3 files, stream the file directly
-            if hasattr(image_field, 'url'):
-                try:
-                    import boto3
-                    from django.conf import settings
-                    
-                    # Create S3 client
-                    s3_client = boto3.client(
-                        's3',
-                        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                        region_name=settings.AWS_S3_REGION_NAME
-                    )
-                    
-                    # Get the file path from the storage
-                    file_path = image_field.name
-                    
-                    # Get the file object from S3
-                    response = s3_client.get_object(
-                        Bucket=settings.AWS_STORAGE_BUCKET_NAME,
-                        Key=file_path
-                    )
-                    
-                    # Stream the file content
-                    file_content = response['Body'].read()
-                    
-                    # Determine content type based on file extension
-                    content_type = 'image/jpeg'  # default
-                    if file_path.lower().endswith('.png'):
-                        content_type = 'image/png'
-                    elif file_path.lower().endswith('.gif'):
-                        content_type = 'image/gif'
-                    elif file_path.lower().endswith('.webp'):
-                        content_type = 'image/webp'
-                    
-                    # Create HTTP response with the file content
-                    http_response = HttpResponse(file_content, content_type=content_type)
-                    http_response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
-                    
-                    return http_response
-                    
-                except Exception as e:
-                    print(f"Error streaming image from S3: {e}")
-                    return Response({'detail': 'Image not accessible'}, status=status.HTTP_404_NOT_FOUND)
-            else:
-                # For local files, try to serve directly
-                try:
-                    with image_field.open('rb') as f:
-                        file_content = f.read()
-                    
-                    # Determine content type based on file extension
-                    content_type = 'image/jpeg'  # default
-                    if image_field.name.lower().endswith('.png'):
-                        content_type = 'image/png'
-                    elif image_field.name.lower().endswith('.gif'):
-                        content_type = 'image/gif'
-                    elif image_field.name.lower().endswith('.webp'):
-                        content_type = 'image/webp'
-                    
-                    response = HttpResponse(file_content, content_type=content_type)
-                    response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
-                    return response
-                except Exception as e:
-                    return Response({'detail': 'Image not accessible'}, status=status.HTTP_404_NOT_FOUND)
-            
-        except Flashcard.DoesNotExist:
-            return Response({'detail': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({
+            'similar_groups': similar_groups_serialized
+        })
+    except Group.DoesNotExist:
+        return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
