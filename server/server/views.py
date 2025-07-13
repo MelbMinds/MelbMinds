@@ -206,13 +206,64 @@ def register(request):
         verification_url = f"http://localhost:3000/verify-email?token={token}"
         email_subject = "🎓 Welcome to MelbMinds - Verify Your Account"
         email_message = f"""
-        Please verify your email by clicking the link: {verification_url}
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='utf-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>Welcome to MelbMinds</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; background: #f4f6fb; color: #222; margin: 0; padding: 0; }}
+                .container {{ max-width: 600px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(30,58,138,0.08); overflow: hidden; }}
+                .header {{ background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); color: #fff; padding: 32px 0; text-align: center; }}
+                .header img {{ width: 60px; margin-bottom: 12px; }}
+                .content {{ padding: 32px; }}
+                .cta-btn {{ display: inline-block; background: #3b82f6; color: #fff; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 18px; margin: 24px 0; }}
+                .footer {{ background: #f1f5f9; color: #666; text-align: center; padding: 18px 0; font-size: 14px; }}
+                .warning {{ background: #fef3c7; border: 1px solid #f59e0b; padding: 15px; border-radius: 8px; margin: 20px 0; color: #b45309; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <img src='https://raw.githubusercontent.com/Serzh-byte/MelbMinds/main/client/public/placeholder-logo.png' alt='MelbMinds Logo' />
+                    <h1>Welcome to MelbMinds!</h1>
+                    <p>Your University of Melbourne Study Group Platform</p>
+                </div>
+                <div class='content'>
+                    <h2>Hello!</h2>
+                    <p>Thank you for joining <b>MelbMinds</b>! We're excited to have you as part of our community of University of Melbourne students.</p>
+                    <p>To complete your registration and start connecting with fellow students, please verify your email address by clicking the button below:</p>
+                    <div style='text-align: center;'>
+                        <a href='{verification_url}' class='cta-btn'>Verify My Email Address</a>
+                    </div>
+                    <div class='warning'>
+                        <strong>⚠️ Important:</strong> This verification link will expire in 24 hours for security reasons.
+                    </div>
+                    <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+                    <p style='word-break: break-all; color: #3b82f6;'>{verification_url}</p>
+                    <h3>What's next?</h3>
+                    <ul>
+                        <li>✅ Verify your email (you're here!)</li>
+                        <li>🔍 Discover study groups in your subjects</li>
+                        <li>👥 Join groups that match your study preferences</li>
+                        <li>📚 Connect with fellow University of Melbourne students</li>
+                    </ul>
+                    <p>If you didn't create this account, please ignore this email.</p>
+                </div>
+                <div class='footer'>
+                    <p>Best regards,<br><b>The MelbMinds Team</b></p>
+                    <p>University of Melbourne Student Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>
         """
         try:
             send_mail(
                 subject=email_subject,
-                message=email_message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
+                message="Please use an HTML compatible email client to view this message.",
+                from_email="MelbMinds <melbminds@gmail.com>",
                 recipient_list=[email],
                 fail_silently=False,
                 html_message=email_message
