@@ -185,3 +185,15 @@ class GroupRating(models.Model):
     def get_rating_count(cls, group):
         """Get the number of ratings for a group"""
         return cls.objects.filter(group=group).count()
+
+class PendingRegistration(models.Model):
+    email = models.EmailField(unique=True)
+    password = models.CharField(max_length=255)
+    name = models.CharField(max_length=255)
+    major = models.CharField(max_length=255)
+    year_level = models.CharField(max_length=50)
+    preferred_study_format = models.CharField(max_length=100)
+    languages_spoken = models.CharField(max_length=255)
+    bio = models.TextField(blank=True)
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)

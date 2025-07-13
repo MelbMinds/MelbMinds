@@ -4,7 +4,7 @@ from rest_framework import status, generics, serializers
 from django.contrib.auth import authenticate
 from django.db.models import Q
 from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer
-from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile, GroupRating
+from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile, GroupRating, PendingRegistration
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -178,25 +178,20 @@ def is_content_clean(field_name, value):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
-    """Register a new user with email verification"""
+    """Register a new user with email verification (user is only created after verification)"""
     try:
         data = json.loads(request.body)
         email = data.get('email', '').strip().lower()
-        
         # Validate email domain
         if not validate_unimelb_email(email):
-            return Response({
-                'error': 'Only University of Melbourne student emails (@student.unimelb.edu.au) are allowed.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Check if user already exists
-        if User.objects.filter(email__iexact=email).exists():
-            return Response({
-                'error': 'A user with this email already exists.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Create user with email verification required
-        user = User.objects.create_user(
+            return Response({'error': 'Only University of Melbourne student emails (@student.unimelb.edu.au) are allowed.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Block if user or pending registration exists
+        if User.objects.filter(email__iexact=email).exists() or PendingRegistration.objects.filter(email__iexact=email).exists():
+            return Response({'error': 'A user with this email already exists or is pending verification.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Generate a unique token
+        token = str(uuid.uuid4())
+        # Store registration data in PendingRegistration
+        PendingRegistration.objects.create(
             email=email,
             password=data.get('password'),
             name=data.get('name'),
@@ -205,78 +200,14 @@ def register(request):
             preferred_study_format=data.get('preferred_study_format'),
             languages_spoken=data.get('languages_spoken'),
             bio=data.get('bio', ''),
-            is_active=True,  # User can login but needs email verification
-            is_email_verified=False
+            token=token
         )
-        
-        # Content moderation for registration fields
-        name_check = is_content_clean('name', data.get('name', ''))
-        bio_check = is_content_clean('bio', data.get('bio', ''))
-        if not name_check['valid']:
-            return Response({'error': name_check['message']}, status=status.HTTP_400_BAD_REQUEST)
-        if not bio_check['valid']:
-            return Response({'error': bio_check['message']}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Create email verification token
-        verification_token = EmailVerificationToken.objects.create(user=user)
-        
         # Send verification email
-        verification_url = f"http://localhost:3000/verify-email?token={verification_token.token}"
-        
+        verification_url = f"http://localhost:3000/verify-email?token={token}"
         email_subject = "🎓 Welcome to MelbMinds - Verify Your Account"
         email_message = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset='utf-8'>
-            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-            <title>Welcome to MelbMinds</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
-                .content {{ background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }}
-                .button {{ display: inline-block; background: #3b82f6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }}
-                .footer {{ text-align: center; margin-top: 30px; color: #666; font-size: 14px; }}
-                .warning {{ background: #fef3c7; border: 1px solid #f59e0b; padding: 15px; border-radius: 8px; margin: 20px 0; }}
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <h1>🎓 Welcome to MelbMinds!</h1>
-                    <p>Your University of Melbourne Study Group Platform</p>
-                </div>
-                <div class='content'>
-                    <h2>Hello {user.name}!</h2>
-                    <p>Thank you for joining MelbMinds! We're excited to have you as part of our community of University of Melbourne students.</p>
-                    <p>To complete your registration and start connecting with fellow students, please verify your email address by clicking the button below:</p>
-                    <div style='text-align: center;'>
-                        <a href='{verification_url}' class='button'>Verify My Email Address</a>
-                    </div>
-                    <div class='warning'>
-                        <strong>⚠️ Important:</strong> This verification link will expire in 24 hours for security reasons.
-                    </div>
-                    <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
-                    <p style='word-break: break-all; color: #3b82f6;'>{verification_url}</p>
-                    <h3>What's next?</h3>
-                    <ul>
-                        <li>✅ Verify your email (you're here!)</li>
-                        <li>🔍 Discover study groups in your subjects</li>
-                        <li>👥 Join groups that match your study preferences</li>
-                        <li>📚 Connect with fellow University of Melbourne students</li>
-                    </ul>
-                    <p>If you didn't create this account, please ignore this email.</p>
-                </div>
-                <div class='footer'>
-                    <p>Best regards,<br>The MelbMinds Team</p>
-                    <p>University of Melbourne Student Platform</p>
-                </div>
-            </div>
-        </body>
-        </html>
+        Please verify your email by clicking the link: {verification_url}
         """
-        
         try:
             send_mail(
                 subject=email_subject,
@@ -287,77 +218,55 @@ def register(request):
                 html_message=email_message
             )
         except Exception as e:
-            # If email fails, delete the user and token
-            user.delete()
-            return Response({
-                'error': 'Failed to send verification email. Please try again.'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        return Response({
-            'message': 'Registration successful! Please check your email to verify your account.',
-            'user_id': user.id
-        }, status=status.HTTP_201_CREATED)
-        
+            PendingRegistration.objects.filter(email=email).delete()
+            return Response({'error': 'Failed to send verification email. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'message': 'Registration started! Please check your email to verify your account.'}, status=status.HTTP_201_CREATED)
     except json.JSONDecodeError:
-        return Response({
-            'error': 'Invalid JSON data'
-        }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def verify_email(request):
-    """Verify user email with token"""
+    """Verify user email with token and create the user account"""
     try:
         data = json.loads(request.body)
         token = data.get('token')
-        
         if not token:
-            return Response({
-                'error': 'Verification token is required.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({'error': 'Verification token is required.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            verification_token = EmailVerificationToken.objects.get(
-                token=token,
-                is_used=False
-            )
-        except EmailVerificationToken.DoesNotExist:
-            return Response({
-                'error': 'Invalid or expired verification token.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+            pending = PendingRegistration.objects.get(token=token)
+        except PendingRegistration.DoesNotExist:
+            return Response({'error': 'Invalid or expired verification token.'}, status=status.HTTP_400_BAD_REQUEST)
         # Check if token is expired (24 hours)
-        if verification_token.created_at < timezone.now() - timedelta(hours=settings.EMAIL_VERIFICATION_EXPIRY_HOURS):
-            return Response({
-                'error': 'Verification token has expired.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Mark user as verified
-        user = verification_token.user
-        user.is_email_verified = True
-        user.email_verified_at = timezone.now()
-        user.save()
-        
-        # Mark token as used
-        verification_token.is_used = True
-        verification_token.save()
-        
-        return Response({
-            'message': 'Email verified successfully! You can now log in to your account.'
-        }, status=status.HTTP_200_OK)
-        
+        if pending.created_at < timezone.now() - timedelta(hours=24):
+            pending.delete()
+            return Response({'error': 'Verification token has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if user already exists (shouldn't happen, but just in case)
+        if User.objects.filter(email__iexact=pending.email).exists():
+            pending.delete()
+            return Response({'error': 'A user with this email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Create the user
+        user = User.objects.create_user(
+            email=pending.email,
+            password=pending.password,
+            name=pending.name,
+            major=pending.major,
+            year_level=pending.year_level,
+            preferred_study_format=pending.preferred_study_format,
+            languages_spoken=pending.languages_spoken,
+            bio=pending.bio,
+            is_active=True,
+            is_email_verified=True,
+            email_verified_at=timezone.now()
+        )
+        pending.delete()
+        return Response({'message': 'Email verified successfully! Your account has been created. You can now log in.'}, status=status.HTTP_200_OK)
     except json.JSONDecodeError:
-        return Response({
-            'error': 'Invalid JSON data'
-        }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
-        return Response({
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
