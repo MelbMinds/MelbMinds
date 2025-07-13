@@ -191,6 +191,18 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=7),
 }
 
+# Email Configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'melbminds@gmail.com'
+EMAIL_HOST_PASSWORD = '***REMOVED***'  # Replace with your Gmail App Password
+DEFAULT_FROM_EMAIL = 'melbminds@gmail.com'
+
+# Email verification settings
+EMAIL_VERIFICATION_EXPIRY_HOURS = 24
+
 AWS_ACCESS_KEY_ID = '***REMOVED***'
 AWS_SECRET_ACCESS_KEY = '***REMOVED***'
 AWS_STORAGE_BUCKET_NAME = 'melbmindsbucket'

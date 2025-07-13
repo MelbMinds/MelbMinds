@@ -81,7 +81,18 @@ export default function AuthPage() {
       })
       if (!tokenRes.ok) {
         const data = await tokenRes.json()
-        setError(data?.detail || "Login failed")
+        let errorMsg = data?.error || data?.detail || null;
+        if (errorMsg) {
+          if (errorMsg.toLowerCase().includes('invalid credentials')) {
+            setError('Invalid email or password')
+          } else if (errorMsg.toLowerCase().includes('not verified') || errorMsg.toLowerCase().includes('verify')) {
+            setError('Please verify your email before logging in.')
+          } else {
+            setError(errorMsg)
+          }
+        } else {
+          setError('Login failed')
+        }
         setIsLoading(false)
         return
       }
@@ -93,8 +104,9 @@ export default function AuthPage() {
         },
       })
       if (!userRes.ok) {
-        setError("Failed to fetch user profile")
+        // If profile fetch fails, still treat as successful login and redirect
         setIsLoading(false)
+        router.push("/")
         return
       }
       const userData = await userRes.json()
@@ -131,8 +143,8 @@ export default function AuthPage() {
           bio,
         }),
       })
+      const data = await res.json()
       if (!res.ok) {
-        const data = await res.json()
         // Find the first string error in the response
         let errorMsg = data?.error || data?.detail || null;
         if (!errorMsg && typeof data === 'object') {
@@ -147,41 +159,37 @@ export default function AuthPage() {
             }
           }
         }
+        toast({
+          title: 'Registration Failed',
+          description: errorMsg || "Registration failed",
+          variant: 'destructive',
+        })
         setError(errorMsg || "Registration failed")
         setIsLoading(false)
         return
       }
-      // After successful registration, get JWT tokens
-      const tokenRes = await fetch("http://localhost:8000/api/token/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
+      // Registration successful, show toast and prompt user to check email
+      toast({
+        title: 'Almost there! 🎉',
+        description: 'A verification email has been sent to your university email address. Please check your inbox and follow the link to verify your account.',
       })
-      if (!tokenRes.ok) {
-        setError("Failed to obtain token after registration")
-        setIsLoading(false)
-        return
-      }
-      const tokens = await tokenRes.json()
-      // Fetch user profile
-      const userRes = await fetch("http://localhost:8000/api/profile/", {
-        headers: {
-          "Authorization": `Bearer ${tokens.access}`,
-        },
-      })
-      if (!userRes.ok) {
-        setError("Failed to fetch user profile")
-        setIsLoading(false)
-        return
-      }
-      const userData = await userRes.json()
-      setUser(userData, tokens)
       setIsLoading(false)
-      router.push("/")
+      setFullName("")
+      setEmail("")
+      setPassword("")
+      setConfirmPassword("")
+      setYear("")
+      setMajor("")
+      setBio("")
+      setStudyFormat("")
+      setLanguages([])
+      router.push('/check-email')
     } catch (err) {
+      toast({
+        title: 'Network Error',
+        description: 'Network error. Please try again.',
+        variant: 'destructive',
+      })
       setError("Network error. Please try again.")
       setIsLoading(false)
     }

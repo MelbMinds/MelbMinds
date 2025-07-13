@@ -100,18 +100,28 @@ class UserProfileSerializer(serializers.ModelSerializer):
     languages = serializers.SerializerMethodField()
     year = serializers.CharField(source='year_level')
     studyFormat = serializers.CharField(source='preferred_study_format')
+    joinDate = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             "name", "email", "major", "year", "studyFormat",
-            "languages", "bio"
+            "languages", "bio", "joinDate", "avatar"
         ]
     
     def get_languages(self, obj):
         if obj.languages_spoken:
             return [lang.strip() for lang in obj.languages_spoken.split(',') if lang.strip()]
         return []
+    
+    def get_joinDate(self, obj):
+        # Use date_joined if available, else None
+        return getattr(obj, 'date_joined', None)
+    
+    def get_avatar(self, obj):
+        # No avatar field in model, return None or a placeholder
+        return None
 
 class MessageSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)

@@ -18,37 +18,26 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from .views import RegisterView, LoginView, GroupListCreateView, GroupRetrieveView, UserProfileView, JoinGroupView, GroupChatView, GroupMembersView, GroupSessionListCreateView, GroupSessionRetrieveUpdateDeleteView, GroupFileListCreateView, GroupFileDownloadView, GroupFileDeleteView, GroupRatingView, LeaveGroupView, DeleteGroupView, UpdateGroupView, stats_summary, group_notifications, trigger_cleanup, create_test_session, clear_group_notifications, test_moderation, create_sample_groups, create_sample_ratings, group_recommendations
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from . import views
+from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/register/', RegisterView.as_view(), name='register'),
-    path('api/login/', LoginView.as_view(), name='login'),
-    path('api/groups/', GroupListCreateView.as_view(), name='groups'),
-    path('api/groups/<int:pk>/', GroupRetrieveView.as_view(), name='group-detail'),
-    path('api/groups/<int:group_id>/join/', JoinGroupView.as_view(), name='join-group'),
-    path('api/groups/<int:group_id>/leave/', LeaveGroupView.as_view(), name='leave-group'),
-    path('api/groups/<int:group_id>/delete/', DeleteGroupView.as_view(), name='delete-group'),
-    path('api/groups/<int:group_id>/update/', UpdateGroupView.as_view(), name='update-group'),
-    path('api/profile/', UserProfileView.as_view(), name='user-profile'),
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/register/', views.register, name='register'),
+    path('api/verify-email/', views.verify_email, name='verify_email'),
+    path('api/resend-verification/', views.resend_verification_email, name='resend_verification_email'),
+    path('api/login/', views.LoginView.as_view(), name='login'),
+    path('api/logout/', views.LogoutView.as_view(), name='logout'),
+    path('api/token/', views.CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/groups/<int:group_id>/chat/', GroupChatView.as_view(), name='group-chat'),
-    path('api/groups/<int:group_id>/members/', GroupMembersView.as_view(), name='group-members'),
-    path('api/groups/<int:group_id>/sessions/', GroupSessionListCreateView.as_view(), name='group-sessions'),
-    path('api/sessions/<int:session_id>/', GroupSessionRetrieveUpdateDeleteView.as_view(), name='session-detail'),
-    path('api/groups/<int:group_id>/files/', GroupFileListCreateView.as_view(), name='group-files'),
-    path('api/files/<int:file_id>/download/', GroupFileDownloadView.as_view(), name='file-download'),
-    path('api/files/<int:file_id>/delete/', GroupFileDeleteView.as_view(), name='file-delete'),
-    path('api/groups/<int:group_id>/rating/', GroupRatingView.as_view(), name='group-rating'),
-    path('api/stats/summary/', stats_summary, name='stats-summary'),
-    path('api/groups/<int:group_id>/notifications/', group_notifications, name='group-notifications'),
-    path('api/groups/<int:group_id>/notifications/clear/', clear_group_notifications, name='clear-group-notifications'),
-    path('api/cleanup/', trigger_cleanup, name='trigger-cleanup'),
-    path('api/test-session/', create_test_session, name='create-test-session'),
-    path('api/test-moderation/', test_moderation, name='test-moderation'),
-    path('api/create-sample-groups/', create_sample_groups, name='create-sample-groups'),
-    path('api/create-sample-ratings/', create_sample_ratings, name='create-sample-ratings'),
-    path('api/recommendations/', group_recommendations, name='group-recommendations'),
+    path('api/profile/', views.UserProfileView.as_view(), name='user_profile'),
+    path('api/stats/summary/', views.stats_summary, name='stats_summary'),
+    path('api/groups/', views.group_list, name='group_list'),
+    path('api/groups/<int:group_id>/', views.group_detail, name='group_detail'),
+    path('api/groups/<int:group_id>/messages/', views.message_list, name='message_list'),
+    path('api/groups/<int:group_id>/sessions/', views.session_list, name='session_list'),
+    path('api/groups/<int:group_id>/files/', views.file_list, name='file_list'),
+    path('api/groups/<int:group_id>/notifications/', views.notification_list, name='notification_list'),
+    path('api/groups/<int:group_id>/ratings/', views.rating_list, name='rating_list'),
+    path('api/similar-groups/<int:group_id>/', views.similar_groups, name='similar_groups'),
 ]
