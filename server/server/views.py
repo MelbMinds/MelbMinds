@@ -1573,8 +1573,20 @@ def file_list(request, group_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def notification_list(request, group_id):
-    """Get notifications for a group"""
-    return group_notifications(request, group_id)
+    group = Group.objects.get(id=group_id)
+    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        return Response({'detail': 'Not a group member'}, status=403)
+    # Clean up past sessions before fetching notifications
+    cleanup_past_sessions()
+    notifications = GroupNotification.objects.filter(group=group).order_by('-created_at')[:50]
+    data = [
+        {
+            'id': n.id,
+            'message': n.message,
+            'created_at': n.created_at
+        } for n in notifications
+    ]
+    return Response(data)
 
 @api_view(['GET', 'POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
