@@ -88,6 +88,8 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     group_personality: ''
   })
 
+  const [editingFolder, setEditingFolder] = useState<any>(null)
+
   useEffect(() => {
     const fetchGroup = async () => {
       setLoading(true)
@@ -433,11 +435,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   }, [group?.id, joined, tokens])
 
   const fetchFlashcardFolders = async () => {
-    if (!tokens?.access) return
+    if (!tokens?.access || !group?.id) return
     
     setLoadingFlashcards(true)
     try {
-      const res = await fetch("http://localhost:8000/api/flashcards/folders/", {
+      const res = await fetch(`http://localhost:8000/api/flashcards/folders/?group=${group.id}`, {
         headers: {
           'Authorization': `Bearer ${tokens.access}`
         }
@@ -493,6 +495,73 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsCreatingFolder(false)
     }
+  }
+
+  const handleRenameFolder = (folder: any) => {
+    setEditingFolder(folder)
+    setNewFolderName(folder.name)
+    setShowCreateFolderDialog(true)
+  }
+
+  const handleDeleteFolder = async (folder: any) => {
+    if (!window.confirm(`Are you sure you want to delete "${folder.name}"? This action cannot be undone.`)) return
+
+    try {
+      const res = await fetch(`http://localhost:8000/api/flashcards/folders/${folder.id}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+      })
+
+      if (res.ok) {
+        setFlashcardFolders(prev => prev.filter(f => f.id !== folder.id))
+        toast({ title: 'Folder deleted successfully!' })
+      } else {
+        const error = await res.json()
+        toast({ title: 'Error deleting folder', description: error.detail, variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error deleting folder', variant: 'destructive' })
+    }
+  }
+
+  const handleUpdateFolder = async () => {
+    if (!editingFolder?.id) return
+
+    setIsCreatingFolder(true)
+    try {
+      const res = await fetch(`http://localhost:8000/api/flashcards/folders/${editingFolder.id}/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+        body: JSON.stringify({ name: newFolderName.trim() })
+      })
+
+      if (res.ok) {
+        const updatedFolder = await res.json()
+        setFlashcardFolders(prev => prev.map(f => f.id === updatedFolder.id ? updatedFolder : f))
+        setEditingFolder(null)
+        setNewFolderName("")
+        setShowCreateFolderDialog(false)
+        toast({ title: 'Folder updated successfully!' })
+      } else {
+        const error = await res.json()
+        toast({ title: 'Error updating folder', description: error.detail, variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error updating folder', variant: 'destructive' })
+    } finally {
+      setIsCreatingFolder(false)
+    }
+  }
+
+  const handleCancelFolderEdit = () => {
+    setEditingFolder(null)
+    setNewFolderName("")
+    setShowCreateFolderDialog(false)
   }
 
   // Session CRUD handlers
@@ -1297,7 +1366,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                           </DialogTrigger>
                           <DialogContent>
                             <DialogHeader>
-                              <DialogTitle>Create New Flashcard Folder</DialogTitle>
+                              <DialogTitle>{editingFolder ? 'Rename Folder' : 'Create New Flashcard Folder'}</DialogTitle>
                             </DialogHeader>
                             <div className="space-y-4">
                               <div>
@@ -1307,22 +1376,22 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                   value={newFolderName}
                                   onChange={(e) => setNewFolderName(e.target.value)}
                                   placeholder="Enter folder name..."
-                                  onKeyPress={(e) => e.key === 'Enter' && handleCreateFolder()}
+                                  onKeyPress={(e) => e.key === 'Enter' && (editingFolder ? handleUpdateFolder() : handleCreateFolder())}
                                 />
                               </div>
                               <div className="flex justify-end space-x-2">
                                 <Button 
                                   variant="outline" 
-                                  onClick={() => setShowCreateFolderDialog(false)}
+                                  onClick={handleCancelFolderEdit}
                                 >
                                   Cancel
                                 </Button>
                                 <Button 
-                                  onClick={handleCreateFolder}
+                                  onClick={editingFolder ? handleUpdateFolder : handleCreateFolder}
                                   disabled={!newFolderName.trim() || isCreatingFolder}
                                   className="bg-deep-blue hover:bg-deep-blue/90"
                                 >
-                                  {isCreatingFolder ? "Creating..." : "Create"}
+                                  {isCreatingFolder ? (editingFolder ? "Updating..." : "Creating...") : (editingFolder ? "Rename" : "Create")}
                                 </Button>
                               </div>
                             </div>
@@ -1340,33 +1409,40 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                           <Folder className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                           <h3 className="text-lg font-medium text-gray-900 mb-2">No flashcard folders yet</h3>
                           <p className="text-gray-600 mb-4">Create your first flashcard folder to get started</p>
-                          <Button 
-                            onClick={() => setShowCreateFolderDialog(true)}
-                            className="bg-deep-blue hover:bg-deep-blue/90 text-white"
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Create Folder
-                          </Button>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                           {flashcardFolders.map((folder) => (
-                            <Link key={folder.id} href={`/flashcards/${folder.id}`}>
-                              <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
-                                <CardContent className="p-6 text-center">
-                                  <div className="relative mb-4">
-                                    <div className="w-16 h-16 bg-deep-blue/10 rounded-lg flex items-center justify-center mx-auto group-hover:bg-deep-blue/20 transition-colors">
-                                      <Folder className="w-8 h-8 text-deep-blue" />
+                            <div key={folder.id} className="relative group">
+                              <Link href={`/flashcards/${folder.id}`}>
+                                <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
+                                  <CardContent className="p-6 text-center">
+                                                                        <div className="relative mb-4">
+                                      <div className="w-16 h-16 bg-deep-blue/10 rounded-lg flex items-center justify-center mx-auto group-hover:bg-deep-blue/20 transition-colors">
+                                        <Folder className="w-8 h-8 text-deep-blue" />
+                                      </div>
                                     </div>
-                                    <div className="absolute -top-2 -right-2 bg-deep-blue text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                                      {folder.flashcard_count}
-                                    </div>
-                                  </div>
-                                  <h3 className="font-semibold text-gray-900 mb-1 truncate">{folder.name}</h3>
-                                  <p className="text-sm text-gray-500">{folder.flashcard_count} cards</p>
-                                </CardContent>
-                              </Card>
-                            </Link>
+                                    <h3 className="font-semibold text-gray-900 mb-1 truncate">{folder.name}</h3>
+                                    <p className="text-sm text-gray-500">{folder.flashcard_count} flashcards</p>
+                                  </CardContent>
+                                </Card>
+                              </Link>
+                                                             {/* Rename and Delete icons */}
+                               <button
+                                 className="absolute bottom-2 left-2 z-10 p-1 hover:bg-gray-100 transition-colors"
+                                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleRenameFolder(folder); }}
+                                 title="Rename folder"
+                               >
+                                 <Edit className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                               </button>
+                               <button
+                                 className="absolute bottom-2 right-2 z-10 p-1 hover:bg-gray-100 transition-colors"
+                                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleDeleteFolder(folder); }}
+                                 title="Delete folder"
+                               >
+                                 <Trash2 className="h-4 w-4 text-gray-400 hover:text-red-600" />
+                               </button>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -1794,6 +1870,8 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
       )}
+
+
     </div>
   )
 }

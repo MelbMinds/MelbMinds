@@ -194,17 +194,62 @@ class FlashcardSerializer(serializers.ModelSerializer):
     
     def get_question_image_url(self, obj):
         if obj.question_image:
-            return obj.question_image.url
+            # Return URL to our Django backend instead of direct S3 URL
+            request = self.context.get('request')
+            if request:
+                return f"{request.scheme}://{request.get_host()}/api/flashcards/{obj.id}/image/question/"
+            return None
         return None
     
     def get_answer_image_url(self, obj):
         if obj.answer_image:
-            return obj.answer_image.url
+            # Return URL to our Django backend instead of direct S3 URL
+            request = self.context.get('request')
+            if request:
+                return f"{request.scheme}://{request.get_host()}/api/flashcards/{obj.id}/image/answer/"
+            return None
         return None
+    
+    def validate(self, data):
+        """Validate the flashcard data"""
+        # For partial updates, we need to check existing data as well
+        instance = getattr(self, 'instance', None)
+        
+        # Get the values being updated
+        question = data.get('question')
+        answer = data.get('answer')
+        question_image = data.get('question_image')
+        answer_image = data.get('answer_image')
+        
+        # For partial updates, use existing values if not provided
+        if instance:
+            if question is None:
+                question = instance.question
+            if answer is None:
+                answer = instance.answer
+            if question_image is None:
+                question_image = instance.question_image
+            if answer_image is None:
+                answer_image = instance.answer_image
+        
+        # Strip whitespace from text fields
+        question = question.strip() if question else ''
+        answer = answer.strip() if answer else ''
+        
+        # At least one of question text or question image must be provided
+        if not question and not question_image:
+            raise serializers.ValidationError("Question text or image is required")
+        
+        # At least one of answer text or answer image must be provided
+        if not answer and not answer_image:
+            raise serializers.ValidationError("Answer text or image is required")
+        
+        return data
     
     def create(self, validated_data):
         # Ensure the folder is properly set
         folder = validated_data.get('folder')
         if not folder:
             raise serializers.ValidationError("Folder is required")
+        
         return super().create(validated_data) 

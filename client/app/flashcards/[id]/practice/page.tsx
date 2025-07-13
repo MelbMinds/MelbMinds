@@ -9,6 +9,8 @@ import { useUser } from "@/components/UserContext"
 import { toast } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { use } from "react"
+import { apiRequest } from "@/lib/api"
+import AuthenticatedImage from "@/components/AuthenticatedImage"
 
 interface Flashcard {
   id: number
@@ -24,10 +26,13 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
   const [flashcards, setFlashcards] = useState<Flashcard[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
-  const [isRandomized, setIsRandomized] = useState(false)
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { user, tokens } = useUser()
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null)
+
+  const { user, tokens, refreshToken } = useUser()
 
   useEffect(() => {
     if (!user || !tokens?.access) return
@@ -58,7 +63,7 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
 
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [currentIndex, flashcards.length])
+  }, [currentIndex, flashcards.length, isFlipped])
 
   const fetchFlashcards = async () => {
     if (!tokens?.access) return
@@ -66,15 +71,12 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`http://localhost:8000/api/flashcards/folders/${id}/`, {
-        headers: {
-          'Authorization': `Bearer ${tokens.access}`
-        }
-      })
+      const res = await apiRequest(`http://localhost:8000/api/flashcards/folders/${id}/`, {}, tokens, refreshToken)
       
       if (!res.ok) throw new Error("Failed to fetch flashcards")
       
       const data = await res.json()
+      console.log("Flashcards data:", data.flashcards)
       setFlashcards(data.flashcards)
     } catch (err) {
       setError("Failed to load flashcards")
@@ -90,15 +92,27 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
 
   const handleNext = () => {
     if (currentIndex < flashcards.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-      setIsFlipped(false)
+      setSlideDirection('left')
+      setIsTransitioning(true)
+      setTimeout(() => {
+        setCurrentIndex(currentIndex + 1)
+        setIsFlipped(false)
+        setIsTransitioning(false)
+        setSlideDirection(null)
+      }, 300)
     }
   }
 
   const handlePrevious = () => {
     if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1)
-      setIsFlipped(false)
+      setSlideDirection('right')
+      setIsTransitioning(true)
+      setTimeout(() => {
+        setCurrentIndex(currentIndex - 1)
+        setIsFlipped(false)
+        setIsTransitioning(false)
+        setSlideDirection(null)
+      }, 300)
     }
   }
 
@@ -109,7 +123,6 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
     setFlashcards(shuffled)
     setCurrentIndex(0)
     setIsFlipped(false)
-    setIsRandomized(true)
     
     toast({
       title: "Shuffled!",
@@ -117,12 +130,7 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
     })
   }
 
-  const handleReset = () => {
-    fetchFlashcards()
-    setCurrentIndex(0)
-    setIsFlipped(false)
-    setIsRandomized(false)
-  }
+
 
   if (!user) {
     return (
@@ -164,7 +172,7 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
   const currentCard = flashcards[currentIndex]
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -183,17 +191,14 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="randomize"
-                checked={isRandomized}
-                onCheckedChange={handleRandomize}
-              />
-              <Label htmlFor="randomize">Randomize</Label>
-            </div>
-            <Button variant="outline" size="sm" onClick={handleReset}>
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Reset
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRandomize}
+              className="flex items-center gap-2"
+            >
+              <Shuffle className="w-4 h-4" />
+              Shuffle
             </Button>
           </div>
         </div>
@@ -205,43 +210,51 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
           {/* Flashcard */}
           <div className="w-full max-w-2xl mb-8">
             <div 
-              className={`relative w-full aspect-[3/2] cursor-pointer transition-transform duration-500 transform-style-preserve-3d ${
-                isFlipped ? 'rotate-y-180' : ''
-              }`}
+              className={`relative w-full aspect-[3/2] cursor-pointer transition-all duration-300 ${
+                isTransitioning ? 'opacity-0' : 'opacity-100'
+              } ${
+                slideDirection === 'left' ? 'slide-out-left' : ''
+              } ${slideDirection === 'right' ? 'slide-out-right' : ''}`}
               onClick={handleFlip}
             >
-              {/* Front of card */}
-              <div className={`absolute inset-0 w-full h-full backface-hidden ${
-                isFlipped ? 'opacity-0' : 'opacity-100'
-              } transition-opacity duration-500`}>
-                <div className="w-full h-full bg-white rounded-lg shadow-lg border border-gray-200 p-8 flex flex-col justify-center items-center">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-4 text-center">
-                    {currentCard.question}
-                  </h2>
+              <div className="relative w-full h-full preserve-3d">
+                {/* Front side (Question) */}
+                <div className={`absolute w-full h-full rounded-lg shadow-lg border border-gray-200 p-8 flex flex-col justify-center items-center backface-hidden transition-all duration-500 ${
+                  isFlipped ? 'rotate-y-180' : ''
+                } bg-white`}>
+                  {currentCard.question && (
+                    <h2 className="text-xl font-semibold text-gray-900 mb-4 text-center">
+                      {currentCard.question}
+                    </h2>
+                  )}
                   {currentCard.question_image_url && (
-                    <img 
-                      src={currentCard.question_image_url} 
-                      alt="Question" 
-                      className="max-w-full max-h-48 object-contain rounded-lg"
+                    <AuthenticatedImage
+                      src={currentCard.question_image_url}
+                      alt="Question"
+                      className="max-w-full max-h-64 object-contain rounded-lg"
+                      tokens={tokens}
+                      refreshToken={refreshToken}
                     />
                   )}
                   <p className="text-sm text-gray-500 mt-4">Click to reveal answer</p>
                 </div>
-              </div>
 
-              {/* Back of card */}
-              <div className={`absolute inset-0 w-full h-full backface-hidden rotate-y-180 ${
-                isFlipped ? 'opacity-100' : 'opacity-0'
-              } transition-opacity duration-500`}>
-                <div className="w-full h-full bg-deep-blue text-white rounded-lg shadow-lg p-8 flex flex-col justify-center items-center">
-                  <h2 className="text-xl font-semibold mb-4 text-center">
-                    {currentCard.answer}
-                  </h2>
+                {/* Back side (Answer) */}
+                <div className={`absolute w-full h-full rounded-lg shadow-lg border border-gray-200 p-8 flex flex-col justify-center items-center backface-hidden transition-all duration-500 ${
+                  isFlipped ? '' : 'rotate-y-180'
+                } bg-deep-blue text-white`}>
+                  {currentCard.answer && (
+                    <h2 className="text-xl font-semibold text-white mb-4 text-center">
+                      {currentCard.answer}
+                    </h2>
+                  )}
                   {currentCard.answer_image_url && (
-                    <img 
-                      src={currentCard.answer_image_url} 
-                      alt="Answer" 
-                      className="max-w-full max-h-48 object-contain rounded-lg"
+                    <AuthenticatedImage
+                      src={currentCard.answer_image_url}
+                      alt="Answer"
+                      className="max-w-full max-h-64 object-contain rounded-lg"
+                      tokens={tokens}
+                      refreshToken={refreshToken}
                     />
                   )}
                   <p className="text-sm text-blue-100 mt-4">Click to see question</p>
@@ -294,7 +307,13 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
       </div>
 
       <style jsx>{`
-        .transform-style-preserve-3d {
+        .slide-out-left {
+          transform: translateX(-100%);
+        }
+        .slide-out-right {
+          transform: translateX(100%);
+        }
+        .preserve-3d {
           transform-style: preserve-3d;
         }
         .backface-hidden {

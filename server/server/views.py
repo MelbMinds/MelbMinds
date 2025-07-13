@@ -1150,8 +1150,15 @@ class FlashcardFolderView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        """Get all flashcard folders for the current user"""
-        folders = FlashcardFolder.objects.filter(creator=request.user).order_by('-created_at')
+        """Get all flashcard folders for the current user, optionally filtered by group"""
+        folders = FlashcardFolder.objects.filter(creator=request.user)
+        
+        # Filter by group if specified
+        group_id = request.query_params.get('group')
+        if group_id:
+            folders = folders.filter(group_id=group_id)
+        
+        folders = folders.order_by('-created_at')
         serializer = FlashcardFolderSerializer(folders, many=True, context={'request': request})
         return Response(serializer.data)
     
@@ -1217,7 +1224,25 @@ class FlashcardView(APIView):
             
             # Create a new dict with the data to avoid deepcopy issues with files
             data = dict(request.data)
-            data['folder'] = folder.id
+            data['folder'] = folder.id  # Pass the folder ID, not the object
+            
+            # Convert list values to strings for text fields
+            if isinstance(data.get('question'), list):
+                data['question'] = data['question'][0] if data['question'] else ''
+            if isinstance(data.get('answer'), list):
+                data['answer'] = data['answer'][0] if data['answer'] else ''
+            
+            # Convert list values to files for image fields
+            if isinstance(data.get('question_image'), list):
+                data['question_image'] = data['question_image'][0] if data['question_image'] else None
+            if isinstance(data.get('answer_image'), list):
+                data['answer_image'] = data['answer_image'][0] if data['answer_image'] else None
+
+            # Add more detailed debugging
+            print("Request data:", request.data)
+            print("Processed data:", data)
+            print("Folder ID:", folder_id)
+            print("Folder object:", folder)
 
             serializer = FlashcardSerializer(data=data, context={'request': request})
             if serializer.is_valid():
@@ -1247,10 +1272,67 @@ class FlashcardDetailView(APIView):
         """Update a flashcard"""
         try:
             flashcard = Flashcard.objects.get(id=flashcard_id, folder__creator=request.user)
-            serializer = FlashcardSerializer(flashcard, data=request.data, partial=True, context={'request': request})
+            
+            print(f"=== FLASHCARD UPDATE DEBUG ===")
+            print(f"Flashcard ID: {flashcard_id}")
+            print(f"Original question_image: {flashcard.question_image}")
+            print(f"Original answer_image: {flashcard.answer_image}")
+            print(f"Request data keys: {list(request.data.keys())}")
+            print(f"Request FILES keys: {list(request.FILES.keys())}")
+            
+            # Handle FormData for image updates
+            data = dict(request.data)
+            
+            # Convert list values to strings for text fields
+            if isinstance(data.get('question'), list):
+                data['question'] = data['question'][0] if data['question'] else ''
+            if isinstance(data.get('answer'), list):
+                data['answer'] = data['answer'][0] if data['answer'] else ''
+            
+            # Convert list values to files for image fields
+            if isinstance(data.get('question_image'), list):
+                data['question_image'] = data['question_image'][0] if data['question_image'] else None
+            if isinstance(data.get('answer_image'), list):
+                data['answer_image'] = data['answer_image'][0] if data['answer_image'] else None
+            
+            # Handle image removal (empty string means remove the image)
+            if data.get('question_image') == '':
+                data['question_image'] = None
+            if data.get('answer_image') == '':
+                data['answer_image'] = None
+            
+            print(f"Processed data: {data}")
+            print(f"Question image type: {type(data.get('question_image'))}")
+            print(f"Answer image type: {type(data.get('answer_image'))}")
+            if data.get('question_image'):
+                print(f"Question image name: {data['question_image'].name}")
+            if data.get('answer_image'):
+                print(f"Answer image name: {data['answer_image'].name}")
+            
+            serializer = FlashcardSerializer(flashcard, data=data, partial=True, context={'request': request})
             if serializer.is_valid():
-                serializer.save()
+                # Check if we're updating images and delete old ones
+                if data.get('question_image') and flashcard.question_image:
+                    print(f"Deleting old question image: {flashcard.question_image}")
+                    try:
+                        flashcard.question_image.delete(save=False)
+                    except Exception as e:
+                        print(f"Error deleting old question image: {e}")
+                
+                if data.get('answer_image') and flashcard.answer_image:
+                    print(f"Deleting old answer image: {flashcard.answer_image}")
+                    try:
+                        flashcard.answer_image.delete(save=False)
+                    except Exception as e:
+                        print(f"Error deleting old answer image: {e}")
+                
+                updated_flashcard = serializer.save()
+                print(f"Updated question_image: {updated_flashcard.question_image}")
+                print(f"Updated answer_image: {updated_flashcard.answer_image}")
                 return Response(serializer.data)
+            # Add debugging to see what validation errors occur
+            print("Flashcard update validation errors:", serializer.errors)
+            print("Flashcard update data:", data)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Flashcard.DoesNotExist:
             return Response({'error': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -1263,3 +1345,90 @@ class FlashcardDetailView(APIView):
             return Response({'message': 'Flashcard deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
         except Flashcard.DoesNotExist:
             return Response({'error': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class FlashcardImageView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, flashcard_id, image_type):
+        """Serve flashcard images (question or answer)"""
+        try:
+            flashcard = Flashcard.objects.get(id=flashcard_id, folder__creator=request.user)
+            
+            # Determine which image to serve
+            if image_type == 'question':
+                image_field = flashcard.question_image
+            elif image_type == 'answer':
+                image_field = flashcard.answer_image
+            else:
+                return Response({'detail': 'Invalid image type'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not image_field:
+                return Response({'detail': 'Image not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # For S3 files, stream the file directly
+            if hasattr(image_field, 'url'):
+                try:
+                    import boto3
+                    from django.conf import settings
+                    
+                    # Create S3 client
+                    s3_client = boto3.client(
+                        's3',
+                        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                        region_name=settings.AWS_S3_REGION_NAME
+                    )
+                    
+                    # Get the file path from the storage
+                    file_path = image_field.name
+                    
+                    # Get the file object from S3
+                    response = s3_client.get_object(
+                        Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                        Key=file_path
+                    )
+                    
+                    # Stream the file content
+                    file_content = response['Body'].read()
+                    
+                    # Determine content type based on file extension
+                    content_type = 'image/jpeg'  # default
+                    if file_path.lower().endswith('.png'):
+                        content_type = 'image/png'
+                    elif file_path.lower().endswith('.gif'):
+                        content_type = 'image/gif'
+                    elif file_path.lower().endswith('.webp'):
+                        content_type = 'image/webp'
+                    
+                    # Create HTTP response with the file content
+                    http_response = HttpResponse(file_content, content_type=content_type)
+                    http_response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
+                    
+                    return http_response
+                    
+                except Exception as e:
+                    print(f"Error streaming image from S3: {e}")
+                    return Response({'detail': 'Image not accessible'}, status=status.HTTP_404_NOT_FOUND)
+            else:
+                # For local files, try to serve directly
+                try:
+                    with image_field.open('rb') as f:
+                        file_content = f.read()
+                    
+                    # Determine content type based on file extension
+                    content_type = 'image/jpeg'  # default
+                    if image_field.name.lower().endswith('.png'):
+                        content_type = 'image/png'
+                    elif image_field.name.lower().endswith('.gif'):
+                        content_type = 'image/gif'
+                    elif image_field.name.lower().endswith('.webp'):
+                        content_type = 'image/webp'
+                    
+                    response = HttpResponse(file_content, content_type=content_type)
+                    response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
+                    return response
+                except Exception as e:
+                    return Response({'detail': 'Image not accessible'}, status=status.HTTP_404_NOT_FOUND)
+            
+        except Flashcard.DoesNotExist:
+            return Response({'detail': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)

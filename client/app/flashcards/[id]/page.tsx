@@ -13,6 +13,8 @@ import { useUser } from "@/components/UserContext"
 import { toast } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { use } from "react"
+import { apiRequest } from "@/lib/api"
+import AuthenticatedImage from "@/components/AuthenticatedImage"
 
 interface Flashcard {
   id: number
@@ -29,6 +31,7 @@ interface FlashcardFolder {
   creator_name: string
   flashcard_count: number
   created_at: string
+  group: number
 }
 
 export default function FlashcardFolderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -49,12 +52,15 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
     question: "",
     answer: "",
     questionImage: null as File | null,
-    answerImage: null as File | null
+    answerImage: null as File | null,
+    removeQuestionImage: false,
+    removeAnswerImage: false
   })
+  const [fileInputKey, setFileInputKey] = useState(0)
   const [isCreating, setIsCreating] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const { user, tokens } = useUser()
+  const { user, tokens, refreshToken } = useUser()
 
   useEffect(() => {
     if (!user || !tokens?.access) return
@@ -67,11 +73,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`http://localhost:8000/api/flashcards/folders/${id}/`, {
-        headers: {
-          'Authorization': `Bearer ${tokens.access}`
-        }
-      })
+      const res = await apiRequest(`http://localhost:8000/api/flashcards/folders/${id}/`, {}, tokens, refreshToken)
       
       if (!res.ok) throw new Error("Failed to fetch folder")
       
@@ -103,13 +105,10 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
         formData.append('answer_image', newFlashcard.answerImage)
       }
       
-      const res = await fetch("http://localhost:8000/api/flashcards/", {
+      const res = await apiRequest("http://localhost:8000/api/flashcards/", {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${tokens?.access}`
-        },
         body: formData
-      })
+      }, tokens, refreshToken)
       
       if (!res.ok) throw new Error("Failed to create flashcard")
       
@@ -139,41 +138,76 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
   }
 
   const handleEditFlashcard = async () => {
-    if (!editingFlashcard || !editFlashcard.question.trim() || !editFlashcard.answer.trim()) return
+    // Check if there's content for question (text or image)
+    const hasQuestionContent = editFlashcard.question.trim() || 
+      editFlashcard.questionImage || 
+      (editingFlashcard?.question_image_url && !editFlashcard.removeQuestionImage)
+    
+    // Check if there's content for answer (text or image)
+    const hasAnswerContent = editFlashcard.answer.trim() || 
+      editFlashcard.answerImage || 
+      (editingFlashcard?.answer_image_url && !editFlashcard.removeAnswerImage)
+    
+    if (!editingFlashcard || !hasQuestionContent || !hasAnswerContent) return
+    
+    console.log('handleEditFlashcard called with state:', editFlashcard)
     
     setIsEditing(true)
     try {
       const formData = new FormData()
-      formData.append('question', editFlashcard.question.trim())
-      formData.append('answer', editFlashcard.answer.trim())
+      formData.append('question', editFlashcard.question.trim() || '')
+      formData.append('answer', editFlashcard.answer.trim() || '')
       
       if (editFlashcard.questionImage) {
+        console.log('Adding question image to FormData:', editFlashcard.questionImage.name)
         formData.append('question_image', editFlashcard.questionImage)
+      } else if (editFlashcard.removeQuestionImage) {
+        console.log('Removing question image')
+        formData.append('question_image', '') // Empty string to remove image
       }
+      
       if (editFlashcard.answerImage) {
+        console.log('Adding answer image to FormData:', editFlashcard.answerImage.name)
         formData.append('answer_image', editFlashcard.answerImage)
+      } else if (editFlashcard.removeAnswerImage) {
+        console.log('Removing answer image')
+        formData.append('answer_image', '') // Empty string to remove image
       }
       
-      const res = await fetch(`http://localhost:8000/api/flashcards/${editingFlashcard.id}/`, {
+      const res = await apiRequest(`http://localhost:8000/api/flashcards/${editingFlashcard.id}/`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${tokens?.access}`
-        },
         body: formData
-      })
+      }, tokens, refreshToken)
       
-      if (!res.ok) throw new Error("Failed to update flashcard")
+      if (!res.ok) {
+        const errorData = await res.text()
+        console.error('Backend error response:', errorData)
+        throw new Error(`Failed to update flashcard: ${res.status} ${res.statusText}`)
+      }
       
       const updatedFlashcard = await res.json()
+      console.log('Backend returned updated flashcard:', updatedFlashcard)
+      
+      // Force refresh by adding timestamp to image URLs to bust cache
+      const cacheBustedFlashcard = {
+        ...updatedFlashcard,
+        question_image_url: updatedFlashcard.question_image_url ? 
+          `${updatedFlashcard.question_image_url}?t=${Date.now()}&v=${Math.random()}` : undefined,
+        answer_image_url: updatedFlashcard.answer_image_url ? 
+          `${updatedFlashcard.answer_image_url}?t=${Date.now()}&v=${Math.random()}` : undefined
+      }
+      
       setFlashcards(prev => prev.map(card => 
-        card.id === editingFlashcard.id ? updatedFlashcard : card
+        card.id === editingFlashcard.id ? cacheBustedFlashcard : card
       ))
       setEditingFlashcard(null)
       setEditFlashcard({
         question: "",
         answer: "",
         questionImage: null,
-        answerImage: null
+        answerImage: null,
+        removeQuestionImage: false,
+        removeAnswerImage: false
       })
       
       toast({
@@ -194,12 +228,9 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
   const handleDeleteFlashcard = async (flashcardId: number) => {
     setIsDeleting(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/flashcards/${flashcardId}/`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${tokens?.access}`
-        }
-      })
+      const res = await apiRequest(`http://localhost:8000/api/flashcards/${flashcardId}/`, {
+        method: 'DELETE'
+      }, tokens, refreshToken)
       
       if (!res.ok) throw new Error("Failed to delete flashcard")
       
@@ -226,16 +257,83 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
       question: flashcard.question,
       answer: flashcard.answer,
       questionImage: null,
-      answerImage: null
+      answerImage: null,
+      removeQuestionImage: false,
+      removeAnswerImage: false
     })
+    // Reset file input key to ensure clean state
+    setFileInputKey(prev => prev + 1)
   }
 
   const handleImageUpload = (file: File | null, side: 'question' | 'answer', isEdit: boolean = false) => {
+    console.log(`handleImageUpload called:`, { file: file?.name, side, isEdit })
+    
+    if (!file) {
+      // Handle file removal
+      if (isEdit) {
+        setEditFlashcard(prev => {
+          const newState = {
+            ...prev,
+            [side === 'question' ? 'questionImage' : 'answerImage']: null,
+            [side === 'question' ? 'removeQuestionImage' : 'removeAnswerImage']: false
+          }
+          console.log(`Updated editFlashcard state:`, newState)
+          return newState
+        })
+      } else {
+        setNewFlashcard(prev => ({
+          ...prev,
+          [side === 'question' ? 'questionImage' : 'answerImage']: null
+        }))
+      }
+      return
+    }
+    
+    // Check file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+    const fileExtension = file.name.toLowerCase().split('.').pop()
+    
+    if (fileExtension === 'heic' || fileExtension === 'heif') {
+      toast({
+        title: "Unsupported Image Format",
+        description: "HEIC/HEIF images are not supported. Please convert to JPEG or PNG format.",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    if (!validTypes.includes(file.type) && !['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension || '')) {
+      toast({
+        title: "Invalid Image Format",
+        description: "Please select a valid image file (JPEG, PNG, GIF, or WebP).",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    // Check file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024 // 5MB
+    if (file.size > maxSize) {
+      toast({
+        title: "File Too Large",
+        description: "Image must be smaller than 5MB. Please compress the image and try again.",
+        variant: "destructive"
+      })
+      return
+    }
+    
     if (isEdit) {
-      setEditFlashcard(prev => ({
-        ...prev,
-        [side === 'question' ? 'questionImage' : 'answerImage']: file
-      }))
+      setEditFlashcard(prev => {
+        const newState = {
+          ...prev,
+          [side === 'question' ? 'questionImage' : 'answerImage']: file,
+          [side === 'question' ? 'removeQuestionImage' : 'removeAnswerImage']: false
+        }
+        console.log(`Updated editFlashcard state:`, newState)
+        return newState
+      })
+      // Reset file input key to force re-render
+      setFileInputKey(prev => prev + 1)
     } else {
       setNewFlashcard(prev => ({
         ...prev,
@@ -243,12 +341,15 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
       }))
     }
   }
+
+
 
   const removeImage = (side: 'question' | 'answer', isEdit: boolean = false) => {
     if (isEdit) {
       setEditFlashcard(prev => ({
         ...prev,
-        [side === 'question' ? 'questionImage' : 'answerImage']: null
+        [side === 'question' ? 'questionImage' : 'answerImage']: null,
+        [side === 'question' ? 'removeQuestionImage' : 'removeAnswerImage']: true
       }))
     } else {
       setNewFlashcard(prev => ({
@@ -257,6 +358,66 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
       }))
     }
   }
+
+  // Check if there are any changes in the edit form
+  const hasChanges = () => {
+    if (!editingFlashcard) return false
+    
+    // Check text changes
+    const questionChanged = editFlashcard.question !== editingFlashcard.question
+    const answerChanged = editFlashcard.answer !== editingFlashcard.answer
+    
+    // Check image changes
+    const questionImageChanged = editFlashcard.questionImage !== null || editFlashcard.removeQuestionImage
+    const answerImageChanged = editFlashcard.answerImage !== null || editFlashcard.removeAnswerImage
+    
+    return questionChanged || answerChanged || questionImageChanged || answerImageChanged
+  }
+
+  // Get the current image display for edit mode
+  const getCurrentImageDisplay = (side: 'question' | 'answer') => {
+    // If there's a new image selected, show that (highest priority)
+    if (editFlashcard[side === 'question' ? 'questionImage' : 'answerImage']) {
+      return {
+        type: 'new' as const,
+        file: editFlashcard[side === 'question' ? 'questionImage' : 'answerImage']
+      }
+    }
+    
+    // If image is marked for removal, show nothing
+    if (editFlashcard[side === 'question' ? 'removeQuestionImage' : 'removeAnswerImage']) {
+      return null
+    }
+    
+    // If there's an existing image and it's not marked for removal, show it
+    if (editingFlashcard?.[side === 'question' ? 'question_image_url' : 'answer_image_url']) {
+      return {
+        type: 'existing' as const,
+        url: editingFlashcard[side === 'question' ? 'question_image_url' : 'answer_image_url']
+      }
+    }
+    
+    return null
+  }
+
+  // Create object URL for new image preview
+  const getImagePreviewUrl = (file: File | null) => {
+    if (!file) return null
+    return URL.createObjectURL(file)
+  }
+
+  // Cleanup object URLs when component unmounts or images change
+  useEffect(() => {
+    return () => {
+      // Cleanup any object URLs when component unmounts
+      if (editFlashcard.questionImage) {
+        URL.revokeObjectURL(URL.createObjectURL(editFlashcard.questionImage))
+      }
+      if (editFlashcard.answerImage) {
+        URL.revokeObjectURL(URL.createObjectURL(editFlashcard.answerImage))
+      }
+    }
+  }, [editFlashcard.questionImage, editFlashcard.answerImage])
 
   if (!user) {
     return (
@@ -298,7 +459,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
   return (
     <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16 py-8">
       <div className="flex items-center gap-4 mb-8">
-        <Link href="/dashboard">
+        <Link href={`/group/${folder.group}`}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
@@ -343,7 +504,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
                     <Input
                       id="question-image"
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                       onChange={(e) => handleImageUpload(e.target.files?.[0] || null, 'question')}
                     />
                     {newFlashcard.questionImage && (
@@ -373,7 +534,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
                     <Input
                       id="answer-image"
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                       onChange={(e) => handleImageUpload(e.target.files?.[0] || null, 'answer')}
                     />
                     {newFlashcard.answerImage && (
@@ -396,7 +557,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
                   </Button>
                   <Button 
                     onClick={handleCreateFlashcard}
-                    disabled={!newFlashcard.question.trim() || !newFlashcard.answer.trim() || isCreating}
+                    disabled={(!newFlashcard.question.trim() && !newFlashcard.questionImage) || (!newFlashcard.answer.trim() && !newFlashcard.answerImage) || isCreating}
                     className="bg-deep-blue hover:bg-deep-blue/90"
                   >
                     {isCreating ? "Creating..." : "Create Flashcard"}
@@ -412,13 +573,6 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
         <div className="text-center py-12">
           <h3 className="text-lg font-medium text-gray-900 mb-2">No flashcards yet</h3>
           <p className="text-gray-600 mb-4">Create your first flashcard to get started</p>
-          <Button 
-            onClick={() => setShowCreateDialog(true)}
-            className="bg-deep-blue hover:bg-deep-blue/90 text-white"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Create Flashcard
-          </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -427,23 +581,33 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
               <CardContent className="p-6">
                 <div className="mb-4">
                   <h3 className="font-semibold text-gray-900 mb-2">Question:</h3>
-                  <p className="text-gray-700 mb-2">{flashcard.question}</p>
+                  {flashcard.question && (
+                    <p className="text-gray-700 mb-2">{flashcard.question}</p>
+                  )}
                   {flashcard.question_image_url && (
-                    <img 
-                      src={flashcard.question_image_url} 
-                      alt="Question" 
-                      className="w-full h-32 object-cover rounded-lg mb-2"
+                    <AuthenticatedImage
+                      key={`question-${flashcard.id}-${flashcard.question_image_url}`}
+                      src={flashcard.question_image_url}
+                      alt="Question"
+                      className="w-full h-48 object-contain rounded-lg mb-2 bg-gray-50"
+                      tokens={tokens}
+                      refreshToken={refreshToken}
                     />
                   )}
                 </div>
                 <div className="mb-4">
                   <h3 className="font-semibold text-gray-900 mb-2">Answer:</h3>
-                  <p className="text-gray-700 mb-2">{flashcard.answer}</p>
+                  {flashcard.answer && (
+                    <p className="text-gray-700 mb-2">{flashcard.answer}</p>
+                  )}
                   {flashcard.answer_image_url && (
-                    <img 
-                      src={flashcard.answer_image_url} 
-                      alt="Answer" 
-                      className="w-full h-32 object-cover rounded-lg mb-2"
+                    <AuthenticatedImage
+                      key={`answer-${flashcard.id}-${flashcard.answer_image_url}`}
+                      src={flashcard.answer_image_url}
+                      alt="Answer"
+                      className="w-full h-48 object-contain rounded-lg mb-2 bg-gray-50"
+                      tokens={tokens}
+                      refreshToken={refreshToken}
                     />
                   )}
                 </div>
@@ -490,11 +654,11 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
 
       {/* Edit Flashcard Dialog */}
       <Dialog open={!!editingFlashcard} onOpenChange={() => setEditingFlashcard(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Flashcard</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
               <Label htmlFor="edit-question">Question</Label>
               <Textarea
@@ -502,26 +666,78 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
                 value={editFlashcard.question}
                 onChange={(e) => setEditFlashcard(prev => ({ ...prev, question: e.target.value }))}
                 placeholder="Enter your question..."
-                rows={3}
+                rows={2}
               />
             </div>
             <div>
               <Label htmlFor="edit-question-image">Question Image (optional)</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="edit-question-image"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleImageUpload(e.target.files?.[0] || null, 'question', true)}
-                />
-                {editFlashcard.questionImage && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => removeImage('question', true)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
+              <div className="space-y-2">
+                {/* Current image display */}
+                {(() => {
+                  const currentImage = getCurrentImageDisplay('question')
+                  if (currentImage) {
+                    return (
+                      <div className="border rounded-lg p-2 bg-gray-50">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium text-gray-700">
+                            {currentImage.type === 'new' ? 'New Image:' : 'Current Image:'}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeImage('question', true)}
+                            className="h-6 px-2"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        {currentImage.type === 'new' ? (
+                          <div className="space-y-1">
+                            <div className="text-xs text-gray-600 truncate">
+                              {currentImage.file?.name}
+                            </div>
+                            <img
+                              src={getImagePreviewUrl(currentImage.file) || ''}
+                              alt="Preview"
+                              className="w-full h-20 object-contain rounded bg-white"
+                              onLoad={(e) => {
+                                // Clean up object URL when image loads
+                                const target = e.target as HTMLImageElement
+                                if (target.src.startsWith('blob:')) {
+                                  setTimeout(() => URL.revokeObjectURL(target.src), 1000)
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <AuthenticatedImage
+                            src={currentImage.url || ''}
+                            alt="Question"
+                            className="w-full h-20 object-contain rounded bg-white"
+                            tokens={tokens}
+                            refreshToken={refreshToken}
+                          />
+                        )}
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
+                
+                {/* File input - only show when no image is present */}
+                {!getCurrentImageDisplay('question') && (
+                  <div className="flex items-center gap-2">
+                                      <Input
+                    key={`question-${fileInputKey}`}
+                    id="edit-question-image"
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                    onChange={(e) => {
+                      handleImageUpload(e.target.files?.[0] || null, 'question', true)
+                    }}
+                  />
+                    <span className="text-sm text-gray-500">No image selected</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -532,26 +748,78 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
                 value={editFlashcard.answer}
                 onChange={(e) => setEditFlashcard(prev => ({ ...prev, answer: e.target.value }))}
                 placeholder="Enter your answer..."
-                rows={3}
+                rows={2}
               />
             </div>
             <div>
               <Label htmlFor="edit-answer-image">Answer Image (optional)</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="edit-answer-image"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleImageUpload(e.target.files?.[0] || null, 'answer', true)}
-                />
-                {editFlashcard.answerImage && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => removeImage('answer', true)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
+              <div className="space-y-2">
+                {/* Current image display */}
+                {(() => {
+                  const currentImage = getCurrentImageDisplay('answer')
+                  if (currentImage) {
+                    return (
+                      <div className="border rounded-lg p-2 bg-gray-50">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium text-gray-700">
+                            {currentImage.type === 'new' ? 'New Image:' : 'Current Image:'}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeImage('answer', true)}
+                            className="h-6 px-2"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        {currentImage.type === 'new' ? (
+                          <div className="space-y-1">
+                            <div className="text-xs text-gray-600 truncate">
+                              {currentImage.file?.name}
+                            </div>
+                            <img
+                              src={getImagePreviewUrl(currentImage.file) || ''}
+                              alt="Preview"
+                              className="w-full h-20 object-contain rounded bg-white"
+                              onLoad={(e) => {
+                                // Clean up object URL when image loads
+                                const target = e.target as HTMLImageElement
+                                if (target.src.startsWith('blob:')) {
+                                  setTimeout(() => URL.revokeObjectURL(target.src), 1000)
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <AuthenticatedImage
+                            src={currentImage.url || ''}
+                            alt="Answer"
+                            className="w-full h-20 object-contain rounded bg-white"
+                            tokens={tokens}
+                            refreshToken={refreshToken}
+                          />
+                        )}
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
+                
+                {/* File input - only show when no image is present */}
+                {!getCurrentImageDisplay('answer') && (
+                  <div className="flex items-center gap-2">
+                                      <Input
+                    key={`answer-${fileInputKey}`}
+                    id="edit-answer-image"
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                    onChange={(e) => {
+                      handleImageUpload(e.target.files?.[0] || null, 'answer', true)
+                    }}
+                  />
+                    <span className="text-sm text-gray-500">No image selected</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -564,7 +832,19 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
               </Button>
               <Button 
                 onClick={handleEditFlashcard}
-                disabled={!editFlashcard.question.trim() || !editFlashcard.answer.trim() || isEditing}
+                disabled={(() => {
+                  // Check if there's content for question (text or image)
+                  const hasQuestionContent = editFlashcard.question.trim() || 
+                    editFlashcard.questionImage || 
+                    (editingFlashcard?.question_image_url && !editFlashcard.removeQuestionImage)
+                  
+                  // Check if there's content for answer (text or image)
+                  const hasAnswerContent = editFlashcard.answer.trim() || 
+                    editFlashcard.answerImage || 
+                    (editingFlashcard?.answer_image_url && !editFlashcard.removeAnswerImage)
+                  
+                  return !hasQuestionContent || !hasAnswerContent || isEditing || !hasChanges()
+                })()}
                 className="bg-deep-blue hover:bg-deep-blue/90"
               >
                 {isEditing ? "Updating..." : "Update Flashcard"}

@@ -18,7 +18,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from .views import RegisterView, LoginView, GroupListCreateView, GroupRetrieveView, UserProfileView, JoinGroupView, GroupChatView, GroupMembersView, GroupSessionListCreateView, GroupSessionRetrieveUpdateDeleteView, GroupFileListCreateView, GroupFileDownloadView, GroupFileDeleteView, GroupRatingView, LeaveGroupView, DeleteGroupView, UpdateGroupView, stats_summary, group_notifications, trigger_cleanup, create_test_session, clear_group_notifications, test_moderation, create_sample_groups, create_sample_ratings, group_recommendations, FlashcardFolderView, FlashcardFolderDetailView, FlashcardView, FlashcardDetailView
+from .views import RegisterView, LoginView, GroupListCreateView, GroupRetrieveView, UserProfileView, JoinGroupView, GroupChatView, GroupMembersView, GroupSessionListCreateView, GroupSessionRetrieveUpdateDeleteView, GroupFileListCreateView, GroupFileDownloadView, GroupFileDeleteView, GroupRatingView, LeaveGroupView, DeleteGroupView, UpdateGroupView, stats_summary, group_notifications, trigger_cleanup, create_test_session, clear_group_notifications, test_moderation, create_sample_groups, create_sample_ratings, group_recommendations, FlashcardFolderView, FlashcardFolderDetailView, FlashcardView, FlashcardDetailView, FlashcardImageView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
@@ -56,4 +56,5 @@ urlpatterns = [
     path('api/flashcards/folders/<int:folder_id>/', FlashcardFolderDetailView.as_view(), name='flashcard-folder-detail'),
     path('api/flashcards/', FlashcardView.as_view(), name='flashcards'),
     path('api/flashcards/<int:flashcard_id>/', FlashcardDetailView.as_view(), name='flashcard-detail'),
+    path('api/flashcards/<int:flashcard_id>/image/<str:image_type>/', FlashcardImageView.as_view(), name='flashcard-image'),
 ]

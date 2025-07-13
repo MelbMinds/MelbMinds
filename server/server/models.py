@@ -86,8 +86,8 @@ class FlashcardFolder(models.Model):
 
 class Flashcard(models.Model):
     folder = models.ForeignKey(FlashcardFolder, on_delete=models.CASCADE, related_name='flashcards')
-    question = models.TextField()
-    answer = models.TextField()
+    question = models.TextField(blank=True)
+    answer = models.TextField(blank=True)
     question_image = models.ImageField(upload_to='flashcard_images/', null=True, blank=True)
     answer_image = models.ImageField(upload_to='flashcard_images/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

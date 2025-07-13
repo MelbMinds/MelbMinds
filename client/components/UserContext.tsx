@@ -19,6 +19,7 @@ interface UserContextType {
   logout: () => void
   tokens: AuthTokens | null
   setTokens: (tokens: AuthTokens | null) => void
+  refreshToken: () => Promise<boolean>
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
@@ -57,6 +58,36 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     else localStorage.removeItem("tokens")
   }
 
+  const refreshToken = async (): Promise<boolean> => {
+    if (!tokens?.refresh) return false
+    
+    try {
+      const response = await fetch("http://localhost:8000/api/token/refresh/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          refresh: tokens.refresh,
+        }),
+      })
+      
+      if (response.ok) {
+        const newTokens = await response.json()
+        setTokens(newTokens)
+        return true
+      } else {
+        // Refresh token is invalid, logout user
+        logout()
+        return false
+      }
+    } catch (error) {
+      console.error("Token refresh failed:", error)
+      logout()
+      return false
+    }
+  }
+
   const logout = () => {
     setUser(null, null)
     setTokens(null)
@@ -64,7 +95,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <UserContext.Provider value={{ user, setUser, logout, tokens, setTokens }}>
+    <UserContext.Provider value={{ user, setUser, logout, tokens, setTokens, refreshToken }}>
       {children}
     </UserContext.Provider>
   )
