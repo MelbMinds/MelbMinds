@@ -40,4 +40,5 @@ urlpatterns = [
     path('api/groups/<int:group_id>/notifications/', views.notification_list, name='notification_list'),
     path('api/groups/<int:group_id>/ratings/', views.rating_list, name='rating_list'),
     path('api/similar-groups/<int:group_id>/', views.similar_groups, name='similar_groups'),
+    path('api/recommendations/', views.group_recommendations, name='group_recommendations'),
 ]

@@ -1521,6 +1521,9 @@ def group_list(request):
     """Get list of groups with filtering"""
     view = GroupListCreateView()
     view.request = request
+    view.args = ()
+    view.kwargs = {}
+    view.format_kwarg = None
     return view.get(request)
 
 @api_view(['GET'])
