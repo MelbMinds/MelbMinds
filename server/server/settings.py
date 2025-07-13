@@ -90,23 +90,15 @@ DATABASES = {
 
 
 DATABASES = {
-
     'default': {
-
         'ENGINE': 'django.db.backends.postgresql',
-
-        'NAME': 'mmdb',
-
-        'USER': 'mmserver',
-
-        'PASSWORD': 'BigDih12321',
-
-        'HOST': 'database-1.chw2s466e5hh.ap-southeast-2.rds.amazonaws.com',
-
-        'PORT': '5432',
+        'NAME': 'railway',
+        'USER': 'postgres',
+        'PASSWORD': '***REMOVED***',
+        'HOST': 'crossover.proxy.rlwy.net',
+        'PORT': '33803',
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
