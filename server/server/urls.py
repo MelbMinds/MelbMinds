@@ -18,7 +18,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from .views import RegisterView, LoginView, GroupListCreateView, GroupRetrieveView, UserProfileView, JoinGroupView, GroupChatView, GroupMembersView, GroupSessionListCreateView, GroupSessionRetrieveUpdateDeleteView, GroupFileListCreateView, GroupFileDownloadView, GroupFileDeleteView, GroupRatingView, LeaveGroupView, DeleteGroupView, UpdateGroupView, stats_summary, group_notifications, trigger_cleanup, create_test_session, clear_group_notifications, test_moderation, create_sample_groups, create_sample_ratings, group_recommendations
+from .views import RegisterView, LoginView, GroupListCreateView, GroupRetrieveView, UserProfileView, JoinGroupView, GroupChatView, GroupMembersView, GroupSessionListCreateView, GroupSessionRetrieveUpdateDeleteView, GroupFileListCreateView, GroupFileDownloadView, GroupFileDeleteView, GroupRatingView, LeaveGroupView, DeleteGroupView, UpdateGroupView, stats_summary, group_notifications, trigger_cleanup, create_test_session, clear_group_notifications, test_moderation, create_sample_groups, create_sample_ratings, group_recommendations, FlashcardFolderView, FlashcardFolderDetailView, FlashcardView, FlashcardDetailView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
@@ -51,4 +51,9 @@ urlpatterns = [
     path('api/create-sample-groups/', create_sample_groups, name='create-sample-groups'),
     path('api/create-sample-ratings/', create_sample_ratings, name='create-sample-ratings'),
     path('api/recommendations/', group_recommendations, name='group-recommendations'),
+    # Flashcard endpoints
+    path('api/flashcards/folders/', FlashcardFolderView.as_view(), name='flashcard-folders'),
+    path('api/flashcards/folders/<int:folder_id>/', FlashcardFolderDetailView.as_view(), name='flashcard-folder-detail'),
+    path('api/flashcards/', FlashcardView.as_view(), name='flashcards'),
+    path('api/flashcards/<int:flashcard_id>/', FlashcardDetailView.as_view(), name='flashcard-detail'),
 ]

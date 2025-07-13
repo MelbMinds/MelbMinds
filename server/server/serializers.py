@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Group, Message, GroupSession, GroupFile, GroupRating
+from .models import User, Group, Message, GroupSession, GroupFile, GroupRating, FlashcardFolder, Flashcard
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -165,4 +165,46 @@ class GroupRatingSerializer(serializers.ModelSerializer):
         return GroupRating.get_average_rating(obj.group)
     
     def get_rating_count(self, obj):
-        return GroupRating.get_rating_count(obj.group) 
+        return GroupRating.get_rating_count(obj.group)
+
+class FlashcardFolderSerializer(serializers.ModelSerializer):
+    creator_name = serializers.CharField(source='creator.name', read_only=True)
+    flashcard_count = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        model = FlashcardFolder
+        fields = ['id', 'name', 'creator', 'creator_name', 'group', 'created_at', 'updated_at', 'flashcard_count']
+        read_only_fields = ['creator', 'creator_name', 'created_at', 'updated_at', 'flashcard_count']
+    
+    def create(self, validated_data):
+        # Set the creator from the request user
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['creator'] = request.user
+        return super().create(validated_data)
+
+class FlashcardSerializer(serializers.ModelSerializer):
+    question_image_url = serializers.SerializerMethodField()
+    answer_image_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Flashcard
+        fields = ['id', 'folder', 'question', 'answer', 'question_image', 'answer_image', 'question_image_url', 'answer_image_url', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_question_image_url(self, obj):
+        if obj.question_image:
+            return obj.question_image.url
+        return None
+    
+    def get_answer_image_url(self, obj):
+        if obj.answer_image:
+            return obj.answer_image.url
+        return None
+    
+    def create(self, validated_data):
+        # Ensure the folder is properly set
+        folder = validated_data.get('folder')
+        if not folder:
+            raise serializers.ValidationError("Folder is required")
+        return super().create(validated_data) 

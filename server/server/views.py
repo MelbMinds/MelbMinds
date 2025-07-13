@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status, generics, serializers
 from django.contrib.auth import authenticate
 from django.db.models import Q
-from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer
-from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile, GroupRating
+from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer, FlashcardFolderSerializer, FlashcardSerializer
+from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile, GroupRating, FlashcardFolder, Flashcard
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -1133,51 +1133,133 @@ class UpdateGroupView(APIView):
     permission_classes = [IsAuthenticated]
     
     def put(self, request, group_id):
-        """Update a group (for creators only)"""
         try:
             group = Group.objects.get(id=group_id)
-            
-            # Check if user is the creator
             if group.creator != request.user:
-                return Response({'detail': 'Only the group creator can update the group'}, status=status.HTTP_403_FORBIDDEN)
+                return Response({'error': 'Only the group creator can update the group'}, status=status.HTTP_403_FORBIDDEN)
             
-            # Content moderation for group updates
-            group_name_validation = perspective_moderator.validate_user_input('group name', request.data.get('group_name', ''))
-            description_validation = perspective_moderator.validate_user_input('description', request.data.get('description', ''))
-            tags_validation = perspective_moderator.validate_user_input('tags', request.data.get('tags', ''))
-            
-            if not group_name_validation['valid']:
-                return Response({
-                    'error': group_name_validation['message']
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            if not description_validation['valid']:
-                return Response({
-                    'error': description_validation['message']
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            if not tags_validation['valid']:
-                return Response({
-                    'error': tags_validation['message']
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Update allowed fields
-            allowed_fields = [
-                'group_name', 'subject_code', 'course_name', 'description', 
-                'year_level', 'meeting_format', 'primary_language', 
-                'meeting_schedule', 'location', 'tags', 'group_guidelines', 
-                'group_personality'
-            ]
-            
-            for field in allowed_fields:
-                if field in request.data:
-                    setattr(group, field, request.data[field])
-            
-            group.save()
-            
-            # Return updated group data
-            serializer = GroupDetailSerializer(group, context={'request': request})
-            return Response(serializer.data, status=status.HTTP_200_OK)
-            
+            serializer = GroupSerializer(group, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Group.DoesNotExist:
-            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class FlashcardFolderView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """Get all flashcard folders for the current user"""
+        folders = FlashcardFolder.objects.filter(creator=request.user).order_by('-created_at')
+        serializer = FlashcardFolderSerializer(folders, many=True, context={'request': request})
+        return Response(serializer.data)
+    
+    def post(self, request):
+        """Create a new flashcard folder"""
+        serializer = FlashcardFolderSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class FlashcardFolderDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, folder_id):
+        """Get a specific flashcard folder with its flashcards"""
+        try:
+            folder = FlashcardFolder.objects.get(id=folder_id, creator=request.user)
+            folder_data = FlashcardFolderSerializer(folder, context={'request': request}).data
+            flashcards = Flashcard.objects.filter(folder=folder).order_by('created_at')
+            flashcard_data = FlashcardSerializer(flashcards, many=True, context={'request': request}).data
+            
+            return Response({
+                'folder': folder_data,
+                'flashcards': flashcard_data
+            })
+        except FlashcardFolder.DoesNotExist:
+            return Response({'error': 'Folder not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    def put(self, request, folder_id):
+        """Update a flashcard folder"""
+        try:
+            folder = FlashcardFolder.objects.get(id=folder_id, creator=request.user)
+            serializer = FlashcardFolderSerializer(folder, data=request.data, partial=True, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except FlashcardFolder.DoesNotExist:
+            return Response({'error': 'Folder not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    def delete(self, request, folder_id):
+        """Delete a flashcard folder"""
+        try:
+            folder = FlashcardFolder.objects.get(id=folder_id, creator=request.user)
+            folder.delete()
+            return Response({'message': 'Folder deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+        except FlashcardFolder.DoesNotExist:
+            return Response({'error': 'Folder not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class FlashcardView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        """Create a new flashcard"""
+        try:
+            # Handle both FormData and JSON data
+            folder_id = request.data.get('folder')
+            if not folder_id:
+                return Response({'error': 'Folder ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            folder = FlashcardFolder.objects.get(id=folder_id, creator=request.user)
+            
+            # Create a new dict with the data to avoid deepcopy issues with files
+            data = dict(request.data)
+            data['folder'] = folder.id
+
+            serializer = FlashcardSerializer(data=data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            # Add debugging to see what validation errors occur
+            print("Flashcard validation errors:", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except FlashcardFolder.DoesNotExist:
+            return Response({'error': 'Folder not found'}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError:
+            return Response({'error': 'Invalid folder ID'}, status=status.HTTP_400_BAD_REQUEST)
+
+class FlashcardDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, flashcard_id):
+        """Get a specific flashcard"""
+        try:
+            flashcard = Flashcard.objects.get(id=flashcard_id, folder__creator=request.user)
+            serializer = FlashcardSerializer(flashcard, context={'request': request})
+            return Response(serializer.data)
+        except Flashcard.DoesNotExist:
+            return Response({'error': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    def put(self, request, flashcard_id):
+        """Update a flashcard"""
+        try:
+            flashcard = Flashcard.objects.get(id=flashcard_id, folder__creator=request.user)
+            serializer = FlashcardSerializer(flashcard, data=request.data, partial=True, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Flashcard.DoesNotExist:
+            return Response({'error': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    def delete(self, request, flashcard_id):
+        """Delete a flashcard"""
+        try:
+            flashcard = Flashcard.objects.get(id=flashcard_id, folder__creator=request.user)
+            flashcard.delete()
+            return Response({'message': 'Flashcard deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+        except Flashcard.DoesNotExist:
+            return Response({'error': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)

@@ -70,6 +70,32 @@ class Group(models.Model):
     def __str__(self):
         return self.group_name
 
+class FlashcardFolder(models.Model):
+    name = models.CharField(max_length=255)
+    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='flashcard_folders')
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='flashcard_folders', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def flashcard_count(self):
+        return self.flashcards.count()
+
+class Flashcard(models.Model):
+    folder = models.ForeignKey(FlashcardFolder, on_delete=models.CASCADE, related_name='flashcards')
+    question = models.TextField()
+    answer = models.TextField()
+    question_image = models.ImageField(upload_to='flashcard_images/', null=True, blank=True)
+    answer_image = models.ImageField(upload_to='flashcard_images/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.question[:50]}..."
+
 class Message(models.Model):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='messages')
     user = models.ForeignKey(User, on_delete=models.CASCADE)

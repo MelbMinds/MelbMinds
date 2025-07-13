@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Users,
@@ -32,6 +34,7 @@ import {
   Download,
   Heart,
   Crown,
+  Folder,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
@@ -204,7 +207,6 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   const [message, setMessage] = useState("")
   const [hasRequested, setHasRequested] = useState(false)
-  const [newFlashcard, setNewFlashcard] = useState({ front: "", back: "" })
   const [chatMessage, setChatMessage] = useState("")
 
   const handleLeaveGroup = async () => {
@@ -416,10 +418,80 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const handleCreateFlashcard = () => {
-    if (newFlashcard.front.trim() && newFlashcard.back.trim()) {
-      // Add flashcard
-      setNewFlashcard({ front: "", back: "" })
+  // Flashcard state
+  const [flashcardFolders, setFlashcardFolders] = useState<any[]>([])
+  const [loadingFlashcards, setLoadingFlashcards] = useState(false)
+  const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false)
+  const [newFolderName, setNewFolderName] = useState("")
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+
+  // Fetch flashcard folders
+  useEffect(() => {
+    if (group?.id && (joined || isGroupCreator()) && tokens?.access) {
+      fetchFlashcardFolders()
+    }
+  }, [group?.id, joined, tokens])
+
+  const fetchFlashcardFolders = async () => {
+    if (!tokens?.access) return
+    
+    setLoadingFlashcards(true)
+    try {
+      const res = await fetch("http://localhost:8000/api/flashcards/folders/", {
+        headers: {
+          'Authorization': `Bearer ${tokens.access}`
+        }
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        setFlashcardFolders(data)
+      }
+    } catch (err) {
+      console.error("Failed to fetch flashcard folders:", err)
+    } finally {
+      setLoadingFlashcards(false)
+    }
+  }
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return
+    
+    setIsCreatingFolder(true)
+    try {
+      const res = await fetch("http://localhost:8000/api/flashcards/folders/", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokens?.access}`
+        },
+        body: JSON.stringify({ 
+          name: newFolderName.trim(),
+          group: group.id
+        })
+      })
+      
+      if (res.ok) {
+        const newFolder = await res.json()
+        setFlashcardFolders(prev => [newFolder, ...prev])
+        setNewFolderName("")
+        setShowCreateFolderDialog(false)
+        
+        toast({
+          title: "Success!",
+          description: "Flashcard folder created successfully.",
+        })
+      } else {
+        throw new Error("Failed to create folder")
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to create folder. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsCreatingFolder(false)
     }
   }
 
@@ -1213,56 +1285,99 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     <TabsContent value="flashcards" className="space-y-4">
                       <div className="flex justify-between items-center">
                         <h3 className="text-lg font-serif font-medium text-deep-blue">Study Flashcards</h3>
-                        <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                          <Plus className="mr-2 h-4 w-4" />
-                          Create Flashcard
-                        </Button>
+                        <Dialog open={showCreateFolderDialog} onOpenChange={setShowCreateFolderDialog}>
+                          <DialogTrigger asChild>
+                            <Button 
+                              disabled={flashcardFolders.length >= 5}
+                              className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif"
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Create Folder
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Create New Flashcard Folder</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div>
+                                <Label htmlFor="folder-name">Folder Name</Label>
+                                <Input
+                                  id="folder-name"
+                                  value={newFolderName}
+                                  onChange={(e) => setNewFolderName(e.target.value)}
+                                  placeholder="Enter folder name..."
+                                  onKeyPress={(e) => e.key === 'Enter' && handleCreateFolder()}
+                                />
+                              </div>
+                              <div className="flex justify-end space-x-2">
+                                <Button 
+                                  variant="outline" 
+                                  onClick={() => setShowCreateFolderDialog(false)}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button 
+                                  onClick={handleCreateFolder}
+                                  disabled={!newFolderName.trim() || isCreatingFolder}
+                                  className="bg-deep-blue hover:bg-deep-blue/90"
+                                >
+                                  {isCreatingFolder ? "Creating..." : "Create"}
+                                </Button>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
                       </div>
 
-                      {/* Create New Flashcard */}
-                      <div className="p-4 bg-soft-gray rounded-lg space-y-3">
-                        <h4 className="font-medium text-deep-blue">Create New Flashcard</h4>
-                        <div className="grid md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-sm font-medium mb-1 block">Front (Question)</label>
-                            <Textarea
-                              placeholder="Enter the question or term..."
-                              value={newFlashcard.front}
-                              onChange={(e) => setNewFlashcard({ ...newFlashcard, front: e.target.value })}
-                              rows={3}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium mb-1 block">Back (Answer)</label>
-                            <Textarea
-                              placeholder="Enter the answer or definition..."
-                              value={newFlashcard.back}
-                              onChange={(e) => setNewFlashcard({ ...newFlashcard, back: e.target.value })}
-                              rows={3}
-                            />
-                          </div>
+                      {loadingFlashcards ? (
+                        <div className="text-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-deep-blue mx-auto"></div>
+                          <p className="mt-2 text-gray-600">Loading folders...</p>
                         </div>
-                        <Button onClick={handleCreateFlashcard} className="bg-deep-blue hover:bg-deep-blue/90 text-white">
-                          Add Flashcard
-                        </Button>
-                      </div>
+                      ) : flashcardFolders.length === 0 ? (
+                        <div className="text-center py-12">
+                          <Folder className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No flashcard folders yet</h3>
+                          <p className="text-gray-600 mb-4">Create your first flashcard folder to get started</p>
+                          <Button 
+                            onClick={() => setShowCreateFolderDialog(true)}
+                            className="bg-deep-blue hover:bg-deep-blue/90 text-white"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Create Folder
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {flashcardFolders.map((folder) => (
+                            <Link key={folder.id} href={`/flashcards/${folder.id}`}>
+                              <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
+                                <CardContent className="p-6 text-center">
+                                  <div className="relative mb-4">
+                                    <div className="w-16 h-16 bg-deep-blue/10 rounded-lg flex items-center justify-center mx-auto group-hover:bg-deep-blue/20 transition-colors">
+                                      <Folder className="w-8 h-8 text-deep-blue" />
+                                    </div>
+                                    <div className="absolute -top-2 -right-2 bg-deep-blue text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                                      {folder.flashcard_count}
+                                    </div>
+                                  </div>
+                                  <h3 className="font-semibold text-gray-900 mb-1 truncate">{folder.name}</h3>
+                                  <p className="text-sm text-gray-500">{folder.flashcard_count} cards</p>
+                                </CardContent>
+                              </Card>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
 
-                      {/* Existing Flashcards */}
-                      <div className="grid md:grid-cols-2 gap-4">
-                        {(Array.isArray(group.flashcards) ? group.flashcards : []).map((card: any) => (
-                          <div key={card.id} className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow">
-                            <div className="mb-3">
-                              <div className="text-sm font-medium text-deep-blue mb-2">Question:</div>
-                              <div className="text-gray-700">{card.front}</div>
-                            </div>
-                            <div className="mb-3">
-                              <div className="text-sm font-medium text-deep-blue mb-2">Answer:</div>
-                              <div className="text-gray-700">{card.back}</div>
-                            </div>
-                            <div className="text-xs text-gray-500">Created by {card.createdBy}</div>
-                          </div>
-                        ))}
-                      </div>
+                      {flashcardFolders.length >= 5 && (
+                        <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <p className="text-yellow-800 text-sm">
+                            You've reached the maximum of 5 folders. Create new folders by deleting existing ones.
+                          </p>
+                        </div>
+                      )}
                     </TabsContent>
                   )}
 
