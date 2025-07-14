@@ -40,6 +40,7 @@ import { toast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
 import { StarRating } from "@/components/ui/star-rating"
 import { PopupAlert } from "@/components/ui/popup-alert"
+import { Progress } from "@/components/ui/progress"
 
 export default function StudyGroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -54,7 +55,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   // Add state for sessions
   const [sessions, setSessions] = useState<any[]>([])
-  const [sessionForm, setSessionForm] = useState({ date: '', time: '', location: '', description: '' })
+  const [sessionForm, setSessionForm] = useState({ date: '', start_time: '', end_time: '', location: '', description: '' })
   const [editingSession, setEditingSession] = useState<any>(null)
   const [sessionLoading, setSessionLoading] = useState(false)
 
@@ -468,10 +469,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleCreateSession = async (e: any) => {
     e.preventDefault()
     setSessionLoading(true)
-    let { date, time, location, description } = sessionForm
-    // Ensure time is in HH:MM:SS format
-    if (time && time.length === 5) time = time + ':00'
-    const payload = { date, time, location, description }
+    let { date, start_time, end_time, location, description } = sessionForm
+    // Ensure times are in HH:MM:SS format
+    if (start_time && start_time.length === 5) start_time = start_time + ':00'
+    if (end_time && end_time.length === 5) end_time = end_time + ':00'
+    const payload = { date, start_time, end_time, location, description }
     console.log('Session creation payload:', payload)
     const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
       method: 'POST',
@@ -483,7 +485,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     })
     setSessionLoading(false)
     if (res.ok) {
-      setSessionForm({ date: '', time: '', location: '', description: '' })
+      setSessionForm({ date: '', start_time: '', end_time: '', location: '', description: '' })
       fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
@@ -514,7 +516,8 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     setEditingSession(session)
     setSessionForm({
       date: session.date,
-      time: session.time,
+      start_time: session.start_time?.slice(0,5) || '',
+      end_time: session.end_time?.slice(0,5) || '',
       location: session.location,
       description: session.description || ''
     })
@@ -522,18 +525,22 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleUpdateSession = async (e: any) => {
     e.preventDefault()
     setSessionLoading(true)
+    let { date, start_time, end_time, location, description } = sessionForm
+    if (start_time && start_time.length === 5) start_time = start_time + ':00'
+    if (end_time && end_time.length === 5) end_time = end_time + ':00'
+    const payload = { date, start_time, end_time, location, description }
     const res = await fetch(`http://localhost:8000/api/sessions/${editingSession.id}/`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
       },
-      body: JSON.stringify(sessionForm)
+      body: JSON.stringify(payload)
     })
     setSessionLoading(false)
     if (res.ok) {
       setEditingSession(null)
-      setSessionForm({ date: '', time: '', location: '', description: '' })
+      setSessionForm({ date: '', start_time: '', end_time: '', location: '', description: '' })
       fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
@@ -870,6 +877,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // 1. Add time options for 00, 15, 30, 45 minutes
+  const timeOptions = Array.from({ length: 24 }, (_, hour) =>
+    [0, 15, 30, 45].map(min => `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`)
+  ).flat();
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
   if (!group) return null
@@ -931,6 +943,16 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     <span className="text-base text-gray-700">Course Code: {group.subject_code}</span>
                     <span className="text-base text-gray-700">Course Name: {group.course_name}</span>
                   </div>
+                  {/* Progress Bar for Study Hours */}
+                  {typeof group?.total_hours === 'number' && typeof group?.target_hours === 'number' && group.target_hours > 0 && (
+                    <div className="mb-2">
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-gray-600 font-medium">Progress</span>
+                        <span className="text-gray-600 font-medium">{group.total_hours}h / {group.target_hours}h</span>
+                      </div>
+                      <Progress value={group.progress_percent} className="bg-blue-100 [&_.bg-primary]:bg-blue-600" />
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" className="bg-transparent">
@@ -1372,16 +1394,24 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       <form onSubmit={editingSession ? handleUpdateSession : handleCreateSession} className="mb-6 space-y-2 bg-white p-4 rounded-lg shadow">
                         <div className="flex flex-wrap gap-2">
                           <input type="date" name="date" value={sessionForm.date} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
-                          <input type="time" name="time" value={sessionForm.time} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
+                          <select name="start_time" value={sessionForm.start_time} onChange={handleSessionFormChange} required className="border rounded px-2 py-1">
+                            <option value="">Start Time</option>
+                            {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <select name="end_time" value={sessionForm.end_time} onChange={handleSessionFormChange} required className="border rounded px-2 py-1">
+                            <option value="">End Time</option>
+                            {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
                           <input type="text" name="location" value={sessionForm.location} onChange={handleSessionFormChange} required placeholder="Location" className="border rounded px-2 py-1" />
                           <input type="text" name="description" value={sessionForm.description} onChange={handleSessionFormChange} placeholder="Description (optional)" className="border rounded px-2 py-1 flex-1" />
                           <Button type="submit" className="bg-deep-blue text-white" disabled={sessionLoading}>
                             {editingSession ? 'Update' : 'Create'}
                           </Button>
                           {editingSession && (
-                            <Button type="button" variant="outline" onClick={() => { setEditingSession(null); setSessionForm({ date: '', time: '', location: '', description: '' }) }}>Cancel</Button>
+                            <Button type="button" variant="outline" onClick={() => { setEditingSession(null); setSessionForm({ date: '', start_time: '', end_time: '', location: '', description: '' }) }}>Cancel</Button>
                           )}
                         </div>
+                        {sessionError && <div className="text-red-600 text-xs mt-1">{sessionError}</div>}
                       </form>
                     )}
                     <div className="space-y-2">
@@ -1389,7 +1419,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       {sessions.map(session => (
                         <div key={session.id} className="flex items-center justify-between bg-white p-3 rounded shadow">
                           <div>
-                            <div className="font-medium text-deep-blue">{format(new Date(session.date + 'T' + session.time), 'eeee, MMM d, yyyy h:mm a')}</div>
+                            <div className="font-medium text-deep-blue">{format(new Date(session.date + 'T' + session.start_time), 'eeee, MMM d, yyyy h:mm a')}</div>
                             <div className="text-sm text-gray-600">{session.location}</div>
                             {session.description && <div className="text-xs text-gray-500">{session.description}</div>}
                           </div>

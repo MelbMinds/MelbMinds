@@ -32,7 +32,7 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/profile/', views.UserProfileView.as_view(), name='user_profile'),
     path('api/stats/summary/', views.stats_summary, name='stats_summary'),
-    path('api/groups/', views.group_list, name='group_list'),
+    path('api/groups/', views.GroupListCreateView.as_view(), name='group_list'),
     path('api/groups/<int:group_id>/', views.group_detail, name='group_detail'),
     path('api/groups/<int:group_id>/messages/', views.message_list, name='message_list'),
     path('api/groups/<int:group_id>/sessions/', views.session_list, name='session_list'),
@@ -44,4 +44,6 @@ urlpatterns = [
     path('api/groups/<int:group_id>/join/', views.JoinGroupView.as_view(), name='group_join'),
     path('api/similar-groups/<int:group_id>/', views.similar_groups, name='similar_groups'),
     path('api/recommendations/', views.group_recommendations, name='group_recommendations'),
+    path('api/forgot-password/', views.forgot_password, name='forgot_password'),
+    path('api/reset-password/', views.reset_password, name='reset_password'),
 ]

@@ -33,6 +33,11 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const { setUser } = useUser()
+  const [showForgot, setShowForgot] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState("")
+  const [forgotSuccess, setForgotSuccess] = useState(false)
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotError, setForgotError] = useState("")
 
   const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Masters", "PhD"]
   const majors = [
@@ -278,9 +283,11 @@ export default function AuthPage() {
                         Remember me
                       </Label>
                     </div>
-                    <Link href="/forgot-password" className="text-sm text-deep-blue hover:underline">
-                      Forgot password?
-                    </Link>
+                    <div className="text-right mt-2">
+                      <button type="button" className="text-blue-600 hover:underline text-sm" onClick={() => setShowForgot(true)}>
+                        Forgot password?
+                      </button>
+                    </div>
                   </div>
 
                   <Button
@@ -525,6 +532,42 @@ export default function AuthPage() {
             </TabsContent>
           </Tabs>
         </Card>
+
+        {/* Forgot Password Modal/Form */}
+        {showForgot && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+            <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+              <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600" onClick={() => setShowForgot(false)}>&times;</button>
+              <h2 className="text-xl font-bold mb-4">Reset your password</h2>
+              {forgotSuccess ? (
+                <div className="text-green-600">If an account with that email exists, a password reset link has been sent.</div>
+              ) : (
+                <form onSubmit={async e => {
+                  e.preventDefault()
+                  setForgotLoading(true)
+                  setForgotError("")
+                  try {
+                    const res = await fetch("http://localhost:8000/api/forgot-password/", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email: forgotEmail })
+                    })
+                    setForgotSuccess(true)
+                  } catch {
+                    setForgotError("Something went wrong. Please try again.")
+                  } finally {
+                    setForgotLoading(false)
+                  }
+                }}>
+                  <label className="block mb-2 text-sm font-medium">Email address</label>
+                  <input type="email" className="w-full border rounded px-3 py-2 mb-4" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required />
+                  {forgotError && <div className="text-red-600 mb-2">{forgotError}</div>}
+                  <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded" disabled={forgotLoading}>{forgotLoading ? "Sending..." : "Send reset link"}</button>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="text-center mt-6">
           <p className="text-blue-100 text-sm">Only University of Melbourne students can join MelbMinds</p>

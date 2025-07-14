@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Users, MapPin, Video, Clock, Filter, Search, Globe, Star } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
+import { Progress } from "@/components/ui/progress"
 
 export default function DiscoverPage() {
   const { user, tokens } = useUser()
@@ -322,7 +323,7 @@ export default function DiscoverPage() {
                           </div>
                           <div className="flex items-center text-sm text-gray-600">
                             <Clock className="h-4 w-4 mr-1" />
-                            {group.study_hours || 0}h studied
+                            {group.total_hours || 0}h studied
                           </div>
                         </div>
                       </div>
@@ -394,6 +395,16 @@ export default function DiscoverPage() {
                         </Link>
                       )}
                     </div>
+                    {/* Progress Bar for Study Hours */}
+                    {typeof group.total_hours === 'number' && typeof group.target_hours === 'number' && group.target_hours > 0 && (
+                      <div className="mb-2">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-600 font-medium">Progress</span>
+                          <span className="text-gray-600 font-medium">{group.total_hours}h / {group.target_hours}h</span>
+                        </div>
+                        <Progress value={group.progress_percent} className="bg-blue-100 [&_.bg-primary]:bg-blue-600" />
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}

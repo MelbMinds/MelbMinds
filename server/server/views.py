@@ -32,7 +32,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import Group, Message, GroupSession, GroupFile, CompletedSessionCounter, GroupNotification, GroupRating, EmailVerificationToken
+from .models import Group, Message, GroupSession, GroupFile, CompletedSessionCounter, GroupNotification, GroupRating, EmailVerificationToken, PasswordResetToken
 from .serializers import GroupSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer
 import json
 from datetime import datetime, timedelta
@@ -1471,7 +1471,7 @@ class UpdateGroupView(APIView):
                 'group_name', 'subject_code', 'course_name', 'description', 
                 'year_level', 'meeting_format', 'primary_language', 
                 'meeting_schedule', 'location', 'tags', 'group_guidelines', 
-                'group_personality'
+                'group_personality', 'target_hours'
             ]
             
             for field in allowed_fields:
@@ -1513,6 +1513,72 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password(request):
+    """Request a password reset link (always respond with success for security)"""
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        # Always respond with success, even if user doesn't exist
+        user = User.objects.filter(email__iexact=email).first()
+        if user:
+            # Invalidate old tokens
+            PasswordResetToken.objects.filter(user=user, is_used=False).update(is_used=True)
+            # Generate new token
+            import uuid
+            token = str(uuid.uuid4())
+            PasswordResetToken.objects.create(user=user, token=token)
+            # Send reset email
+            reset_url = f"http://localhost:3000/reset-password?token={token}"
+            email_subject = "MelbMinds Password Reset Request"
+            email_message = f"""
+            <html><body>
+            <h2>Password Reset Request</h2>
+            <p>Click the button below to reset your password. This link will expire in 1 hour.</p>
+            <a href='{reset_url}' style='display:inline-block;padding:12px 24px;background:#3b82f6;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;'>Reset Password</a>
+            <p>If you did not request this, you can ignore this email.</p>
+            </body></html>
+            """
+            send_mail(
+                subject=email_subject,
+                message="Please use an HTML compatible email client to view this message.",
+                from_email="MelbMinds <melbminds@gmail.com>",
+                recipient_list=[email],
+                fail_silently=True,
+                html_message=email_message
+            )
+        return Response({'message': 'If an account with that email exists, a password reset link has been sent.'})
+    except Exception:
+        return Response({'message': 'If an account with that email exists, a password reset link has been sent.'})
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password(request):
+    """Reset password using a valid token"""
+    try:
+        data = json.loads(request.body)
+        token = data.get('token')
+        new_password = data.get('password')
+        if not token or not new_password:
+            return Response({'error': 'Token and new password are required.'}, status=400)
+        prt = PasswordResetToken.objects.filter(token=token, is_used=False).first()
+        if not prt:
+            return Response({'error': 'Invalid or expired token.'}, status=400)
+        from datetime import timedelta
+        if prt.created_at < timezone.now() - timedelta(hours=1):
+            prt.is_used = True
+            prt.save()
+            return Response({'error': 'Token has expired.'}, status=400)
+        user = prt.user
+        user.set_password(new_password)
+        user.save()
+        prt.is_used = True
+        prt.save()
+        return Response({'message': 'Password has been reset successfully.'})
+    except Exception as e:
+        return Response({'error': 'Invalid request.'}, status=400)
 
 # Function-based views for URL patterns
 @api_view(['GET'])

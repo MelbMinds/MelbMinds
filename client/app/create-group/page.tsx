@@ -36,6 +36,7 @@ export default function CreateGroupPage() {
   const [error, setError] = useState<string | null>(null)
   const [courseName, setCourseName] = useState("")
   const [popupMessage, setPopupMessage] = useState<string | null>(null)
+  const [targetHours, setTargetHours] = useState(10)
 
   const personalityOptions = [
     "Quiet",
@@ -151,6 +152,7 @@ export default function CreateGroupPage() {
           tags: tags.join(", "),
           group_guidelines: "Respectful, Attendance, Academic Integrity, Moderation", // or collect from checkboxes
           group_personality: personalities.join(", "),
+          target_hours: targetHours,
         }),
       })
       if (!res.ok) {
@@ -258,6 +260,20 @@ export default function CreateGroupPage() {
                       onChange={(e) => setDescription(e.target.value)}
                       rows={4}
                       required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="targetHours">Target Study Hours *</Label>
+                    <Input
+                      id="targetHours"
+                      type="number"
+                      min="1"
+                      step="0.5"
+                      value={targetHours}
+                      onChange={e => setTargetHours(Number(e.target.value))}
+                      required
+                      placeholder="e.g., 20"
                     />
                   </div>
                 </CardContent>
@@ -534,6 +550,13 @@ export default function CreateGroupPage() {
                         <div className="flex items-center text-sm text-gray-600">
                           <MapPin className="mr-2 h-4 w-4" />
                           {location}
+                        </div>
+                      )}
+
+                      {targetHours && (
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Clock className="mr-2 h-4 w-4" />
+                          Target: {targetHours} hours
                         </div>
                       )}
                     </div>

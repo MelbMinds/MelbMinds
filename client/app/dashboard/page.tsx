@@ -19,6 +19,7 @@ import {
 import { useUser } from "@/components/UserContext"
 import { format } from "date-fns"
 import { toast } from "@/components/ui/use-toast"
+import { Progress } from "@/components/ui/progress"
 
 export default function DashboardPage() {
   const [notifications] = useState([
@@ -291,6 +292,17 @@ export default function DashboardPage() {
                                   </div>
                                 </div>
 
+                                {/* Progress Bar for Study Hours */}
+                                {typeof group.total_hours === 'number' && typeof group.target_hours === 'number' && group.target_hours > 0 && (
+                                  <div className="mb-2">
+                                    <div className="flex justify-between text-xs mb-1">
+                                      <span className="text-gray-600 font-medium">Progress</span>
+                                      <span className="text-gray-600 font-medium">{group.total_hours}h / {group.target_hours}h</span>
+                                    </div>
+                                    <Progress value={group.progress_percent} className="bg-blue-100 [&_.bg-primary]:bg-blue-600" />
+                                  </div>
+                                )}
+
                                 <div className="flex justify-between items-center mt-4">
                                   <Link href={`/group/${group.id}`}>
                                     <Button variant="outline">Manage Group</Button>
@@ -364,6 +376,17 @@ export default function DashboardPage() {
                                     Next session: {group.next_session || "TBA"}
                                   </div>
                                 </div>
+
+                                {/* Progress Bar for Study Hours */}
+                                {typeof group.total_hours === 'number' && typeof group.target_hours === 'number' && group.target_hours > 0 && (
+                                  <div className="mb-2">
+                                    <div className="flex justify-between text-xs mb-1">
+                                      <span className="text-gray-600 font-medium">Progress</span>
+                                      <span className="text-gray-600 font-medium">{group.total_hours}h / {group.target_hours}h</span>
+                                    </div>
+                                    <Progress value={group.progress_percent} className="bg-blue-100 [&_.bg-primary]:bg-blue-600" />
+                                  </div>
+                                )}
 
                                 <div className="flex justify-between items-center mt-4">
                                   <Link href={`/group/${group.id}`}>

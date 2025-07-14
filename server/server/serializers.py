@@ -23,6 +23,8 @@ class GroupSerializer(serializers.ModelSerializer):
     average_rating = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
     user_rating = serializers.SerializerMethodField()
+    total_hours = serializers.SerializerMethodField()
+    progress_percent = serializers.SerializerMethodField()
     
     class Meta:
         model = Group
@@ -55,6 +57,26 @@ class GroupSerializer(serializers.ModelSerializer):
                 return None
         return None
 
+    def get_total_hours(self, obj):
+        # Sum the duration (in hours) of all sessions for this group
+        from datetime import datetime, date, timedelta
+        total = 0.0
+        for session in obj.sessions.all():
+            # Calculate duration in hours between start_time and end_time
+            start = session.start_time
+            end = session.end_time
+            if start and end:
+                duration = (datetime.combine(date.today(), end) - datetime.combine(date.today(), start)).total_seconds() / 3600.0
+                if duration > 0:
+                    total += duration
+        return round(total, 2)
+
+    def get_progress_percent(self, obj):
+        target = obj.target_hours or 1
+        total = self.get_total_hours(obj)
+        percent = min(100, round((total / target) * 100, 2))
+        return percent
+
 class GroupDetailSerializer(serializers.ModelSerializer):
     creator_name = serializers.CharField(source='creator.name', read_only=True)
     creator_email = serializers.CharField(source='creator.email', read_only=True)
@@ -64,6 +86,8 @@ class GroupDetailSerializer(serializers.ModelSerializer):
     average_rating = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
     user_rating = serializers.SerializerMethodField()
+    total_hours = serializers.SerializerMethodField()
+    progress_percent = serializers.SerializerMethodField()
     
     class Meta:
         model = Group
@@ -95,6 +119,24 @@ class GroupDetailSerializer(serializers.ModelSerializer):
             except GroupRating.DoesNotExist:
                 return None
         return None
+
+    def get_total_hours(self, obj):
+        from datetime import datetime, date, timedelta
+        total = 0.0
+        for session in obj.sessions.all():
+            start = session.start_time
+            end = session.end_time
+            if start and end:
+                duration = (datetime.combine(date.today(), end) - datetime.combine(date.today(), start)).total_seconds() / 3600.0
+                if duration > 0:
+                    total += duration
+        return round(total, 2)
+
+    def get_progress_percent(self, obj):
+        target = obj.target_hours or 1
+        total = self.get_total_hours(obj)
+        percent = min(100, round((total / target) * 100, 2))
+        return percent
 
 class UserProfileSerializer(serializers.ModelSerializer):
     languages = serializers.SerializerMethodField()
@@ -132,10 +174,35 @@ class MessageSerializer(serializers.ModelSerializer):
 
 class GroupSessionSerializer(serializers.ModelSerializer):
     creator_name = serializers.CharField(source='creator.name', read_only=True)
+
+    def validate(self, data):
+        from datetime import datetime, date as dt_date
+        start_time = data.get('start_time')
+        end_time = data.get('end_time')
+        session_date = data.get('date')
+        allowed_minutes = {0, 15, 30, 45}
+        if start_time is None or end_time is None:
+            raise serializers.ValidationError('Both start_time and end_time are required.')
+        if start_time.minute not in allowed_minutes or end_time.minute not in allowed_minutes:
+            raise serializers.ValidationError('Start and end times must be at 00, 15, 30, or 45 minutes past the hour.')
+        if start_time >= end_time:
+            raise serializers.ValidationError('End time must be after start time.')
+        # If session is today, start_time must not be in the past
+        if session_date == dt_date.today():
+            now = datetime.now().time()
+            if start_time < now:
+                raise serializers.ValidationError('Start time cannot be in the past.')
+        return data
+
+    def create(self, validated_data):
+        # Set 'time' to 'start_time' for backward compatibility
+        validated_data['time'] = validated_data['start_time']
+        return super().create(validated_data)
+
     class Meta:
         model = GroupSession
-        fields = ['id', 'group', 'creator', 'creator_name', 'date', 'time', 'location', 'description', 'created_at', 'updated_at']
-        read_only_fields = ['group', 'creator', 'creator_name', 'created_at', 'updated_at'] 
+        fields = ['id', 'group', 'creator', 'creator_name', 'date', 'start_time', 'end_time', 'location', 'description', 'created_at', 'updated_at']
+        read_only_fields = ['group', 'creator', 'creator_name', 'created_at', 'updated_at']
 
 class GroupFileSerializer(serializers.ModelSerializer):
     uploaded_by_name = serializers.CharField(source='uploaded_by.name', read_only=True)

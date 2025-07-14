@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 import uuid
+from django.conf import settings
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -79,6 +80,7 @@ class Group(models.Model):
     tags = models.CharField(max_length=255, blank=True)
     group_guidelines = models.TextField(blank=True)
     group_personality = models.CharField(max_length=255, blank=True, default="")
+    target_hours = models.FloatField(default=10)
     created_at = models.DateTimeField(auto_now_add=True)
     creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_groups', null=True, blank=True)
     members = models.ManyToManyField(User, related_name='joined_groups', blank=True)
@@ -100,6 +102,8 @@ class GroupSession(models.Model):
     creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_sessions')
     date = models.DateField()
     time = models.TimeField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
     location = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -197,3 +201,9 @@ class PendingRegistration(models.Model):
     bio = models.TextField(blank=True)
     token = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
