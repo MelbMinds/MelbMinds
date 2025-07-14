@@ -80,6 +80,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
       const data = await res.json()
       setFolder(data.folder)
       setFlashcards(data.flashcards)
+      setError(null)
     } catch (err) {
       setError("Failed to load flashcard folder")
       console.error(err)

@@ -38,6 +38,7 @@ import json
 from datetime import datetime, timedelta
 import uuid
 import logging
+from rest_framework.permissions import IsAdminUser
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
@@ -835,6 +836,8 @@ def stats_summary(request):
         sessions_completed = CompletedSessionCounter.objects.get(pk=1).count
     except CompletedSessionCounter.DoesNotExist:
         sessions_completed = 0
+    from datetime import timedelta
+    new_users_24hrs = User.objects.filter(date_joined__gte=now - timedelta(days=1)).count()
     return Response({
         "active_students": active_students,
         "active_sessions": active_sessions,
@@ -844,6 +847,7 @@ def stats_summary(request):
         "groups_created": groups_created,
         "sessions_completed": sessions_completed,
         "grade_improvement": 12,
+        "new_users_24hrs": new_users_24hrs,
     })
 
 @api_view(['POST'])
@@ -1879,3 +1883,82 @@ def similar_groups(request, group_id):
         })
     except Group.DoesNotExist:
         return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def user_growth(request):
+    from .models import User
+    from django.utils import timezone
+    from datetime import timedelta
+    today = timezone.now().date()
+    days = 30
+    data = []
+    for i in range(days):
+        day = today - timedelta(days=days - i - 1)
+        count = User.objects.filter(date_joined__date__lte=day).count()
+        data.append({
+            'date': day.isoformat(),
+            'user_count': count
+        })
+    return Response(data)
+
+from .models import Report
+from rest_framework import serializers
+
+class ReportSerializer(serializers.ModelSerializer):
+    reporter_email = serializers.SerializerMethodField()
+    class Meta:
+        model = Report
+        fields = ['id', 'type', 'target_id', 'reporter_email', 'reason', 'status', 'severity', 'created_at']
+    def get_reporter_email(self, obj):
+        return obj.reporter.email if obj.reporter else 'Anonymous'
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def submit_report(request):
+    serializer = ReportSerializer(data=request.data)
+    if serializer.is_valid():
+        reporter = request.user if request.user.is_authenticated else None
+        Report.objects.create(
+            type=serializer.validated_data['type'],
+            target_id=serializer.validated_data['target_id'],
+            reporter=reporter,
+            reason=serializer.validated_data['reason'],
+            status=serializer.validated_data.get('status', 'open'),
+            severity=serializer.validated_data.get('severity', 'medium'),
+        )
+        return Response({'message': 'Report submitted'}, status=201)
+    return Response(serializer.errors, status=400)
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def list_reports(request):
+    reports = Report.objects.all().order_by('-created_at')
+    serializer = ReportSerializer(reports, many=True)
+    return Response(serializer.data)
+
+@api_view(['PATCH'])
+@permission_classes([IsAdminUser])
+def update_report(request, report_id):
+    try:
+        report = Report.objects.get(id=report_id)
+    except Report.DoesNotExist:
+        return Response({'error': 'Report not found'}, status=404)
+    for field in ['status', 'severity']:
+        if field in request.data:
+            setattr(report, field, request.data[field])
+    report.save()
+    serializer = ReportSerializer(report)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def popular_subjects(request):
+    from .models import Group
+    from django.db.models import Count
+    subjects = (
+        Group.objects.values('subject_code')
+        .annotate(group_count=Count('id'))
+        .order_by('-group_count')[:5]
+    )
+    return Response(list(subjects))

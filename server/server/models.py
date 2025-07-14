@@ -223,3 +223,30 @@ class PendingRegistration(models.Model):
     bio = models.TextField(blank=True)
     token = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+class Report(models.Model):
+    REPORT_TYPE_CHOICES = [
+        ("group", "Group"),
+        ("user", "User"),
+        ("message", "Message"),
+    ]
+    STATUS_CHOICES = [
+        ("open", "Open"),
+        ("investigating", "Investigating"),
+        ("resolved", "Resolved"),
+    ]
+    SEVERITY_CHOICES = [
+        ("low", "Low"),
+        ("medium", "Medium"),
+        ("high", "High"),
+    ]
+    type = models.CharField(max_length=16, choices=REPORT_TYPE_CHOICES)
+    target_id = models.IntegerField()
+    reporter = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True)
+    reason = models.TextField()
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="open")
+    severity = models.CharField(max_length=16, choices=SEVERITY_CHOICES, default="medium")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.type} report (ID {self.target_id}) - {self.status}";
