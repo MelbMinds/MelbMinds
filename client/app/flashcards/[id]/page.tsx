@@ -89,7 +89,10 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
   }
 
   const handleCreateFlashcard = async () => {
-    if (!newFlashcard.question.trim() || !newFlashcard.answer.trim()) return
+    // Allow creation if either text or image is present for question and answer
+    const hasQuestionContent = newFlashcard.question.trim() || newFlashcard.questionImage;
+    const hasAnswerContent = newFlashcard.answer.trim() || newFlashcard.answerImage;
+    if (!hasQuestionContent || !hasAnswerContent) return;
     
     setIsCreating(true)
     try {
@@ -500,22 +503,52 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
                 </div>
                 <div>
                   <Label htmlFor="question-image">Question Image (optional)</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="question-image"
-                      type="file"
-                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                      onChange={(e) => handleImageUpload(e.target.files?.[0] || null, 'question')}
-                    />
-                    {newFlashcard.questionImage && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeImage('question')}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    )}
+                  <div className="space-y-2">
+                    {/* Current image display */}
+                    {(() => {
+                      if (newFlashcard.questionImage && newFlashcard.questionImage instanceof File) {
+                        return (
+                          <div className="border rounded-lg p-2 bg-gray-50">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-medium text-gray-700">New Image:</span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => removeImage('question')}
+                                className="h-6 px-2"
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="text-xs text-gray-600 truncate">{newFlashcard.questionImage.name}</div>
+                              <img
+                                src={URL.createObjectURL(newFlashcard.questionImage)}
+                                alt="Preview"
+                                className="w-full h-20 object-contain rounded bg-white"
+                                onLoad={e => {
+                                  const target = e.target as HTMLImageElement;
+                                  if (target.src.startsWith('blob:')) {
+                                    setTimeout(() => URL.revokeObjectURL(target.src), 1000);
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="question-image"
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                            onChange={e => handleImageUpload(e.target.files?.[0] || null, 'question')}
+                          />
+                          <span className="text-sm text-gray-500">No image selected</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div>
@@ -530,22 +563,52 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
                 </div>
                 <div>
                   <Label htmlFor="answer-image">Answer Image (optional)</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="answer-image"
-                      type="file"
-                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                      onChange={(e) => handleImageUpload(e.target.files?.[0] || null, 'answer')}
-                    />
-                    {newFlashcard.answerImage && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeImage('answer')}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    )}
+                  <div className="space-y-2">
+                    {/* Current image display */}
+                    {(() => {
+                      if (newFlashcard.answerImage && newFlashcard.answerImage instanceof File) {
+                        return (
+                          <div className="border rounded-lg p-2 bg-gray-50">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-medium text-gray-700">New Image:</span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => removeImage('answer')}
+                                className="h-6 px-2"
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="text-xs text-gray-600 truncate">{newFlashcard.answerImage.name}</div>
+                              <img
+                                src={URL.createObjectURL(newFlashcard.answerImage)}
+                                alt="Preview"
+                                className="w-full h-20 object-contain rounded bg-white"
+                                onLoad={e => {
+                                  const target = e.target as HTMLImageElement;
+                                  if (target.src.startsWith('blob:')) {
+                                    setTimeout(() => URL.revokeObjectURL(target.src), 1000);
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="answer-image"
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                            onChange={e => handleImageUpload(e.target.files?.[0] || null, 'answer')}
+                          />
+                          <span className="text-sm text-gray-500">No image selected</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="flex justify-end space-x-2">

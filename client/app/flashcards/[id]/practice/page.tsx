@@ -76,8 +76,14 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
       if (!res.ok) throw new Error("Failed to fetch flashcards")
       
       const data = await res.json()
-      console.log("Flashcards data:", data.flashcards)
-      setFlashcards(data.flashcards)
+      // Cache-bust image URLs to always get the latest
+      const now = Date.now();
+      const cacheBusted = data.flashcards.map((card: Flashcard) => ({
+        ...card,
+        question_image_url: card.question_image_url ? `${card.question_image_url}?t=${now}&v=${Math.random()}` : undefined,
+        answer_image_url: card.answer_image_url ? `${card.answer_image_url}?t=${now}&v=${Math.random()}` : undefined,
+      }));
+      setFlashcards(cacheBusted);
     } catch (err) {
       setError("Failed to load flashcards")
       console.error(err)
