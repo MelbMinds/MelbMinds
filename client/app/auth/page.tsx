@@ -16,6 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Mail, Lock, User, Globe, Video, MapPin, UserCheck } from "lucide-react"
 import Link from "next/link"
+import { toast } from "@/components/ui/use-toast"
+import { PopupAlert } from "@/components/ui/popup-alert"
 
 export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -79,7 +81,18 @@ export default function AuthPage() {
       })
       if (!tokenRes.ok) {
         const data = await tokenRes.json()
-        setError(data?.detail || "Login failed")
+        let errorMsg = data?.error || data?.detail || null;
+        if (errorMsg) {
+          if (errorMsg.toLowerCase().includes('invalid credentials')) {
+            setError('Invalid email or password')
+          } else if (errorMsg.toLowerCase().includes('not verified') || errorMsg.toLowerCase().includes('verify')) {
+            setError('Please verify your email before logging in.')
+          } else {
+            setError(errorMsg)
+          }
+        } else {
+          setError('Login failed')
+        }
         setIsLoading(false)
         return
       }
@@ -91,8 +104,9 @@ export default function AuthPage() {
         },
       })
       if (!userRes.ok) {
-        setError("Failed to fetch user profile")
+        // If profile fetch fails, still treat as successful login and redirect
         setIsLoading(false)
+        router.push("/")
         return
       }
       const userData = await userRes.json()
@@ -129,43 +143,53 @@ export default function AuthPage() {
           bio,
         }),
       })
+      const data = await res.json()
       if (!res.ok) {
-        const data = await res.json()
-        setError(data?.email?.[0] || data?.detail || "Registration failed")
+        // Find the first string error in the response
+        let errorMsg = data?.error || data?.detail || null;
+        if (!errorMsg && typeof data === 'object') {
+          for (const key in data) {
+            if (typeof data[key] === 'string') {
+              errorMsg = data[key];
+              break;
+            }
+            if (Array.isArray(data[key]) && typeof data[key][0] === 'string') {
+              errorMsg = data[key][0];
+              break;
+            }
+          }
+        }
+        toast({
+          title: 'Registration Failed',
+          description: errorMsg || "Registration failed",
+          variant: 'destructive',
+        })
+        setError(errorMsg || "Registration failed")
         setIsLoading(false)
         return
       }
-      // After successful registration, get JWT tokens
-      const tokenRes = await fetch("http://localhost:8000/api/token/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
+      // Registration successful, show toast and prompt user to check email
+      toast({
+        title: 'Almost there! 🎉',
+        description: 'A verification email has been sent to your university email address. Please check your inbox and follow the link to verify your account.',
       })
-      if (!tokenRes.ok) {
-        setError("Failed to obtain token after registration")
-        setIsLoading(false)
-        return
-      }
-      const tokens = await tokenRes.json()
-      // Fetch user profile
-      const userRes = await fetch("http://localhost:8000/api/profile/", {
-        headers: {
-          "Authorization": `Bearer ${tokens.access}`,
-        },
-      })
-      if (!userRes.ok) {
-        setError("Failed to fetch user profile")
-        setIsLoading(false)
-        return
-      }
-      const userData = await userRes.json()
-      setUser(userData, tokens)
       setIsLoading(false)
-      router.push("/")
+      setFullName("")
+      setEmail("")
+      setPassword("")
+      setConfirmPassword("")
+      setYear("")
+      setMajor("")
+      setBio("")
+      setStudyFormat("")
+      setLanguages([])
+      router.push('/check-email')
     } catch (err) {
+      toast({
+        title: 'Network Error',
+        description: 'Network error. Please try again.',
+        variant: 'destructive',
+      })
       setError("Network error. Please try again.")
       setIsLoading(false)
     }
@@ -177,6 +201,12 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-deep-blue to-deep-blue/80 flex items-center justify-center p-4">
+      {/* Popup Alert */}
+      <PopupAlert 
+        message={error} 
+        onClose={() => setError(null)} 
+      />
+      
       <div className="w-full max-w-2xl">
         {/* Logo */}
         <div className="text-center mb-8">

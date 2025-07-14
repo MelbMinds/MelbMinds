@@ -399,26 +399,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* No groups message - only show if both sections are empty */}
-                  {createdGroups.length === 0 && joinedGroups.length === 0 && (
-                    <div className="text-center py-8">
-                      <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                      <p className="text-gray-600 mb-4">You haven't created or joined any groups yet.</p>
-                      <div className="flex gap-4 justify-center">
-                        <Link href="/create-group">
-                          <Button className="bg-[#003366] hover:bg-[#002244] text-white">
-                            <Plus className="mr-2 h-4 w-4" />
-                            Create Group
-                          </Button>
-                        </Link>
-                        <Link href="/discover">
-                          <Button variant="outline">
-                            <Users className="mr-2 h-4 w-4" />
-                            Find Groups
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  )}
+                  
                 </div>
               </TabsContent>
 
@@ -589,24 +570,6 @@ export default function DashboardPage() {
                     Edit Profile
                   </Button>
                 </Link>
-              </CardContent>
-            </Card>
-
-            {/* Study Streak */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Study Streak</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-[#003366] mb-2">7</div>
-                  <p className="text-sm text-gray-600 mb-4">Days in a row</p>
-                  <div className="flex justify-center space-x-1">
-                    {[...Array(7)].map((_, i) => (
-                      <div key={i} className="w-3 h-3 bg-[#003366] rounded-full"></div>
-                    ))}
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>

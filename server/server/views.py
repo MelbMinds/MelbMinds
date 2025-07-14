@@ -4,7 +4,7 @@ from rest_framework import status, generics, serializers
 from django.contrib.auth import authenticate
 from django.db.models import Q
 from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer, FlashcardFolderSerializer, FlashcardSerializer
-from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile, GroupRating, FlashcardFolder, Flashcard
+from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile, GroupRating, PendingRegistration, FlashcardFolder, Flashcard
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes
@@ -15,6 +15,32 @@ from django.http import HttpResponse
 import os
 from .perspective_moderation import perspective_moderator
 from django.db import models
+from django.shortcuts import render
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
+from django.conf import settings
+from django.utils import timezone
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from .models import Group, Message, GroupSession, GroupFile, CompletedSessionCounter, GroupNotification, GroupRating, EmailVerificationToken
+from .serializers import GroupSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer
+import json
+from datetime import datetime, timedelta
+import uuid
+import logging
+logger = logging.getLogger(__name__)
+
+User = get_user_model()
 
 def cleanup_past_sessions():
     """
@@ -135,6 +161,274 @@ def find_similar_groups(group, limit=3):
     similar_groups.sort(key=lambda x: x['score'], reverse=True)
     return similar_groups[:limit]
 
+def validate_unimelb_email(email):
+    """Validate that email is a University of Melbourne student email"""
+    return email.endswith('@student.unimelb.edu.au')
+
+def is_content_clean(field_name, value):
+    """Run moderation only if value is not empty and longer than 2 chars. Only block if high confidence."""
+    if not value or len(value.strip()) < 3:
+        return {'valid': True, 'message': ''}
+    result = perspective_moderator.validate_user_input(field_name, value)
+    # Only block if not valid and the message contains 'likely inappropriate' or 'high confidence'
+    if not result['valid'] and ('likely' in result['message'].lower() or 'high confidence' in result['message'].lower() or 'severe' in result['message'].lower()):
+        return result
+    return {'valid': True, 'message': ''}
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register(request):
+    """Register a new user with email verification (user is only created after verification)"""
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        # Validate email domain
+        if not validate_unimelb_email(email):
+            return Response({'error': 'Only University of Melbourne student emails (@student.unimelb.edu.au) are allowed.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Block if user or pending registration exists
+        if User.objects.filter(email__iexact=email).exists() or PendingRegistration.objects.filter(email__iexact=email).exists():
+            return Response({'error': 'A user with this email already exists or is pending verification.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Generate a unique token
+        token = str(uuid.uuid4())
+        # Store registration data in PendingRegistration
+        PendingRegistration.objects.create(
+            email=email,
+            password=data.get('password'),
+            name=data.get('name'),
+            major=data.get('major'),
+            year_level=data.get('year_level'),
+            preferred_study_format=data.get('preferred_study_format'),
+            languages_spoken=data.get('languages_spoken'),
+            bio=data.get('bio', ''),
+            token=token
+        )
+        # Send verification email
+        verification_url = f"http://localhost:3000/verify-email?token={token}"
+        email_subject = "🎓 Welcome to MelbMinds - Verify Your Account"
+        email_message = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='utf-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>Welcome to MelbMinds</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; background: #f4f6fb; color: #222; margin: 0; padding: 0; }}
+                .container {{ max-width: 600px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(30,58,138,0.08); overflow: hidden; }}
+                .header {{ background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); color: #fff; padding: 32px 0; text-align: center; }}
+                .header img {{ width: 60px; margin-bottom: 12px; }}
+                .content {{ padding: 32px; }}
+                .cta-btn {{ display: inline-block; background: #3b82f6; color: #fff; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 18px; margin: 24px 0; }}
+                .footer {{ background: #f1f5f9; color: #666; text-align: center; padding: 18px 0; font-size: 14px; }}
+                .warning {{ background: #fef3c7; border: 1px solid #f59e0b; padding: 15px; border-radius: 8px; margin: 20px 0; color: #b45309; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <img src='https://raw.githubusercontent.com/Serzh-byte/MelbMinds/main/client/public/placeholder-logo.png' alt='MelbMinds Logo' />
+                    <h1>Welcome to MelbMinds!</h1>
+                    <p>Your University of Melbourne Study Group Platform</p>
+                </div>
+                <div class='content'>
+                    <h2>Hello!</h2>
+                    <p>Thank you for joining <b>MelbMinds</b>! We're excited to have you as part of our community of University of Melbourne students.</p>
+                    <p>To complete your registration and start connecting with fellow students, please verify your email address by clicking the button below:</p>
+                    <div style='text-align: center;'>
+                        <a href='{verification_url}' class='cta-btn'>Verify My Email Address</a>
+                    </div>
+                    <div class='warning'>
+                        <strong>⚠️ Important:</strong> This verification link will expire in 24 hours for security reasons.
+                    </div>
+                    <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+                    <p style='word-break: break-all; color: #3b82f6;'>{verification_url}</p>
+                    <h3>What's next?</h3>
+                    <ul>
+                        <li>✅ Verify your email (you're here!)</li>
+                        <li>🔍 Discover study groups in your subjects</li>
+                        <li>👥 Join groups that match your study preferences</li>
+                        <li>📚 Connect with fellow University of Melbourne students</li>
+                    </ul>
+                    <p>If you didn't create this account, please ignore this email.</p>
+                </div>
+                <div class='footer'>
+                    <p>Best regards,<br><b>The MelbMinds Team</b></p>
+                    <p>University of Melbourne Student Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        try:
+            send_mail(
+                subject=email_subject,
+                message="Please use an HTML compatible email client to view this message.",
+                from_email="MelbMinds <melbminds@gmail.com>",
+                recipient_list=[email],
+                fail_silently=False,
+                html_message=email_message
+            )
+        except Exception as e:
+            PendingRegistration.objects.filter(email=email).delete()
+            return Response({'error': 'Failed to send verification email. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'message': 'Registration started! Please check your email to verify your account.'}, status=status.HTTP_201_CREATED)
+    except json.JSONDecodeError:
+        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_email(request):
+    """Verify user email with token and create the user account"""
+    try:
+        data = json.loads(request.body)
+        token = data.get('token')
+        if not token:
+            return Response({'error': 'Verification token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            pending = PendingRegistration.objects.get(token=token)
+        except PendingRegistration.DoesNotExist:
+            return Response({'error': 'Invalid or expired verification token.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if token is expired (24 hours)
+        if pending.created_at < timezone.now() - timedelta(hours=24):
+            pending.delete()
+            return Response({'error': 'Verification token has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if user already exists (shouldn't happen, but just in case)
+        if User.objects.filter(email__iexact=pending.email).exists():
+            pending.delete()
+            return Response({'error': 'A user with this email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Create the user
+        user = User.objects.create_user(
+            email=pending.email,
+            password=pending.password,
+            name=pending.name,
+            major=pending.major,
+            year_level=pending.year_level,
+            preferred_study_format=pending.preferred_study_format,
+            languages_spoken=pending.languages_spoken,
+            bio=pending.bio,
+            is_active=True,
+            is_email_verified=True,
+            email_verified_at=timezone.now()
+        )
+        pending.delete()
+        return Response({'message': 'Email verified successfully! Your account has been created. You can now log in.'}, status=status.HTTP_200_OK)
+    except json.JSONDecodeError:
+        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def resend_verification_email(request):
+    """Resend verification email"""
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            return Response({
+                'error': 'No user found with this email address.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        if user.is_email_verified:
+            return Response({
+                'error': 'Email is already verified.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Delete any existing unused tokens for this user
+        EmailVerificationToken.objects.filter(user=user, is_used=False).delete()
+        
+        # Create new verification token
+        verification_token = EmailVerificationToken.objects.create(user=user)
+        
+        # Send verification email
+        verification_url = f"http://localhost:3000/verify-email?token={verification_token.token}"
+        
+        email_subject = "🎓 Welcome to MelbMinds - Verify Your Account"
+        email_message = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='utf-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>Welcome to MelbMinds</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .content {{ background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; }}
+                .button {{ display: inline-block; background: #3b82f6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }}
+                .footer {{ text-align: center; margin-top: 30px; color: #666; font-size: 14px; }}
+                .warning {{ background: #fef3c7; border: 1px solid #f59e0b; padding: 15px; border-radius: 8px; margin: 20px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>🎓 Welcome to MelbMinds!</h1>
+                    <p>Your University of Melbourne Study Group Platform</p>
+                </div>
+                <div class='content'>
+                    <h2>Hello {user.name}!</h2>
+                    <p>Thank you for joining MelbMinds! We're excited to have you as part of our community of University of Melbourne students.</p>
+                    <p>To complete your registration and start connecting with fellow students, please verify your email address by clicking the button below:</p>
+                    <div style='text-align: center;'>
+                        <a href='{verification_url}' class='button'>Verify My Email Address</a>
+                    </div>
+                    <div class='warning'>
+                        <strong>⚠️ Important:</strong> This verification link will expire in 24 hours for security reasons.
+                    </div>
+                    <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+                    <p style='word-break: break-all; color: #3b82f6;'>{verification_url}</p>
+                    <h3>What's next?</h3>
+                    <ul>
+                        <li>✅ Verify your email (you're here!)</li>
+                        <li>🔍 Discover study groups in your subjects</li>
+                        <li>👥 Join groups that match your study preferences</li>
+                        <li>📚 Connect with fellow University of Melbourne students</li>
+                    </ul>
+                    <p>If you didn't create this account, please ignore this email.</p>
+                </div>
+                <div class='footer'>
+                    <p>Best regards,<br>The MelbMinds Team</p>
+                    <p>University of Melbourne Student Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        try:
+            send_mail(
+                subject=email_subject,
+                message=email_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+                html_message=email_message
+            )
+        except Exception as e:
+            return Response({
+                'error': 'Failed to send verification email. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({
+            'message': 'Verification email sent successfully!'
+        }, status=status.HTTP_200_OK)
+        
+    except json.JSONDecodeError:
+        return Response({
+            'error': 'Invalid JSON data'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class RegisterView(APIView):
     def post(self, request):
         # Content moderation for user registration
@@ -169,6 +463,12 @@ class LoginView(APIView):
             data = UserSerializer(user).data
             return Response(data, status=status.HTTP_200_OK)
         return Response({'detail': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
+
+class LogoutView(APIView):
+    def post(self, request):
+        # For JWT tokens, logout is typically handled client-side by removing the token
+        # This endpoint can be used to invalidate tokens if needed
+        return Response({'detail': 'Logged out successfully'}, status=status.HTTP_200_OK)
 
 class GroupListCreateView(generics.ListCreateAPIView):
     serializer_class = GroupSerializer
@@ -239,24 +539,15 @@ class GroupListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         # Content moderation for group creation
-        group_name_validation = perspective_moderator.validate_user_input('group name', serializer.validated_data.get('group_name', ''))
-        description_validation = perspective_moderator.validate_user_input('description', serializer.validated_data.get('description', ''))
-        tags_validation = perspective_moderator.validate_user_input('tags', serializer.validated_data.get('tags', ''))
-        
-        if not group_name_validation['valid']:
-            raise serializers.ValidationError({
-                'group_name': group_name_validation['message']
-            })
-        
-        if not description_validation['valid']:
-            raise serializers.ValidationError({
-                'description': description_validation['message']
-            })
-        
-        if not tags_validation['valid']:
-            raise serializers.ValidationError({
-                'tags': tags_validation['message']
-            })
+        group_name_check = is_content_clean('group name', serializer.validated_data.get('group_name', ''))
+        description_check = is_content_clean('description', serializer.validated_data.get('description', ''))
+        tags_check = is_content_clean('tags', serializer.validated_data.get('tags', ''))
+        if not group_name_check['valid']:
+            raise serializers.ValidationError({'error': group_name_check['message']})
+        if not description_check['valid']:
+            raise serializers.ValidationError({'error': description_check['message']})
+        if not tags_check['valid']:
+            raise serializers.ValidationError({'error': tags_check['message']})
         
         serializer.save(creator=self.request.user)
 
@@ -331,18 +622,12 @@ class UserProfileView(APIView):
         data = request.data.copy()
         
         # Content moderation for profile updates
-        name_validation = perspective_moderator.validate_user_input('name', data.get('name', ''))
-        bio_validation = perspective_moderator.validate_user_input('bio', data.get('bio', ''))
-        
-        if not name_validation['valid']:
-            return Response({
-                'error': name_validation['message']
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if not bio_validation['valid']:
-            return Response({
-                'error': bio_validation['message']
-            }, status=status.HTTP_400_BAD_REQUEST)
+        name_check = is_content_clean('name', data.get('name', ''))
+        bio_check = is_content_clean('bio', data.get('bio', ''))
+        if not name_check['valid']:
+            return Response({'error': name_check['message']}, status=status.HTTP_400_BAD_REQUEST)
+        if not bio_check['valid']:
+            return Response({'error': bio_check['message']}, status=status.HTTP_400_BAD_REQUEST)
         
         # Convert languages array back to string for storage
         if 'languages' in data and isinstance(data['languages'], list):
@@ -382,12 +667,10 @@ class GroupChatView(APIView):
         
         # Content moderation for chat messages
         message_text = request.data.get('text', '')
-        message_validation = perspective_moderator.validate_user_input('message', message_text)
+        message_check = is_content_clean('message', message_text)
         
-        if not message_validation['valid']:
-            return Response({
-                'error': message_validation['message']
-            }, status=status.HTTP_400_BAD_REQUEST)
+        if not message_check['valid']:
+            return Response({'error': message_check['message']}, status=status.HTTP_400_BAD_REQUEST)
         
         # Use original message text (Perspective API blocks instead of sanitizing)
         data = request.data.copy()
@@ -442,6 +725,15 @@ class GroupSessionListCreateView(APIView):
         group = Group.objects.get(id=group_id)
         if group.creator != request.user:
             return Response({'detail': 'Only the group creator can create sessions'}, status=403)
+        
+        # Content moderation for session description
+        description_validation = perspective_moderator.validate_user_input('session description', request.data.get('description', ''))
+        
+        if not description_validation['valid']:
+            return Response({
+                'error': description_validation['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = GroupSessionSerializer(data=request.data)
         if serializer.is_valid():
             session = serializer.save(group=group, creator=request.user)
@@ -470,6 +762,15 @@ class GroupSessionRetrieveUpdateDeleteView(APIView):
         session = self.get_object(session_id)
         if session.creator != request.user:
             return Response({'detail': 'Only the group creator can edit sessions'}, status=403)
+        
+        # Content moderation for session description
+        description_validation = perspective_moderator.validate_user_input('session description', request.data.get('description', ''))
+        
+        if not description_validation['valid']:
+            return Response({
+                'error': description_validation['message']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = GroupSessionSerializer(session, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -793,6 +1094,10 @@ class GroupFileListCreateView(APIView):
                 return Response({'detail': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
             
             uploaded_file = request.FILES['file']
+            # Moderation for file name
+            filename_validation = perspective_moderator.validate_user_input('file name', uploaded_file.name)
+            if not filename_validation['valid']:
+                return Response({'error': filename_validation['message']}, status=status.HTTP_400_BAD_REQUEST)
             
             # Create the file record
             file_obj = GroupFile.objects.create(
@@ -1432,3 +1737,145 @@ class FlashcardImageView(APIView):
             
         except Flashcard.DoesNotExist:
             return Response({'detail': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = 'email'
+
+    def validate(self, attrs):
+        # Use 'email' instead of 'username' for authentication
+        credentials = {
+            'email': attrs.get('email', '').strip().lower(),
+            'password': attrs.get('password')
+        }
+        user = authenticate(**credentials)
+        if user is None:
+            logger.warning(f"Login failed: invalid credentials for email={credentials['email']}")
+            raise serializers.ValidationError('Invalid credentials')
+        self.user = user
+        logger.info(f"Login attempt: email={user.email}, is_active={user.is_active}, is_email_verified={getattr(user, 'is_email_verified', None)}")
+        if not user.is_active:
+            logger.warning(f"Login failed: inactive user {user.email}")
+            raise serializers.ValidationError('This account is inactive. Please contact support.')
+        if not getattr(user, 'is_email_verified', True):
+            logger.warning(f"Login failed: unverified email {user.email}")
+            raise serializers.ValidationError('Email not verified. Please check your inbox and verify your email before logging in.')
+        data = super().validate(attrs)
+        return data
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+
+# Function-based views for URL patterns
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def group_list(request):
+    """Get list of groups with filtering"""
+    view = GroupListCreateView()
+    view.request = request
+    view.args = ()
+    view.kwargs = {}
+    view.format_kwarg = None
+    return view.get(request)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def group_detail(request, group_id):
+    """Get detailed information about a specific group"""
+    view = GroupRetrieveView()
+    view.request = request
+    view.args = ()
+    view.kwargs = {'pk': group_id}
+    view.format_kwarg = None
+    return view.get(request, pk=group_id)
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def message_list(request, group_id):
+    """Get messages for a group or post a new message"""
+    view = GroupChatView()
+    view.request = request
+    view.kwargs = {'group_id': group_id}
+    if request.method == 'GET':
+        return view.get(request, group_id=group_id)
+    elif request.method == 'POST':
+        return view.post(request, group_id=group_id)
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def session_list(request, group_id):
+    """Get sessions for a group or create a new session"""
+    view = GroupSessionListCreateView()
+    view.request = request
+    view.kwargs = {'group_id': group_id}
+    if request.method == 'GET':
+        return view.get(request, group_id=group_id)
+    elif request.method == 'POST':
+        return view.post(request, group_id=group_id)
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def file_list(request, group_id):
+    """Get files for a group or upload a new file"""
+    view = GroupFileListCreateView()
+    view.request = request
+    view.kwargs = {'group_id': group_id}
+    if request.method == 'GET':
+        return view.get(request, group_id=group_id)
+    elif request.method == 'POST':
+        return view.post(request, group_id=group_id)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def notification_list(request, group_id):
+    group = Group.objects.get(id=group_id)
+    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        return Response({'detail': 'Not a group member'}, status=403)
+    # Clean up past sessions before fetching notifications
+    cleanup_past_sessions()
+    notifications = GroupNotification.objects.filter(group=group).order_by('-created_at')[:50]
+    data = [
+        {
+            'id': n.id,
+            'message': n.message,
+            'created_at': n.created_at
+        } for n in notifications
+    ]
+    return Response(data)
+
+@api_view(['GET', 'POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def rating_list(request, group_id):
+    """Get ratings for a group, post a rating, or delete a rating"""
+    view = GroupRatingView()
+    view.request = request
+    view.kwargs = {'group_id': group_id}
+    if request.method == 'GET':
+        return view.get(request, group_id=group_id)
+    elif request.method == 'POST':
+        return view.post(request, group_id=group_id)
+    elif request.method == 'DELETE':
+        return view.delete(request, group_id=group_id)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def similar_groups(request, group_id):
+    """Get similar groups for a given group"""
+    try:
+        group = Group.objects.get(id=group_id)
+        similar_groups_data = find_similar_groups(group, limit=3)
+        
+        similar_groups_serialized = []
+        for similar_data in similar_groups_data:
+            similar_group = similar_data['group']
+            similar_serializer = GroupSerializer(similar_group)
+            similar_groups_serialized.append({
+                'group': similar_serializer.data,
+                'similarity_score': similar_data['score'],
+                'matching_factors': similar_data['factors']
+            })
+        
+        return Response({
+            'similar_groups': similar_groups_serialized
+        })
+    except Group.DoesNotExist:
+        return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)

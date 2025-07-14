@@ -28,6 +28,9 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
+import { toast } from "@/components/ui/use-toast"
+import { PopupAlert } from "@/components/ui/popup-alert"
+import { apiClient } from "@/lib/api"
 
 export default function ProfilePage() {
   const { tokens, setUser } = useUser()
@@ -41,12 +44,12 @@ export default function ProfilePage() {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/profile/", {
-          headers: tokens?.access ? { "Authorization": `Bearer ${tokens.access}` } : {},
-        })
-        if (!res.ok) throw new Error("Failed to fetch profile data")
-        const data = await res.json()
-        setProfileData(data)
+        const response = await apiClient.get("/profile/")
+        if (response.error) {
+          setError(response.error)
+        } else {
+          setProfileData(response.data)
+        }
       } catch (err: any) {
         setError(err.message)
       } finally {
@@ -177,26 +180,16 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/profile/", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...(tokens?.access && { "Authorization": `Bearer ${tokens.access}` }),
-        },
-        body: JSON.stringify(profileData),
-      })
+      const response = await apiClient.put("/profile/", profileData)
       
-      if (!res.ok) {
-        const errorData = await res.json()
-        console.error('Save error:', errorData)
-        setError('Failed to save profile changes')
+      if (response.error) {
+        setError(response.error)
         return
       }
       
-      const updatedData = await res.json()
-      setProfileData(updatedData)
+      setProfileData(response.data)
       // Update the user context with the new data
-      setUser(updatedData, tokens)
+      setUser(response.data, tokens)
       setIsEditing(false)
       setError(null)
     } catch (err: any) {
@@ -208,11 +201,14 @@ export default function ProfilePage() {
   const handleCancel = () => {
     // Reset to original data by refetching
     if (tokens?.access) {
-      fetch("http://127.0.0.1:8000/api/profile/", {
-        headers: { "Authorization": `Bearer ${tokens.access}` },
-      })
-        .then(res => res.json())
-        .then(data => setProfileData(data))
+      apiClient.get("/profile/")
+        .then(response => {
+          if (response.error) {
+            setError(response.error)
+          } else {
+            setProfileData(response.data)
+          }
+        })
         .catch(err => setError(err.message))
     }
     setIsEditing(false)
@@ -234,6 +230,12 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-soft-gray">
+      {/* Popup Alert */}
+      <PopupAlert 
+        message={error} 
+        onClose={() => setError(null)} 
+      />
+      
       {/* Navigation */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
