@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Group, Message, GroupSession, GroupFile, GroupNotification, GroupRating, CompletedSessionCounter
+from .models import User, Group, Message, GroupSession, GroupFile, GroupNotification, GroupRating, CompletedSessionCounter, Report
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
@@ -93,3 +93,10 @@ class CompletedSessionCounterAdmin(admin.ModelAdmin):
     
     def has_delete_permission(self, request, obj=None):
         return False 
+
+@admin.register(Report)
+class ReportAdmin(admin.ModelAdmin):
+    list_display = ('type', 'target_id', 'reporter', 'created_at')
+    list_filter = ('type', 'created_at')
+    search_fields = ('type', 'target_id', 'reporter__email')
+    readonly_fields = ('created_at',) 

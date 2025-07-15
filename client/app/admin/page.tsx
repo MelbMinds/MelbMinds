@@ -117,9 +117,9 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="flex justify-between items-center h-12">
-          {/* Header area now more compact */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+        <div className="flex justify-between items-center h-6">
+          {/* Header area now ultra compact */}
         </div>
       </div>
 

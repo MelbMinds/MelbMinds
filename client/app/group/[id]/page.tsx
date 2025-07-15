@@ -19,7 +19,6 @@ import {
   MessageCircle,
   UserPlus,
   Share2,
-  Flag,
   Star,
   Upload,
   FileText,
@@ -35,6 +34,8 @@ import {
   Heart,
   Crown,
   Folder,
+  MoreHorizontal,
+  Flag,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
@@ -43,6 +44,7 @@ import { toast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
 import { StarRating } from "@/components/ui/star-rating"
 import { PopupAlert } from "@/components/ui/popup-alert"
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 
 export default function StudyGroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -95,6 +97,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   const [editingFolder, setEditingFolder] = useState<any>(null)
 
+  const [reportingMessage, setReportingMessage] = useState<any>(null)
+  const [reportReason, setReportReason] = useState("")
+  const [reportSubmitting, setReportSubmitting] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState<number | null>(null)
+
   useEffect(() => {
     const fetchGroup = async () => {
       setLoading(true)
@@ -127,7 +134,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   // Fetch chat messages if joined or is creator
   useEffect(() => {
     if (group?.id && (joined || isGroupCreator())) {
-      fetch(`http://localhost:8000/api/groups/${group.id}/chat/`, {
+      fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
         .then(res => res.json())
@@ -421,7 +428,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleSendMessage = async () => {
     if (!chatMessage.trim()) return
     if (!group?.id) return
-    const res = await fetch(`http://localhost:8000/api/groups/${group.id}/chat/`, {
+    const res = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -432,7 +439,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     if (res.ok) {
       setChatMessage("")
       // Refresh messages
-      const data = await fetch(`http://localhost:8000/api/groups/${group.id}/chat/`, {
+      const data = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       }).then(r => r.json())
       setMessages(data)
@@ -1011,6 +1018,55 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  const handleDeleteMessage = async (msgId: number) => {
+    setDeleteLoading(msgId)
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+        },
+        body: JSON.stringify({ id: msgId })
+      })
+      if (res.ok) {
+        setMessages(messages.filter(m => m.id !== msgId))
+      } else {
+        toast({ title: 'Error', description: 'Could not delete message', variant: 'destructive' })
+      }
+    } finally {
+      setDeleteLoading(null)
+    }
+  }
+
+  const handleReportMessage = async () => {
+    if (!reportingMessage || !reportReason.trim()) return
+    setReportSubmitting(true)
+    try {
+      const res = await fetch('http://localhost:8000/api/reports/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+        },
+        body: JSON.stringify({
+          type: 'message',
+          target_id: reportingMessage.id,
+          reason: reportReason.trim(),
+        })
+      })
+      if (res.ok) {
+        toast({ title: 'Reported', description: 'Message reported for review.' })
+        setReportingMessage(null)
+        setReportReason("")
+      } else {
+        toast({ title: 'Error', description: 'Could not report message', variant: 'destructive' })
+      }
+    } finally {
+      setReportSubmitting(false)
+    }
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
   if (!group) return null
@@ -1077,10 +1133,6 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   <Button variant="outline" size="sm" className="bg-transparent">
                     <Share2 className="h-4 w-4 mr-1" />
                     Share
-                  </Button>
-                  <Button variant="outline" size="sm" className="bg-transparent">
-                    <Flag className="h-4 w-4 mr-1" />
-                    Report
                   </Button>
                 </div>
               </CardHeader>
@@ -1288,7 +1340,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       <div className="h-96 overflow-y-auto space-y-4 p-4 bg-soft-gray rounded-lg">
                         {Array.isArray(messages) && messages.length > 0 ? (
                           messages.map((msg: any) => (
-                            <div key={msg.id} className="flex space-x-3">
+                            <div key={msg.id} className="flex space-x-3 group">
                               <Avatar className="h-8 w-8">
                                 <AvatarFallback className="bg-deep-blue text-white text-xs">
                                   {msg.user_name?.split(" ").map((n: string) => n[0]).join("")}
@@ -1299,7 +1351,28 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                   <span className="font-medium text-deep-blue text-sm">{msg.user_name}</span>
                                   <span className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleString()}</span>
                                 </div>
-                                <p className="text-sm text-gray-700 bg-white p-3 rounded-lg shadow-sm">{msg.text}</p>
+                                <div className="flex items-center">
+                                  <p className="text-sm text-gray-700 bg-white p-3 rounded-lg shadow-sm mb-1 flex-1">{msg.text}</p>
+                                  <div className="ml-2 flex items-center self-start">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button size="icon" variant="ghost" aria-label="Message actions">
+                                          <MoreHorizontal className="h-5 w-5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        {(msg.is_sender || msg.is_group_creator) && (
+                                          <DropdownMenuItem onClick={() => handleDeleteMessage(msg.id)} disabled={deleteLoading === msg.id} className="text-red-600">
+                                            {deleteLoading === msg.id ? 'Deleting...' : 'Delete'}
+                                          </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem onClick={() => setReportingMessage(msg)} className="text-[#003366]">
+                                          Report
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           ))
@@ -1970,6 +2043,29 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      {reportingMessage && (
+        <Dialog open={!!reportingMessage} onOpenChange={open => { if (!open) setReportingMessage(null) }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Report Message</DialogTitle>
+            </DialogHeader>
+            <div className="mb-2">Please provide details for reporting this message:</div>
+            <Textarea
+              value={reportReason}
+              onChange={e => setReportReason(e.target.value)}
+              placeholder="Describe the issue..."
+              rows={3}
+              className="mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setReportingMessage(null)} disabled={reportSubmitting}>Cancel</Button>
+              <Button onClick={handleReportMessage} disabled={reportSubmitting || !reportReason.trim()}>
+                {reportSubmitting ? 'Reporting...' : 'Submit Report'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
     </div>
   )

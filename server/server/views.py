@@ -1792,17 +1792,59 @@ def group_detail(request, group_id):
     view.format_kwarg = None
     return view.get(request, pk=group_id)
 
-@api_view(['GET', 'POST'])
+@api_view(['GET', 'POST', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def message_list(request, group_id):
-    """Get messages for a group or post a new message"""
-    view = GroupChatView()
-    view.request = request
-    view.kwargs = {'group_id': group_id}
+    from .models import Group, Message
+    user = request.user
+    try:
+        group = Group.objects.get(id=group_id)
+    except Group.DoesNotExist:
+        return Response({'error': 'Group not found'}, status=404)
+
     if request.method == 'GET':
-        return view.get(request, group_id=group_id)
-    elif request.method == 'POST':
-        return view.post(request, group_id=group_id)
+        messages = Message.objects.filter(group=group).order_by('timestamp')
+        data = [
+            {
+                'id': m.id,
+                'user_id': m.user.id,
+                'user_name': m.user.name,
+                'text': m.text,
+                'timestamp': m.timestamp,
+                'is_sender': m.user == user,
+                'is_group_creator': group.creator == user,
+            }
+            for m in messages
+        ]
+        return Response(data)
+
+    if request.method == 'POST':
+        text = request.data.get('text', '').strip()
+        if not text:
+            return Response({'error': 'Message text required'}, status=400)
+        msg = Message.objects.create(group=group, user=user, text=text)
+        return Response({
+            'id': msg.id,
+            'user_id': msg.user.id,
+            'user_name': msg.user.name,
+            'text': msg.text,
+            'timestamp': msg.timestamp,
+            'is_sender': True,
+            'is_group_creator': group.creator == user,
+        }, status=201)
+
+    if request.method == 'DELETE':
+        msg_id = request.data.get('id')
+        if not msg_id:
+            return Response({'error': 'Message id required'}, status=400)
+        try:
+            msg = Message.objects.get(id=msg_id, group=group)
+        except Message.DoesNotExist:
+            return Response({'error': 'Message not found'}, status=404)
+        if msg.user != user and group.creator != user:
+            return Response({'error': 'Not allowed'}, status=403)
+        msg.delete()
+        return Response({'success': True})
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
@@ -1913,43 +1955,23 @@ class ReportSerializer(serializers.ModelSerializer):
     def get_reporter_email(self, obj):
         return obj.reporter.email if obj.reporter else 'Anonymous'
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def submit_report(request):
-    serializer = ReportSerializer(data=request.data)
-    if serializer.is_valid():
+@api_view(['GET', 'POST'])
+def reports(request):
+    if request.method == 'GET':
+        reports = Report.objects.all().order_by('-created_at')
+        serializer = ReportSerializer(reports, many=True)
+        return Response(serializer.data)
+    elif request.method == 'POST':
         reporter = request.user if request.user.is_authenticated else None
         Report.objects.create(
-            type=serializer.validated_data['type'],
-            target_id=serializer.validated_data['target_id'],
+            type=request.data.get('type'),
+            target_id=request.data.get('target_id'),
             reporter=reporter,
-            reason=serializer.validated_data['reason'],
-            status=serializer.validated_data.get('status', 'open'),
-            severity=serializer.validated_data.get('severity', 'medium'),
+            reason=request.data.get('reason'),
+            status='open',
+            severity=request.data.get('severity', 'low'),
         )
         return Response({'message': 'Report submitted'}, status=201)
-    return Response(serializer.errors, status=400)
-
-@api_view(['GET'])
-@permission_classes([IsAdminUser])
-def list_reports(request):
-    reports = Report.objects.all().order_by('-created_at')
-    serializer = ReportSerializer(reports, many=True)
-    return Response(serializer.data)
-
-@api_view(['PATCH'])
-@permission_classes([IsAdminUser])
-def update_report(request, report_id):
-    try:
-        report = Report.objects.get(id=report_id)
-    except Report.DoesNotExist:
-        return Response({'error': 'Report not found'}, status=404)
-    for field in ['status', 'severity']:
-        if field in request.data:
-            setattr(report, field, request.data[field])
-    report.save()
-    serializer = ReportSerializer(report)
-    return Response(serializer.data)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])

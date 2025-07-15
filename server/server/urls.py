@@ -50,8 +50,6 @@ urlpatterns = [
     path('api/flashcards/<int:flashcard_id>/', views.FlashcardDetailView.as_view(), name='flashcard_detail'),
     path('api/flashcards/<int:flashcard_id>/image/<str:image_type>/', views.FlashcardImageView.as_view(), name='flashcard_image'),
     path('api/user-growth/', views.user_growth, name='user_growth'),
-    path('api/reports/', views.submit_report, name='submit_report'),
-    path('api/reports/', views.list_reports, name='list_reports'),
-    path('api/reports/<int:report_id>/', views.update_report, name='update_report'),
+    path('api/reports/', views.reports, name='reports'),
     path('api/popular-subjects/', views.popular_subjects, name='popular_subjects'),
 ]
