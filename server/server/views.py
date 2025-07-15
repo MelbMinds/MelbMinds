@@ -1548,22 +1548,41 @@ class FlashcardView(APIView):
                 data['answer_image'] = data['answer_image'][0] if data['answer_image'] else None
 
             # Add more detailed debugging
-            print("Request data:", request.data)
-            print("Processed data:", data)
-            print("Folder ID:", folder_id)
-            print("Folder object:", folder)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[FlashcardView.post] Request data: {request.data}")
+            logger.info(f"[FlashcardView.post] Processed data: {data}")
+            logger.info(f"[FlashcardView.post] Folder ID: {folder_id}")
+            logger.info(f"[FlashcardView.post] Folder object: {folder}")
 
             serializer = FlashcardSerializer(data=data, context={'request': request})
             if serializer.is_valid():
-                serializer.save()
+                flashcard = serializer.save()
+                # Confirm storage backend
+                if flashcard.question_image:
+                    logger.info(f"[FlashcardView.post] question_image storage: {type(flashcard.question_image.storage)}")
+                    logger.info(f"[FlashcardView.post] question_image url: {getattr(flashcard.question_image, 'url', None)}")
+                    if not getattr(flashcard.question_image, 'url', None):
+                        logger.error("[FlashcardView.post] ERROR: Question image was not saved or has no URL!")
+                        return Response({'error': 'Question image was not saved or has no URL.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                if flashcard.answer_image:
+                    logger.info(f"[FlashcardView.post] answer_image storage: {type(flashcard.answer_image.storage)}")
+                    logger.info(f"[FlashcardView.post] answer_image url: {getattr(flashcard.answer_image, 'url', None)}")
+                    if not getattr(flashcard.answer_image, 'url', None):
+                        logger.error("[FlashcardView.post] ERROR: Answer image was not saved or has no URL!")
+                        return Response({'error': 'Answer image was not saved or has no URL.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             # Add debugging to see what validation errors occur
-            print("Flashcard validation errors:", serializer.errors)
+            logger.error(f"[FlashcardView.post] Flashcard validation errors: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except FlashcardFolder.DoesNotExist:
             return Response({'error': 'Folder not found'}, status=status.HTTP_404_NOT_FOUND)
         except ValueError:
             return Response({'error': 'Invalid folder ID'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.exception(f"[FlashcardView.post] Unexpected error: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class FlashcardDetailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1660,6 +1679,8 @@ class FlashcardImageView(APIView):
     
     def get(self, request, flashcard_id, image_type):
         """Serve flashcard images (question or answer)"""
+        import logging
+        logger = logging.getLogger(__name__)
         try:
             flashcard = Flashcard.objects.get(id=flashcard_id, folder__creator=request.user)
             
@@ -1675,6 +1696,9 @@ class FlashcardImageView(APIView):
                 return Response({'detail': 'Image not found'}, status=status.HTTP_404_NOT_FOUND)
             
             # For S3 files, stream the file directly
+            logger.info(f"[FlashcardImageView.get] image_field: {image_field}")
+            logger.info(f"[FlashcardImageView.get] image_field storage: {type(image_field.storage)}")
+            logger.info(f"[FlashcardImageView.get] image_field url: {getattr(image_field, 'url', None)}")
             if hasattr(image_field, 'url'):
                 try:
                     import boto3
@@ -1690,6 +1714,7 @@ class FlashcardImageView(APIView):
                     
                     # Get the file path from the storage
                     file_path = image_field.name
+                    logger.info(f"[FlashcardImageView.get] S3 file_path: {file_path}")
                     
                     # Get the file object from S3
                     response = s3_client.get_object(
@@ -1716,7 +1741,7 @@ class FlashcardImageView(APIView):
                     return http_response
                     
                 except Exception as e:
-                    print(f"Error streaming image from S3: {e}")
+                    logger.error(f"[FlashcardImageView.get] Error streaming image from S3: {e}")
                     return Response({'detail': 'Image not accessible'}, status=status.HTTP_404_NOT_FOUND)
             else:
                 # For local files, try to serve directly
@@ -1735,12 +1760,17 @@ class FlashcardImageView(APIView):
                     
                     response = HttpResponse(file_content, content_type=content_type)
                     response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
+                    logger.warning(f"[FlashcardImageView.get] WARNING: Serving image from local storage!")
                     return response
                 except Exception as e:
+                    logger.error(f"[FlashcardImageView.get] Error accessing local image: {e}")
                     return Response({'detail': 'Image not accessible'}, status=status.HTTP_404_NOT_FOUND)
             
         except Flashcard.DoesNotExist:
             return Response({'detail': 'Flashcard not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(f"[FlashcardImageView.get] Unexpected error: {e}")
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     username_field = 'email'
