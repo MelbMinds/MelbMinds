@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 import uuid
+from storages.backends.s3boto3 import S3Boto3Storage
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -104,8 +105,8 @@ class Flashcard(models.Model):
     folder = models.ForeignKey(FlashcardFolder, on_delete=models.CASCADE, related_name='flashcards')
     question = models.TextField(blank=True)
     answer = models.TextField(blank=True)
-    question_image = models.ImageField(upload_to='flashcard_images/', null=True, blank=True)
-    answer_image = models.ImageField(upload_to='flashcard_images/', null=True, blank=True)
+    question_image = models.ImageField(upload_to='flashcard_images/', null=True, blank=True, storage=S3Boto3Storage())
+    answer_image = models.ImageField(upload_to='flashcard_images/', null=True, blank=True, storage=S3Boto3Storage())
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
