@@ -53,6 +53,7 @@ urlpatterns = [
     path('api/user-growth/', views.user_growth, name='user_growth'),
     path('api/reports/', views.reports, name='reports'),
     path('api/popular-subjects/', views.popular_subjects, name='popular_subjects'),
+    path('api/groups/<int:group_id>/notifications/clear/', views.clear_group_notifications, name='clear_group_notifications'),
 ]
 
 urlpatterns += [
