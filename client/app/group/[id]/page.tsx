@@ -1188,8 +1188,55 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       <span className="text-sm text-gray-600">{group.total_study_hours} / {group.target_hours} hours</span>
                     </div>
                     <Progress value={group.progress_percentage} className="h-4 rounded-full bg-blue-200" />
-                    <div className="flex justify-end text-xs text-gray-500 mt-1">
+                    <div className="flex justify-end items-center text-xs text-gray-500 mt-1 gap-2">
                       <span>{group.progress_percentage}%</span>
+                      {isGroupCreator() && !editingTargetHours && (
+                        <Button 
+                          size="icon" 
+                          variant="default" 
+                          className="ml-2 bg-[#00264D] text-white rounded-xl shadow-md hover:bg-[#001a33] transition-colors w-9 h-9 flex items-center justify-center"
+                          onClick={() => { setEditingTargetHours(true); setTargetHoursInput(group.target_hours); }}
+                          aria-label="Change Target"
+                        >
+                          <Edit className="h-5 w-5" />
+                        </Button>
+                      )}
+                      {isGroupCreator() && editingTargetHours && (
+                        <form onSubmit={async (e) => {
+                          e.preventDefault();
+                          setTargetHoursError(null);
+                          if (!Number.isFinite(Number(targetHoursInput)) || Number(targetHoursInput) <= 0) {
+                            setTargetHoursError("Target hours must be a positive number");
+                            return;
+                          }
+                          setLoadingActions(true);
+                          try {
+                            const res = await fetch(`http://localhost:8000/api/groups/${group.id}/update/`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json', ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` }) },
+                              body: JSON.stringify({ target_hours: Number(targetHoursInput) })
+                            });
+                            if (res.ok) {
+                              const updated = await res.json();
+                              setGroup(updated);
+                              setEditingTargetHours(false);
+                              toast({ title: 'Target hours updated!' });
+                            } else {
+                              const data = await res.json();
+                              setTargetHoursError(data.error || 'Failed to update');
+                            }
+                          } catch {
+                            setTargetHoursError('Network error');
+                          } finally {
+                            setLoadingActions(false);
+                          }
+                        }} className="flex items-center gap-2 ml-2">
+                          <Input type="number" min={1} value={targetHoursInput} onChange={e => setTargetHoursInput(e.target.value)} className="w-20 h-6 text-xs px-2 py-1" />
+                          <Button size="sm" type="submit" disabled={loadingActions}>Save</Button>
+                          <Button size="sm" variant="ghost" type="button" onClick={() => setEditingTargetHours(false)}>Cancel</Button>
+                          {targetHoursError && <span className="text-xs text-red-500 ml-2">{targetHoursError}</span>}
+                        </form>
+                      )}
                     </div>
                   </div>
                   {/* End Study Progress Bar */}
@@ -1401,6 +1448,15 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     </TabsTrigger>
                   </TabsList>
                 </CardHeader>
+
+                {/* JOIN PROMPT: Show if not joined and not creator */}
+                {!(joined || isGroupCreator()) && (
+                  <div className="w-full px-6 pb-2">
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 text-blue-900 rounded text-center text-sm font-medium">
+                      Join the group to access all features (chat, files, flashcards, sessions, etc.)
+                    </div>
+                  </div>
+                )}
 
                 <CardContent>
                   {/* Chat Tab */}
@@ -2155,57 +2211,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       )}
 
       {/* Progress Bar and Target Hours Admin Control */}
-      <div className="mb-6">
-        <div className="flex items-center gap-4">
-          <span className="font-medium text-gray-700">Study Progress:</span>
-          <div className="flex-1">
-            <Progress value={group.progress_percentage} className="h-3" />
-            <div className="flex justify-between text-xs text-gray-600 mt-1">
-              <span>{group.total_study_hours} / {group.target_study_hours} hours</span>
-              <span>{group.progress_percentage}%</span>
-            </div>
-          </div>
-          {isGroupCreator() && !editingTargetHours && (
-            <Button size="sm" variant="outline" onClick={() => { setEditingTargetHours(true); setTargetHoursInput(group.target_study_hours) }}>Edit Target</Button>
-          )}
-          {isGroupCreator() && editingTargetHours && (
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              setTargetHoursError(null);
-              if (!Number.isInteger(Number(targetHoursInput)) || Number(targetHoursInput) <= 0) {
-                setTargetHoursError("Target hours must be a positive integer");
-                return;
-              }
-              setLoadingActions(true);
-              try {
-                const res = await fetch(`http://localhost:8000/api/groups/${group.id}/update/`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json', ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` }) },
-                  body: JSON.stringify({ target_study_hours: Number(targetHoursInput) })
-                });
-                if (res.ok) {
-                  const updated = await res.json();
-                  setGroup(updated);
-                  setEditingTargetHours(false);
-                  toast({ title: 'Target hours updated!' });
-                } else {
-                  const data = await res.json();
-                  setTargetHoursError(data.error || 'Failed to update');
-                }
-              } catch {
-                setTargetHoursError('Network error');
-              } finally {
-                setLoadingActions(false);
-              }
-            }} className="flex items-center gap-2">
-              <Input type="number" min={1} value={targetHoursInput} onChange={e => setTargetHoursInput(e.target.value)} className="w-20" />
-              <Button size="sm" type="submit" disabled={loadingActions}>Save</Button>
-              <Button size="sm" variant="ghost" type="button" onClick={() => setEditingTargetHours(false)}>Cancel</Button>
-              {targetHoursError && <span className="text-xs text-red-500 ml-2">{targetHoursError}</span>}
-            </form>
-          )}
-        </div>
-      </div>
+      
 
       {/* Reporting Dialogs */}
       {(reportingMessage || reportingFile) && (

@@ -29,7 +29,11 @@ class GroupSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def get_member_count(self, obj):
-        return obj.members.count()
+        # Count members + 1 if creator is not in members
+        count = obj.members.count()
+        if obj.creator and not obj.members.filter(id=obj.creator.id).exists():
+            count += 1
+        return count
     
     def get_joined(self, obj):
         request = self.context.get('request')
@@ -70,7 +74,11 @@ class GroupDetailSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def get_member_count(self, obj):
-        return obj.members.count()
+        # Count members + 1 if creator is not in members
+        count = obj.members.count()
+        if obj.creator and not obj.members.filter(id=obj.creator.id).exists():
+            count += 1
+        return count
     
     def get_joined(self, obj):
         request = self.context.get('request')
