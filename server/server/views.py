@@ -40,7 +40,8 @@ import uuid
 import logging
 from rest_framework.permissions import IsAdminUser
 from uuid import UUID
-logger = logging.getLogger(__name__)
+from django.views.decorators.cache import cache_page
+from django.utils.decorators import method_decorator
 
 User = get_user_model()
 
@@ -482,6 +483,8 @@ class LogoutView(APIView):
         # This endpoint can be used to invalidate tokens if needed
         return Response({'detail': 'Logged out successfully'}, status=status.HTTP_200_OK)
 
+# Apply caching to group list view (GET only)
+@method_decorator(cache_page(60), name='dispatch')
 class GroupListCreateView(generics.ListCreateAPIView):
     serializer_class = GroupSerializer
 
@@ -563,76 +566,8 @@ class GroupListCreateView(generics.ListCreateAPIView):
         
         serializer.save(creator=self.request.user)
 
-class GroupRetrieveView(generics.RetrieveAPIView):
-    queryset = Group.objects.all()
-    serializer_class = GroupDetailSerializer
-
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context['request'] = self.request
-        return context
-    
-    def get(self, request, *args, **kwargs):
-        # Clean up past sessions when viewing a group
-        cleanup_past_sessions()
-        
-        # Get the group
-        group = self.get_object()
-        
-        # Find similar groups
-        similar_groups_data = find_similar_groups(group, limit=3)
-        
-        # Serialize the main group
-        serializer = self.get_serializer(group)
-        data = serializer.data
-        
-        # Add similar groups to the response
-        similar_groups_serialized = []
-        for similar_data in similar_groups_data:
-            similar_group = similar_data['group']
-            similar_serializer = GroupSerializer(similar_group)
-            similar_groups_serialized.append({
-                'group': similar_serializer.data,
-                'similarity_score': similar_data['score'],
-                'matching_factors': similar_data['factors']
-            })
-        
-        data['similar_groups'] = similar_groups_serialized
-
-        # Add progress bar data
-        from datetime import datetime, timedelta
-        sessions = group.sessions.all()
-        total_seconds = 0
-        for session in sessions:
-            # Calculate duration in seconds
-            start = datetime.combine(session.date, session.start_time)
-            end = datetime.combine(session.date, session.end_time)
-            duration = (end - start).total_seconds()
-            if duration > 0:
-                total_seconds += duration
-        total_hours = round(total_seconds / 3600, 2)
-        target_hours = group.target_hours or 1
-        progress_percentage = min(100, round((total_hours / target_hours) * 100, 2)) if target_hours else 0
-        data['total_study_hours'] = total_hours
-        data['progress_percentage'] = progress_percentage
-        data['target_hours'] = target_hours
-        return Response(data)
-
-class JoinGroupView(APIView):
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request, group_id):
-        try:
-            group = Group.objects.get(id=group_id)
-            if group.creator == request.user:
-                return Response({'detail': 'You cannot join a group you created'}, status=status.HTTP_400_BAD_REQUEST)
-            if request.user in group.members.all():
-                return Response({'detail': 'You are already a member of this group'}, status=status.HTTP_400_BAD_REQUEST)
-            group.members.add(request.user)
-            return Response({'detail': 'Successfully joined the group'}, status=status.HTTP_200_OK)
-        except Group.DoesNotExist:
-            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
-
+# Apply caching to user profile view (GET only)
+@method_decorator(cache_page(60), name='dispatch')
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1323,15 +1258,14 @@ class GroupRatingView(APIView):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@cache_page(60)
 def group_recommendations(request):
     """Get personalized group recommendations for the user"""
     user = request.user
-    
     # Get all groups the user hasn't joined or created
     user_groups = set()
     user_groups.update(user.joined_groups.values_list('id', flat=True))
-    user_groups.add(user.created_groups.values_list('id', flat=True))
-    
+    user_groups.update(user.created_groups.values_list('id', flat=True))
     # Get all available groups excluding user's groups
     available_groups = Group.objects.exclude(id__in=user_groups)
     
@@ -2128,3 +2062,75 @@ def reset_password(request):
         return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# Apply caching to group detail view (GET only)
+@method_decorator(cache_page(60), name='dispatch')
+class GroupRetrieveView(generics.RetrieveAPIView):
+    queryset = Group.objects.all()
+    serializer_class = GroupDetailSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
+    def get(self, request, *args, **kwargs):
+        # Clean up past sessions when viewing a group
+        cleanup_past_sessions()
+        
+        # Get the group
+        group = self.get_object()
+        
+        # Find similar groups
+        similar_groups_data = find_similar_groups(group, limit=3)
+        
+        # Serialize the main group
+        serializer = self.get_serializer(group)
+        data = serializer.data
+        
+        # Add similar groups to the response
+        similar_groups_serialized = []
+        for similar_data in similar_groups_data:
+            similar_group = similar_data['group']
+            similar_serializer = GroupSerializer(similar_group)
+            similar_groups_serialized.append({
+                'group': similar_serializer.data,
+                'similarity_score': similar_data['score'],
+                'matching_factors': similar_data['factors']
+            })
+        
+        data['similar_groups'] = similar_groups_serialized
+
+        # Add progress bar data
+        from datetime import datetime, timedelta
+        sessions = group.sessions.all()
+        total_seconds = 0
+        for session in sessions:
+            # Calculate duration in seconds
+            start = datetime.combine(session.date, session.start_time)
+            end = datetime.combine(session.date, session.end_time)
+            duration = (end - start).total_seconds()
+            if duration > 0:
+                total_seconds += duration
+        total_hours = round(total_seconds / 3600, 2)
+        target_hours = group.target_hours or 1
+        progress_percentage = min(100, round((total_hours / target_hours) * 100, 2)) if target_hours else 0
+        data['total_study_hours'] = total_hours
+        data['progress_percentage'] = progress_percentage
+        data['target_hours'] = target_hours
+        return Response(data)
+
+class JoinGroupView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, group_id):
+        try:
+            group = Group.objects.get(id=group_id)
+            if group.creator == request.user:
+                return Response({'detail': 'You cannot join a group you created'}, status=status.HTTP_400_BAD_REQUEST)
+            if request.user in group.members.all():
+                return Response({'detail': 'You are already a member of this group'}, status=status.HTTP_400_BAD_REQUEST)
+            group.members.add(request.user)
+            return Response({'detail': 'Successfully joined the group'}, status=status.HTTP_200_OK)
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
