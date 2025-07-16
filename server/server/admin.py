@@ -48,7 +48,7 @@ class MessageAdmin(admin.ModelAdmin):
 
 @admin.register(GroupSession)
 class GroupSessionAdmin(admin.ModelAdmin):
-    list_display = ('group', 'creator', 'date', 'time', 'location', 'created_at')
+    list_display = ('group', 'creator', 'date', 'start_time', 'end_time', 'location', 'created_at')
     list_filter = ('date', 'created_at', 'group')
     search_fields = ('location', 'description', 'group__group_name', 'creator__name')
     readonly_fields = ('created_at', 'updated_at')

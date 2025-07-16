@@ -67,6 +67,18 @@ class EmailVerificationToken(models.Model):
     class Meta:
         app_label = 'server'
 
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_tokens')
+    token = models.UUIDField(default=uuid.uuid4, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Password reset token for {self.user.email}"
+
+    class Meta:
+        app_label = 'server'
+
 class Group(models.Model):
     group_name = models.CharField(max_length=255)
     subject_code = models.CharField(max_length=50)
@@ -83,6 +95,7 @@ class Group(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_groups', null=True, blank=True)
     members = models.ManyToManyField(User, related_name='joined_groups', blank=True)
+    target_hours = models.PositiveIntegerField(default=10)  # Renamed from target_study_hours
 
     def __str__(self):
         return self.group_name
@@ -126,14 +139,15 @@ class GroupSession(models.Model):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='sessions')
     creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_sessions')
     date = models.DateField()
-    time = models.TimeField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
     location = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Session for {self.group.group_name} on {self.date} at {self.time}"
+        return f"Session for {self.group.group_name} on {self.date} from {self.start_time} to {self.end_time}"
 
 class GroupFile(models.Model):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='files')

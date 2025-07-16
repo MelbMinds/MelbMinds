@@ -20,6 +20,7 @@ from django.contrib import admin
 from django.urls import path
 from . import views
 from rest_framework_simplejwt.views import TokenRefreshView
+from .views import request_password_reset, reset_password
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -53,4 +54,9 @@ urlpatterns = [
     path('api/reports/', views.reports, name='reports'),
     path('api/popular-subjects/', views.popular_subjects, name='popular_subjects'),
     path('api/groups/messages/<int:message_id>/', views.message_detail, name='message_detail'),
+]
+
+urlpatterns += [
+    path('api/auth/request-password-reset/', request_password_reset, name='request_password_reset'),
+    path('api/auth/reset-password/', reset_password, name='reset_password'),
 ]

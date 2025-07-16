@@ -44,7 +44,14 @@ import { toast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
 import { StarRating } from "@/components/ui/star-rating"
 import { PopupAlert } from "@/components/ui/popup-alert"
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { Progress } from "@/components/ui/progress"
+
+// Helper function to check if a time string is on a quarter-hour mark
+function isQuarterHour(timeStr: string) {
+  if (!timeStr) return false;
+  const [h, m, s] = timeStr.split(':').map(Number);
+  return [0, 15, 30, 45].includes(m) && (!s || s === 0);
+}
 
 export default function StudyGroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -59,7 +66,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   // Add state for sessions
   const [sessions, setSessions] = useState<any[]>([])
-  const [sessionForm, setSessionForm] = useState({ date: '', time: '', location: '', description: '' })
+  const [sessionForm, setSessionForm] = useState({ date: '', start_hour: '', start_minute: '', end_hour: '', end_minute: '', location: '', description: '' })
   const [editingSession, setEditingSession] = useState<any>(null)
   const [sessionLoading, setSessionLoading] = useState(false)
 
@@ -97,11 +104,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   const [editingFolder, setEditingFolder] = useState<any>(null)
 
-  const [reportingMessage, setReportingMessage] = useState<any>(null)
-  const [reportingFile, setReportingFile] = useState<any>(null)
-  const [reportReason, setReportReason] = useState("")
-  const [reportSubmitting, setReportSubmitting] = useState(false)
-  const [deleteLoading, setDeleteLoading] = useState<number | null>(null)
+  // Add state for editing target hours
+  const [editingTargetHours, setEditingTargetHours] = useState(false)
+  const [targetHoursInput, setTargetHoursInput] = useState(group?.target_study_hours || 10)
+  const [targetHoursError, setTargetHoursError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -614,14 +620,33 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleSessionFormChange = (e: any) => {
     setSessionForm({ ...sessionForm, [e.target.name]: e.target.value })
   }
-  const handleCreateSession = async (e: any) => {
-    e.preventDefault()
-    setSessionLoading(true)
-    let { date, time, location, description } = sessionForm
-    // Ensure time is in HH:MM:SS format
-    if (time && time.length === 5) time = time + ':00'
-    const payload = { date, time, location, description }
-    console.log('Session creation payload:', payload)
+  const handleCreateSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSessionError("");
+    const { date, start_hour, start_minute, end_hour, end_minute, location, description } = sessionForm;
+    if (!date || !start_hour || !start_minute || !end_hour || !end_minute) {
+      setSessionError("Please fill in all required fields.");
+      return;
+    }
+    // Combine hour and minute into 'HH:MM:00' format
+    const start_time = `${start_hour}:${start_minute}:00`;
+    const end_time = `${end_hour}:${end_minute}:00`;
+    // Frontend validation for quarter-hour and order
+    if (!isQuarterHour(start_time) || !isQuarterHour(end_time)) {
+      setSessionError('Start and end times must be on a quarter-hour mark (:00, :15, :30, :45).');
+      return;
+    }
+    if (end_time <= start_time) {
+      setSessionError('End time must be after start time.');
+      return;
+    }
+    const payload = {
+      date,
+      start_time,
+      end_time,
+      location,
+      description,
+    };
     const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
       method: 'POST',
       headers: {
@@ -629,20 +654,18 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
       },
       body: JSON.stringify(payload)
-    })
-    setSessionLoading(false)
+    });
+    setSessionLoading(false);
     if (res.ok) {
-      setSessionForm({ date: '', time: '', location: '', description: '' })
+      setSessionForm({ date: '', start_time: '', end_time: '', location: '', description: '' });
       fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
         .then(res => res.json())
-        .then(setSessions)
-      toast({ title: 'Session created!' })
+        .then(setSessions);
+      toast({ title: 'Session created!' });
     } else {
-      const err = await res.json()
-      console.error('Session creation error:', err)
-      // Find the first string error in the response
+      const err = await res.json();
       let errorMsg = err?.error || err?.detail || null;
       if (!errorMsg && typeof err === 'object') {
         for (const key in err) {
@@ -656,42 +679,58 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           }
         }
       }
-      setSessionError(errorMsg || 'Error creating session')
+      setSessionError(errorMsg || 'Error creating session');
     }
   }
   const handleEditSession = (session: any) => {
     setEditingSession(session)
     setSessionForm({
       date: session.date,
-      time: session.time,
+      start_time: session.start_time,
+      end_time: session.end_time,
       location: session.location,
       description: session.description || ''
     })
   }
-  const handleUpdateSession = async (e: any) => {
-    e.preventDefault()
-    setSessionLoading(true)
+  const handleUpdateSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSessionError("");
+    const { date, start_hour, start_minute, end_hour, end_minute, location, description } = sessionForm;
+    if (!date || !start_hour || !start_minute || !end_hour || !end_minute) {
+      setSessionError("Please fill in all required fields.");
+      return;
+    }
+    // Combine hour and minute into 'HH:MM:00' format
+    const start_time = `${start_hour}:${start_minute}:00`;
+    const end_time = `${end_hour}:${end_minute}:00`;
+    if (!isQuarterHour(start_time) || !isQuarterHour(end_time)) {
+      setSessionError('Start and end times must be on a quarter-hour mark (:00, :15, :30, :45).');
+      return;
+    }
+    if (end_time <= start_time) {
+      setSessionError('End time must be after start time.');
+      return;
+    }
     const res = await fetch(`http://localhost:8000/api/sessions/${editingSession.id}/`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
       },
-      body: JSON.stringify(sessionForm)
-    })
-    setSessionLoading(false)
+      body: JSON.stringify({ date, start_time, end_time, location, description })
+    });
+    setSessionLoading(false);
     if (res.ok) {
-      setEditingSession(null)
-      setSessionForm({ date: '', time: '', location: '', description: '' })
+      setEditingSession(null);
+      setSessionForm({ date: '', start_time: '', end_time: '', location: '', description: '' });
       fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
         .then(res => res.json())
-        .then(setSessions)
-      toast({ title: 'Session updated!' })
+        .then(setSessions);
+      toast({ title: 'Session updated!' });
     } else {
-      const err = await res.json()
-      // Find the first string error in the response
+      const err = await res.json();
       let errorMsg = err?.error || err?.detail || null;
       if (!errorMsg && typeof err === 'object') {
         for (const key in err) {
@@ -705,7 +744,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           }
         }
       }
-      setSessionError(errorMsg || 'Error updating session')
+      setSessionError(errorMsg || 'Error updating session');
     }
   }
   const handleDeleteSession = async (sessionId: number) => {
@@ -1642,19 +1681,59 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   <TabsContent value="sessions" className="space-y-4">
                     <h3 className="text-lg font-serif font-medium text-deep-blue mb-2">Upcoming Sessions</h3>
                     {isGroupCreator() && (
-                      <form onSubmit={editingSession ? handleUpdateSession : handleCreateSession} className="mb-6 space-y-2 bg-white p-4 rounded-lg shadow">
-                        <div className="flex flex-wrap gap-2">
-                          <input type="date" name="date" value={sessionForm.date} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
-                          <input type="time" name="time" value={sessionForm.time} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
-                          <input type="text" name="location" value={sessionForm.location} onChange={handleSessionFormChange} required placeholder="Location" className="border rounded px-2 py-1" />
-                          <input type="text" name="description" value={sessionForm.description} onChange={handleSessionFormChange} placeholder="Description (optional)" className="border rounded px-2 py-1 flex-1" />
-                          <Button type="submit" className="bg-deep-blue text-white" disabled={sessionLoading}>
-                            {editingSession ? 'Update' : 'Create'}
-                          </Button>
-                          {editingSession && (
-                            <Button type="button" variant="outline" onClick={() => { setEditingSession(null); setSessionForm({ date: '', time: '', location: '', description: '' }) }}>Cancel</Button>
-                          )}
+                      <form onSubmit={editingSession ? handleUpdateSession : handleCreateSession} className="mb-6 space-y-4 bg-white p-4 rounded-lg shadow">
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                          <div>
+                            <Label htmlFor="session-date">Date</Label>
+                            <input type="date" id="session-date" name="date" value={sessionForm.date} onChange={handleSessionFormChange} required className="border rounded px-2 py-1 w-full" />
+                          </div>
+                          <div>
+                            <Label>Start Time</Label>
+                            <div className="flex gap-2">
+                              <select name="start_hour" value={sessionForm.start_hour || ''} onChange={handleSessionFormChange} required className="border rounded px-2 py-1">
+                                <option value="">Hour</option>
+                                {[...Array(24).keys()].map(h => <option key={h} value={h.toString().padStart(2, '0')}>{h.toString().padStart(2, '0')}</option>)}
+                              </select>
+                              <span className="self-center">:</span>
+                              <select name="start_minute" value={sessionForm.start_minute || ''} onChange={handleSessionFormChange} required className="border rounded px-2 py-1">
+                                <option value="">Min</option>
+                                {[0, 15, 30, 45].map(m => <option key={m} value={m.toString().padStart(2, '0')}>{m.toString().padStart(2, '0')}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <Label>End Time</Label>
+                            <div className="flex gap-2">
+                              <select name="end_hour" value={sessionForm.end_hour || ''} onChange={handleSessionFormChange} required className="border rounded px-2 py-1">
+                                <option value="">Hour</option>
+                                {[...Array(24).keys()].map(h => <option key={h} value={h.toString().padStart(2, '0')}>{h.toString().padStart(2, '0')}</option>)}
+                              </select>
+                              <span className="self-center">:</span>
+                              <select name="end_minute" value={sessionForm.end_minute || ''} onChange={handleSessionFormChange} required className="border rounded px-2 py-1">
+                                <option value="">Min</option>
+                                {[0, 15, 30, 45].map(m => <option key={m} value={m.toString().padStart(2, '0')}>{m.toString().padStart(2, '0')}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <Label htmlFor="session-location">Location</Label>
+                            <input type="text" id="session-location" name="location" value={sessionForm.location} onChange={handleSessionFormChange} required placeholder="Location" className="border rounded px-2 py-1 w-full" />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button type="submit" className="bg-deep-blue text-white w-full" disabled={sessionLoading}>
+                              {editingSession ? 'Update' : 'Create'}
+                            </Button>
+                            {editingSession && (
+                              <Button type="button" variant="outline" onClick={() => { setEditingSession(null); setSessionForm({ date: '', start_hour: '', start_minute: '', end_hour: '', end_minute: '', location: '', description: '' }) }}>Cancel</Button>
+                            )}
+                          </div>
                         </div>
+                        <div className="mt-2">
+                          <Label htmlFor="session-description">Description (optional)</Label>
+                          <input type="text" id="session-description" name="description" value={sessionForm.description} onChange={handleSessionFormChange} placeholder="Description (optional)" className="border rounded px-2 py-1 w-full" />
+                        </div>
+                        {/* Validation error display */}
+                        {sessionError && <div className="text-red-500 text-sm mt-2">{sessionError}</div>}
                       </form>
                     )}
                     <div className="space-y-2">
@@ -1662,7 +1741,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       {sessions.map(session => (
                         <div key={session.id} className="flex items-center justify-between bg-white p-3 rounded shadow">
                           <div>
-                            <div className="font-medium text-deep-blue">{format(new Date(session.date + 'T' + session.time), 'eeee, MMM d, yyyy h:mm a')}</div>
+                            <div className="font-medium text-deep-blue">
+                              {format(new Date(session.date + 'T' + session.start_time), 'eeee, MMM d, yyyy h:mm a')} - {format(new Date(session.date + 'T' + session.end_time), 'h:mm a')}
+                            </div>
                             <div className="text-sm text-gray-600">{session.location}</div>
                             {session.description && <div className="text-xs text-gray-500">{session.description}</div>}
                           </div>
@@ -2052,53 +2133,58 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {reportingMessage && (
-        <Dialog open={!!reportingMessage} onOpenChange={open => { if (!open) setReportingMessage(null) }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Report Message</DialogTitle>
-            </DialogHeader>
-            <div className="mb-2">Please provide details for reporting this message:</div>
-            <Textarea
-              value={reportReason}
-              onChange={e => setReportReason(e.target.value)}
-              placeholder="Describe the issue..."
-              rows={3}
-              className="mb-4"
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setReportingMessage(null)} disabled={reportSubmitting}>Cancel</Button>
-              <Button onClick={handleReportSubmit} disabled={reportSubmitting || !reportReason.trim()}>
-                {reportSubmitting ? 'Reporting...' : 'Submit Report'}
-              </Button>
+      {/* Progress Bar and Target Hours Admin Control */}
+      <div className="mb-6">
+        <div className="flex items-center gap-4">
+          <span className="font-medium text-gray-700">Study Progress:</span>
+          <div className="flex-1">
+            <Progress value={group.progress_percentage} className="h-3" />
+            <div className="flex justify-between text-xs text-gray-600 mt-1">
+              <span>{group.total_study_hours} / {group.target_study_hours} hours</span>
+              <span>{group.progress_percentage}%</span>
             </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {(reportingMessage || reportingFile) && (
-        <Dialog open={!!(reportingMessage || reportingFile)} onOpenChange={open => { if (!open) { setReportingMessage(null); setReportingFile(null); setReportReason(""); } }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Report {reportingMessage ? 'Message' : 'File'}</DialogTitle>
-            </DialogHeader>
-            <div className="mb-2">Please provide details for reporting this {reportingMessage ? 'message' : 'file'}:</div>
-            <Textarea
-              value={reportReason}
-              onChange={e => setReportReason(e.target.value)}
-              placeholder="Describe the issue..."
-              rows={3}
-              className="mb-4"
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setReportingMessage(null); setReportingFile(null); setReportReason(""); }} disabled={reportSubmitting}>Cancel</Button>
-              <Button onClick={handleReportSubmit} disabled={reportSubmitting || !reportReason.trim()}>
-                {reportSubmitting ? 'Reporting...' : 'Submit Report'}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+          </div>
+          {isGroupCreator() && !editingTargetHours && (
+            <Button size="sm" variant="outline" onClick={() => { setEditingTargetHours(true); setTargetHoursInput(group.target_study_hours) }}>Edit Target</Button>
+          )}
+          {isGroupCreator() && editingTargetHours && (
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setTargetHoursError(null);
+              if (!Number.isInteger(Number(targetHoursInput)) || Number(targetHoursInput) <= 0) {
+                setTargetHoursError("Target hours must be a positive integer");
+                return;
+              }
+              setLoadingActions(true);
+              try {
+                const res = await fetch(`http://localhost:8000/api/groups/${group.id}/update/`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json', ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` }) },
+                  body: JSON.stringify({ target_study_hours: Number(targetHoursInput) })
+                });
+                if (res.ok) {
+                  const updated = await res.json();
+                  setGroup(updated);
+                  setEditingTargetHours(false);
+                  toast({ title: 'Target hours updated!' });
+                } else {
+                  const data = await res.json();
+                  setTargetHoursError(data.error || 'Failed to update');
+                }
+              } catch {
+                setTargetHoursError('Network error');
+              } finally {
+                setLoadingActions(false);
+              }
+            }} className="flex items-center gap-2">
+              <Input type="number" min={1} value={targetHoursInput} onChange={e => setTargetHoursInput(e.target.value)} className="w-20" />
+              <Button size="sm" type="submit" disabled={loadingActions}>Save</Button>
+              <Button size="sm" variant="ghost" type="button" onClick={() => setEditingTargetHours(false)}>Cancel</Button>
+              {targetHoursError && <span className="text-xs text-red-500 ml-2">{targetHoursError}</span>}
+            </form>
+          )}
+        </div>
+      </div>
 
     </div>
   )

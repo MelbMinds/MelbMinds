@@ -32,13 +32,14 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import Group, Message, GroupSession, GroupFile, CompletedSessionCounter, GroupNotification, GroupRating, EmailVerificationToken
+from .models import Group, Message, GroupSession, GroupFile, CompletedSessionCounter, GroupNotification, GroupRating, EmailVerificationToken, PasswordResetToken
 from .serializers import GroupSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer
 import json
 from datetime import datetime, timedelta
 import uuid
 import logging
 from rest_framework.permissions import IsAdminUser
+from uuid import UUID
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
@@ -50,6 +51,7 @@ def cleanup_past_sessions():
     """
     from django.utils import timezone
     import pytz
+    from datetime import datetime, timedelta
     
     # Get current time in Australia/Sydney timezone
     australia_tz = pytz.timezone('Australia/Sydney')
@@ -63,8 +65,8 @@ def cleanup_past_sessions():
     past_sessions = []
     
     for session in all_sessions:
-        session_time = session.time.replace(microsecond=0)
-        session_seconds = session_time.hour * 3600 + session_time.minute * 60 + session_time.second
+        session_end_time = session.end_time.replace(microsecond=0)
+        session_seconds = session_end_time.hour * 3600 + session_end_time.minute * 60 + session_end_time.second
         # Check if session is in the past
         if session.date < current_date:
             past_sessions.append(session)
@@ -75,9 +77,18 @@ def cleanup_past_sessions():
     
     # Create notifications for each past session before deleting
     for session in past_sessions:
+        # Calculate session duration in hours
+        start_dt = datetime.combine(session.date, session.start_time)
+        end_dt = datetime.combine(session.date, session.end_time)
+        duration_hours = max(0, (end_dt - start_dt).total_seconds() / 3600)
+        # Add duration to group's target_hours (if you want to track progress, otherwise just recalculate dynamically)
+        group = session.group
+        if hasattr(group, 'target_hours') and group.target_hours is not None:
+            group.target_hours = float(group.target_hours) + duration_hours
+            group.save(update_fields=["target_hours"])
         GroupNotification.objects.create(
-            group=session.group,
-            message=f"Session at {session.location} on {session.date} {session.time} just started."
+            group=group,
+            message=f"Session at {session.location} on {session.date} from {session.start_time} to {session.end_time} just ended. {duration_hours:.2f} hours added to group progress."
         )
         # Delete the session
         session.delete()
@@ -587,7 +598,24 @@ class GroupRetrieveView(generics.RetrieveAPIView):
             })
         
         data['similar_groups'] = similar_groups_serialized
-        
+
+        # Add progress bar data
+        from datetime import datetime, timedelta
+        sessions = group.sessions.all()
+        total_seconds = 0
+        for session in sessions:
+            # Calculate duration in seconds
+            start = datetime.combine(session.date, session.start_time)
+            end = datetime.combine(session.date, session.end_time)
+            duration = (end - start).total_seconds()
+            if duration > 0:
+                total_seconds += duration
+        total_hours = round(total_seconds / 3600, 2)
+        target_hours = group.target_hours or 1
+        progress_percentage = min(100, round((total_hours / target_hours) * 100, 2)) if target_hours else 0
+        data['total_study_hours'] = total_hours
+        data['progress_percentage'] = progress_percentage
+        data['target_hours'] = target_hours
         return Response(data)
 
 class JoinGroupView(APIView):
@@ -716,9 +744,9 @@ class GroupSessionListCreateView(APIView):
         now = timezone.now()
         sessions = GroupSession.objects.filter(
             Q(date__gt=now.date()) |
-            Q(date=now.date(), time__gte=now.time()),
+            Q(date=now.date(), end_time__gte=now.time()),
             group=group
-        ).order_by('date', 'time')
+        ).order_by('date', 'start_time')
         serializer = GroupSessionSerializer(sessions, many=True)
         return Response(serializer.data)
 
@@ -740,7 +768,7 @@ class GroupSessionListCreateView(APIView):
             session = serializer.save(group=group, creator=request.user)
             GroupNotification.objects.create(
                 group=group,
-                message=f"New session created at {session.location} on {session.date} {session.time}."
+                message=f"New session created at {session.location} on {session.date} from {session.start_time} to {session.end_time}."
             )
             return Response(serializer.data, status=201)
         return Response(serializer.errors, status=400)
@@ -825,7 +853,7 @@ def stats_summary(request):
     active_students = User.objects.count()
     active_sessions = GroupSession.objects.filter(
         Q(date__gt=now.date()) |
-        Q(date=now.date(), time__gte=now.time())
+        Q(date=now.date(), end_time__gte=now.time())
     ).count()
     subject_areas = Group.objects.values('subject_code').distinct().count()
     new_groups_today = Group.objects.filter(created_at__date=now.date()).count()
@@ -864,7 +892,7 @@ def trigger_cleanup(request):
 @permission_classes([AllowAny])
 def create_test_session(request):
     """Create a test session in the past (for testing cleanup)"""
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, time as dtime
     from .models import User, Group
     
     # Get or create test user and group
@@ -896,13 +924,16 @@ def create_test_session(request):
     )
     
     # Create a session from 2 hours ago (today but past time)
-    past_time = datetime.now() - timedelta(hours=2)
+    now = datetime.now()
+    past_start = (now - timedelta(hours=2)).replace(second=0, microsecond=0)
+    past_end = (now - timedelta(hours=1)).replace(second=0, microsecond=0)
     
     session = GroupSession.objects.create(
         group=group,
         creator=user,
-        date=past_time.date(),
-        time=past_time.time(),
+        date=past_start.date(),
+        start_time=past_start.time(),
+        end_time=past_end.time(),
         location='Past Test Location',
         description='This session should be deleted by cleanup'
     )
@@ -911,7 +942,8 @@ def create_test_session(request):
         "message": f"Created test session: {session}",
         "session_id": session.id,
         "session_date": session.date,
-        "session_time": session.time
+        "session_start_time": session.start_time,
+        "session_end_time": session.end_time
     })
 
 @api_view(['POST'])
@@ -2016,18 +2048,83 @@ def popular_subjects(request):
     )
     return Response(list(subjects))
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def message_detail(request, message_id):
-    from .models import Message
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def request_password_reset(request):
+    """Request a password reset by email"""
     try:
-        msg = Message.objects.get(id=message_id)
-        return Response({
-            'id': msg.id,
-            'group_id': msg.group.id,
-            'user_id': msg.user.id,
-            'text': msg.text,
-            'timestamp': msg.timestamp,
-        })
-    except Message.DoesNotExist:
-        return Response({'error': 'Message not found'}, status=404)
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        if not email:
+            return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            return Response({'error': 'No user found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
+        # Delete any existing unused tokens for this user
+        PasswordResetToken.objects.filter(user=user, is_used=False).delete()
+        # Create new reset token
+        reset_token = PasswordResetToken.objects.create(user=user)
+        # Send reset email
+        reset_url = f"http://localhost:3000/reset-password?token={reset_token.token}"
+        email_subject = "MelbMinds Password Reset Request"
+        email_message = f"""
+        <html>
+        <body>
+            <h2>Password Reset Requested</h2>
+            <p>Hello {user.name},</p>
+            <p>We received a request to reset your password for your MelbMinds account.</p>
+            <p>Click the link below to reset your password. This link will expire in 1 hour.</p>
+            <a href='{reset_url}'>Reset My Password</a>
+            <p>If you did not request this, you can ignore this email.</p>
+        </body>
+        </html>
+        """
+        try:
+            send_mail(
+                subject=email_subject,
+                message="Please use an HTML compatible email client to view this message.",
+                from_email="MelbMinds <melbminds@gmail.com>",
+                recipient_list=[email],
+                fail_silently=False,
+                html_message=email_message
+            )
+        except Exception as e:
+            reset_token.delete()
+            return Response({'error': 'Failed to send password reset email. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'message': 'Password reset email sent! Please check your inbox.'}, status=status.HTTP_200_OK)
+    except json.JSONDecodeError:
+        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password(request):
+    """Reset password using token"""
+    try:
+        data = json.loads(request.body)
+        token = data.get('token')
+        new_password = data.get('password')
+        if not token or not new_password:
+            return Response({'error': 'Token and new password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from uuid import UUID
+            token_uuid = UUID(token)
+            reset_token = PasswordResetToken.objects.get(token=token_uuid, is_used=False)
+        except (PasswordResetToken.DoesNotExist, ValueError):
+            return Response({'error': 'Invalid or expired reset token.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if token is expired (1 hour)
+        if reset_token.created_at < timezone.now() - timedelta(hours=1):
+            reset_token.delete()
+            return Response({'error': 'Reset token has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        user = reset_token.user
+        user.set_password(new_password)
+        user.save()
+        reset_token.is_used = True
+        reset_token.save()
+        return Response({'message': 'Password has been reset successfully!'}, status=status.HTTP_200_OK)
+    except json.JSONDecodeError:
+        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

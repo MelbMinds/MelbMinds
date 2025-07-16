@@ -36,6 +36,8 @@ export default function CreateGroupPage() {
   const [error, setError] = useState<string | null>(null)
   const [courseName, setCourseName] = useState("")
   const [popupMessage, setPopupMessage] = useState<string | null>(null)
+  const [targetHours, setTargetHours] = useState(10)
+  const [targetHoursError, setTargetHoursError] = useState<string | null>(null)
 
   const personalityOptions = [
     "Quiet",
@@ -131,7 +133,13 @@ export default function CreateGroupPage() {
     e.preventDefault()
     setIsSubmitting(true)
     setError(null)
+    setTargetHoursError(null)
     try {
+      if (!Number.isInteger(targetHours) || targetHours <= 0) {
+        setTargetHoursError("Target hours must be a positive integer");
+        setIsSubmitting(false);
+        return;
+      }
       const res = await fetch("http://localhost:8000/api/groups/", {
         method: "POST",
         headers: { 
@@ -151,6 +159,7 @@ export default function CreateGroupPage() {
           tags: tags.join(", "),
           group_guidelines: "Respectful, Attendance, Academic Integrity, Moderation", // or collect from checkboxes
           group_personality: personalities.join(", "),
+          target_study_hours: targetHours,
         }),
       })
       if (!res.ok) {
@@ -492,6 +501,27 @@ export default function CreateGroupPage() {
                       ))}
                     </div>
                   )}
+                </CardContent>
+              </Card>
+
+              {/* Target Study Hours */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Target Study Hours</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="targetHours">Target Study Hours *</Label>
+                    <Input
+                      id="targetHours"
+                      type="number"
+                      min={1}
+                      value={targetHours}
+                      onChange={e => setTargetHours(Number(e.target.value))}
+                      required
+                    />
+                    {targetHoursError && <span className="text-xs text-red-500">{targetHoursError}</span>}
+                  </div>
                 </CardContent>
               </Card>
             </div>
