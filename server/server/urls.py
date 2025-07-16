@@ -55,6 +55,7 @@ urlpatterns = [
     path('api/reports/', views.list_reports, name='list_reports'),
     path('api/reports/<int:report_id>/', views.update_report, name='update_report'),
     path('api/popular-subjects/', views.popular_subjects, name='popular_subjects'),
+    path('api/groups/<int:group_id>/notifications/clear/', views.clear_group_notifications, name='clear_group_notifications'),
 ]
 
 urlpatterns += [

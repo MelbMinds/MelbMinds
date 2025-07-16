@@ -168,26 +168,23 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }, [group?.id, joined, tokens])
 
-  useEffect(() => {
+  // Fetch notifications
+  const fetchNotifications = () => {
     if (group?.id && (joined || isGroupCreator())) {
-      const fetchNotifications = () => {
-        setLoadingNotifications(true)
-        fetch(`http://localhost:8000/api/groups/${group.id}/notifications/`, {
-          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
-        })
-          .then(res => res.json())
-          .then(setNotifications)
-          .finally(() => setLoadingNotifications(false))
-      }
-      
-      fetchNotifications()
-      
-      // Refresh notifications every 30 seconds to catch new notifications
-      const interval = setInterval(fetchNotifications, 30000)
-      
-      return () => clearInterval(interval)
+      setLoadingNotifications(true);
+      fetch(`http://localhost:8000/api/groups/${group.id}/notifications/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      })
+        .then(res => res.json())
+        .then(setNotifications)
+        .finally(() => setLoadingNotifications(false));
     }
-  }, [group?.id, joined, tokens])
+  };
+  useEffect(() => {
+    fetchNotifications();
+    // Only run on mount or when group/joined/tokens change
+    // No polling interval
+  }, [group?.id, joined, tokens]);
 
   // Fetch files
   useEffect(() => {
@@ -1114,6 +1111,18 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     </Badge>
                     <span>{group.year_level}</span>
                   </div>
+                  {/* Study Progress Bar */}
+                  <div className="w-full rounded-lg p-0 mb-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-deep-blue text-base">Study Progress</span>
+                      <span className="text-sm text-gray-600">{group.total_study_hours} / {group.target_hours} hours</span>
+                    </div>
+                    <Progress value={group.progress_percentage} className="h-4 rounded-full bg-blue-200" />
+                    <div className="flex justify-end text-xs text-gray-500 mt-1">
+                      <span>{group.progress_percentage}%</span>
+                    </div>
+                  </div>
+                  {/* End Study Progress Bar */}
                   <div className="flex flex-col gap-1">
                     <span className="text-base text-gray-700">Course Code: {group.subject_code}</span>
                     <span className="text-base text-gray-700">Course Name: {group.course_name}</span>
