@@ -67,6 +67,18 @@ class EmailVerificationToken(models.Model):
     class Meta:
         app_label = 'server'
 
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_tokens')
+    token = models.UUIDField(default=uuid.uuid4, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Password reset token for {self.user.email}"
+
+    class Meta:
+        app_label = 'server'
+
 class Group(models.Model):
     group_name = models.CharField(max_length=255)
     subject_code = models.CharField(max_length=50)

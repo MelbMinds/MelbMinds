@@ -32,13 +32,14 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import Group, Message, GroupSession, GroupFile, CompletedSessionCounter, GroupNotification, GroupRating, EmailVerificationToken
+from .models import Group, Message, GroupSession, GroupFile, CompletedSessionCounter, GroupNotification, GroupRating, EmailVerificationToken, PasswordResetToken
 from .serializers import GroupSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer
 import json
 from datetime import datetime, timedelta
 import uuid
 import logging
 from rest_framework.permissions import IsAdminUser
+from uuid import UUID
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
@@ -842,7 +843,7 @@ def stats_summary(request):
     active_students = User.objects.count()
     active_sessions = GroupSession.objects.filter(
         Q(date__gt=now.date()) |
-        Q(date=now.date(), time__gte=now.time())
+        Q(date=now.date(), end_time__gte=now.time())
     ).count()
     subject_areas = Group.objects.values('subject_code').distinct().count()
     new_groups_today = Group.objects.filter(created_at__date=now.date()).count()
@@ -2013,3 +2014,84 @@ def popular_subjects(request):
         .order_by('-group_count')[:5]
     )
     return Response(list(subjects))
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def request_password_reset(request):
+    """Request a password reset by email"""
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        if not email:
+            return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            return Response({'error': 'No user found with this email address.'}, status=status.HTTP_404_NOT_FOUND)
+        # Delete any existing unused tokens for this user
+        PasswordResetToken.objects.filter(user=user, is_used=False).delete()
+        # Create new reset token
+        reset_token = PasswordResetToken.objects.create(user=user)
+        # Send reset email
+        reset_url = f"http://localhost:3000/reset-password?token={reset_token.token}"
+        email_subject = "MelbMinds Password Reset Request"
+        email_message = f"""
+        <html>
+        <body>
+            <h2>Password Reset Requested</h2>
+            <p>Hello {user.name},</p>
+            <p>We received a request to reset your password for your MelbMinds account.</p>
+            <p>Click the link below to reset your password. This link will expire in 1 hour.</p>
+            <a href='{reset_url}'>Reset My Password</a>
+            <p>If you did not request this, you can ignore this email.</p>
+        </body>
+        </html>
+        """
+        try:
+            send_mail(
+                subject=email_subject,
+                message="Please use an HTML compatible email client to view this message.",
+                from_email="MelbMinds <melbminds@gmail.com>",
+                recipient_list=[email],
+                fail_silently=False,
+                html_message=email_message
+            )
+        except Exception as e:
+            reset_token.delete()
+            return Response({'error': 'Failed to send password reset email. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'message': 'Password reset email sent! Please check your inbox.'}, status=status.HTTP_200_OK)
+    except json.JSONDecodeError:
+        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password(request):
+    """Reset password using token"""
+    try:
+        data = json.loads(request.body)
+        token = data.get('token')
+        new_password = data.get('password')
+        if not token or not new_password:
+            return Response({'error': 'Token and new password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from uuid import UUID
+            token_uuid = UUID(token)
+            reset_token = PasswordResetToken.objects.get(token=token_uuid, is_used=False)
+        except (PasswordResetToken.DoesNotExist, ValueError):
+            return Response({'error': 'Invalid or expired reset token.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if token is expired (1 hour)
+        if reset_token.created_at < timezone.now() - timedelta(hours=1):
+            reset_token.delete()
+            return Response({'error': 'Reset token has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        user = reset_token.user
+        user.set_password(new_password)
+        user.save()
+        reset_token.is_used = True
+        reset_token.save()
+        return Response({'message': 'Password has been reset successfully!'}, status=status.HTTP_200_OK)
+    except json.JSONDecodeError:
+        return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
