@@ -52,4 +52,5 @@ urlpatterns = [
     path('api/user-growth/', views.user_growth, name='user_growth'),
     path('api/reports/', views.reports, name='reports'),
     path('api/popular-subjects/', views.popular_subjects, name='popular_subjects'),
+    path('api/groups/messages/<int:message_id>/', views.message_detail, name='message_detail'),
 ]

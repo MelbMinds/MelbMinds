@@ -98,6 +98,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [editingFolder, setEditingFolder] = useState<any>(null)
 
   const [reportingMessage, setReportingMessage] = useState<any>(null)
+  const [reportingFile, setReportingFile] = useState<any>(null)
   const [reportReason, setReportReason] = useState("")
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null)
@@ -887,29 +888,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const handleFileReport = async (file: any) => {
-    if (!window.confirm(`Report "${file.original_filename}"? This will notify administrators.`)) return
-
-    try {
-      const res = await fetch(`http://localhost:8000/api/files/${file.id}/report/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${tokens?.access}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          reason: 'Inappropriate content'
-        })
-      })
-
-      if (res.ok) {
-        toast({ title: 'File reported successfully!' })
-      } else {
-        toast({ title: 'Error reporting file', variant: 'destructive' })
-      }
-    } catch (error) {
-      toast({ title: 'Error reporting file', variant: 'destructive' })
-    }
+  const handleFileReport = (file: any) => {
+    setReportingFile(file)
+    setReportReason("")
   }
 
   const handleToggleFavorite = (fileId: number) => {
@@ -1039,31 +1020,59 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const handleReportMessage = async () => {
-    if (!reportingMessage || !reportReason.trim()) return
-    setReportSubmitting(true)
-    try {
-      const res = await fetch('http://localhost:8000/api/reports/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
-        },
-        body: JSON.stringify({
-          type: 'message',
-          target_id: reportingMessage.id,
-          reason: reportReason.trim(),
+  const handleReportSubmit = async () => {
+    if (reportingMessage && reportReason.trim()) {
+      setReportSubmitting(true)
+      try {
+        const res = await fetch('http://localhost:8000/api/reports/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+          },
+          body: JSON.stringify({
+            type: 'message',
+            target_id: reportingMessage.id,
+            reason: reportReason.trim(),
+          })
         })
-      })
-      if (res.ok) {
-        toast({ title: 'Reported', description: 'Message reported for review.' })
-        setReportingMessage(null)
-        setReportReason("")
-      } else {
-        toast({ title: 'Error', description: 'Could not report message', variant: 'destructive' })
+        if (res.ok) {
+          toast({ title: 'Reported', description: 'Message reported for review.' })
+          setReportingMessage(null)
+          setReportReason("")
+        } else {
+          toast({ title: 'Error', description: 'Could not report message', variant: 'destructive' })
+        }
+      } finally {
+        setReportSubmitting(false)
       }
-    } finally {
-      setReportSubmitting(false)
+    } else if (reportingFile && reportReason.trim()) {
+      setReportSubmitting(true)
+      try {
+        const res = await fetch('http://localhost:8000/api/reports/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+          },
+          body: JSON.stringify({
+            type: 'file',
+            target_id: reportingFile.id,
+            reason: reportReason.trim(),
+          })
+        })
+        if (res.ok) {
+          toast({ title: 'File reported successfully!' })
+          setReportingFile(null)
+          setReportReason("")
+        } else {
+          toast({ title: 'Error reporting file', variant: 'destructive' })
+        }
+      } catch (error) {
+        toast({ title: 'Error reporting file', variant: 'destructive' })
+      } finally {
+        setReportSubmitting(false)
+      }
     }
   }
 
@@ -2059,7 +2068,31 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setReportingMessage(null)} disabled={reportSubmitting}>Cancel</Button>
-              <Button onClick={handleReportMessage} disabled={reportSubmitting || !reportReason.trim()}>
+              <Button onClick={handleReportSubmit} disabled={reportSubmitting || !reportReason.trim()}>
+                {reportSubmitting ? 'Reporting...' : 'Submit Report'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {(reportingMessage || reportingFile) && (
+        <Dialog open={!!(reportingMessage || reportingFile)} onOpenChange={open => { if (!open) { setReportingMessage(null); setReportingFile(null); setReportReason(""); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Report {reportingMessage ? 'Message' : 'File'}</DialogTitle>
+            </DialogHeader>
+            <div className="mb-2">Please provide details for reporting this {reportingMessage ? 'message' : 'file'}:</div>
+            <Textarea
+              value={reportReason}
+              onChange={e => setReportReason(e.target.value)}
+              placeholder="Describe the issue..."
+              rows={3}
+              className="mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setReportingMessage(null); setReportingFile(null); setReportReason(""); }} disabled={reportSubmitting}>Cancel</Button>
+              <Button onClick={handleReportSubmit} disabled={reportSubmitting || !reportReason.trim()}>
                 {reportSubmitting ? 'Reporting...' : 'Submit Report'}
               </Button>
             </div>

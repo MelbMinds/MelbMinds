@@ -1986,6 +1986,7 @@ class ReportSerializer(serializers.ModelSerializer):
         return obj.reporter.email if obj.reporter else 'Anonymous'
 
 @api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
 def reports(request):
     if request.method == 'GET':
         reports = Report.objects.all().order_by('-created_at')
@@ -2014,3 +2015,19 @@ def popular_subjects(request):
         .order_by('-group_count')[:5]
     )
     return Response(list(subjects))
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def message_detail(request, message_id):
+    from .models import Message
+    try:
+        msg = Message.objects.get(id=message_id)
+        return Response({
+            'id': msg.id,
+            'group_id': msg.group.id,
+            'user_id': msg.user.id,
+            'text': msg.text,
+            'timestamp': msg.timestamp,
+        })
+    except Message.DoesNotExist:
+        return Response({'error': 'Message not found'}, status=404)

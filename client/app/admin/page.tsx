@@ -24,6 +24,8 @@ import Link from "next/link"
 import { apiClient } from "@/lib/api"
 import { ChartContainer } from "@/components/ui/chart"
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
+import { useRouter } from 'next/navigation'
+import { useUser } from "@/components/UserContext"
 
 export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -32,6 +34,12 @@ export default function AdminPage() {
   const [userGrowth, setUserGrowth] = useState<any[]>([])
   const [reports, setReports] = useState<any[]>([])
   const [popularSubjects, setPopularSubjects] = useState<any[]>([])
+  const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
+  const [resolveActionText, setResolveActionText] = useState("")
+  const [resolvingReport, setResolvingReport] = useState<any>(null)
+  const router = useRouter();
+  const [jumpLoading, setJumpLoading] = useState<number|null>(null)
+  const { tokens } = useUser();
 
   useEffect(() => {
     apiClient.get("/stats/summary/").then(res => {
@@ -112,6 +120,74 @@ export default function AdminPage() {
   const handleResolveReport = (reportId: number) => {
     // Handle report resolution
     console.log("Resolving report:", reportId)
+  }
+
+  const handleMarkResolved = (report: any) => {
+    setResolvingReport(report)
+    setResolveActionText("")
+    setResolveDialogOpen(true)
+  }
+  const handleSubmitResolve = async () => {
+    if (!resolvingReport || !resolveActionText.trim()) return
+    setReports(prev => prev.map(r => r.id === resolvingReport.id ? { ...r, status: 'resolved', action_taken: resolveActionText } : r))
+    try {
+      await fetch(`http://localhost:8000/api/reports/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...resolvingReport, status: 'resolved', action_taken: resolveActionText })
+      })
+    } catch (e) {}
+    setResolveDialogOpen(false)
+    setResolvingReport(null)
+    setResolveActionText("")
+  }
+  const handleMarkUnresolved = async (report: any) => {
+    setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'open' } : r))
+    try {
+      await fetch(`http://localhost:8000/api/reports/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...report, status: 'open' })
+      })
+    } catch (e) {}
+  }
+  const handleJumpToIssue = async (report: any) => {
+    setJumpLoading(report.id)
+    try {
+      if (report.type === 'file') {
+        // Fetch file info to get group_id
+        const res = await fetch(`http://localhost:8000/api/groups/files/${report.target_id}/`)
+        if (res.ok) {
+          const data = await res.json()
+          const groupId = data.group_id
+          // Navigate to group files tab (assuming tab param or hash)
+          router.push(`/group/${groupId}?tab=files`)
+        } else {
+          alert('Could not find file info')
+        }
+      } else if (report.type === 'message') {
+        // Fetch message info to get group_id
+        const res = await fetch(`http://localhost:8000/api/groups/messages/${report.target_id}/`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+          }
+        })
+        if (res.ok) {
+          const data = await res.json()
+          const groupId = data.group_id
+          // Navigate to group chat
+          router.push(`/group/${groupId}`)
+        } else {
+          alert('Could not find message info')
+        }
+      } else {
+        alert('Jump to issue not supported for this type')
+      }
+    } catch (e) {
+      alert('Error jumping to issue')
+    }
+    setJumpLoading(null)
   }
 
   return (
@@ -237,7 +313,6 @@ export default function AdminPage() {
                       <SelectContent>
                         <SelectItem value="all">All statuses</SelectItem>
                         <SelectItem value="open">Open</SelectItem>
-                        <SelectItem value="investigating">Investigating</SelectItem>
                         <SelectItem value="resolved">Resolved</SelectItem>
                       </SelectContent>
                     </Select>
@@ -249,29 +324,47 @@ export default function AdminPage() {
                   {reports.length === 0 ? (
                     <div className="text-center text-gray-500">No reports found.</div>
                   ) : (
-                    reports.map((report) => (
-                      <div key={report.id} className="border rounded-lg p-4 bg-white">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <div className="flex items-center space-x-2 mb-2">
-                              <h3 className="font-semibold">{report.type.charAt(0).toUpperCase() + report.type.slice(1)} Report (ID {report.target_id})</h3>
-                              <Badge variant="outline" className="text-xs">
-                                {report.type}
-                              </Badge>
+                    reports
+                      .filter((report: any) => statusFilter === 'all' || report.status === statusFilter)
+                      .map((report: any) => (
+                        <div key={report.id} className="border rounded-lg p-4 bg-white">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <div className="flex items-center space-x-2 mb-2">
+                                <h3 className="font-semibold">{report.type.charAt(0).toUpperCase() + report.type.slice(1)} Report (ID {report.target_id})</h3>
+                                <Badge variant="outline" className="text-xs">
+                                  {report.type}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-gray-600">Reported by: {report.reporter_email}</p>
+                              <p className="text-sm text-gray-600">Date: {new Date(report.created_at).toLocaleString()}</p>
                             </div>
-                            <p className="text-sm text-gray-600">Reported by: {report.reporter_email}</p>
-                            <p className="text-sm text-gray-600">Date: {new Date(report.created_at).toLocaleString()}</p>
+                            <div className="flex flex-col items-end space-y-2">
+                              <Badge className={getStatusColor(report.status)} style={{ pointerEvents: 'none' }}>{report.status}</Badge>
+                              <div className="flex gap-2 mt-2">
+                                <Button size="sm" variant="outline" onClick={() => handleJumpToIssue(report)} disabled={jumpLoading === report.id}>
+                                  {jumpLoading === report.id ? 'Loading...' : 'Jump to Issue'}
+                                </Button>
+                                {report.status === 'resolved' ? (
+                                  <Button size="sm" variant="destructive" onClick={() => handleMarkUnresolved(report)}>
+                                    Mark Unresolved
+                                  </Button>
+                                ) : (
+                                  <Button size="sm" variant="default" onClick={() => handleMarkResolved(report)}>
+                                    Mark Resolved
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex space-x-2">
-                            <Badge className={getSeverityColor(report.severity)}>{report.severity}</Badge>
-                            <Badge className={getStatusColor(report.status)}>{report.status}</Badge>
+                          <div className="flex flex-wrap items-center text-sm text-gray-700 mb-4 gap-x-2">
+                            <span><strong>Reason:</strong> {report.reason}</span>
+                            {report.status === 'resolved' && report.action_taken && (
+                              <span className="text-red-700"><strong>Action Taken:</strong> {report.action_taken}</span>
+                            )}
                           </div>
                         </div>
-                        <p className="text-sm text-gray-700 mb-4">
-                          <strong>Reason:</strong> {report.reason}
-                        </p>
-                      </div>
-                    ))
+                      ))
                   )}
                 </div>
               </CardContent>
@@ -352,6 +445,25 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       </div>
+      {resolveDialogOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-2">Mark Report as Resolved</h3>
+            <p className="mb-2 text-sm text-gray-600">Please describe the action taken to resolve this issue:</p>
+            <textarea
+              className="w-full border rounded p-2 mb-4"
+              rows={3}
+              value={resolveActionText}
+              onChange={e => setResolveActionText(e.target.value)}
+              placeholder="Action taken..."
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setResolveDialogOpen(false); setResolvingReport(null); setResolveActionText("") }}>Cancel</Button>
+              <Button onClick={handleSubmitResolve} disabled={!resolveActionText.trim()}>Submit</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
