@@ -3,10 +3,12 @@ from .models import User, Group, Message, GroupSession, GroupFile, GroupRating, 
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
+    is_staff = serializers.BooleanField(read_only=True)
+    is_superuser = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'name', 'email', 'major', 'year_level', 'preferred_study_format', 'languages_spoken', 'bio', 'password']
+        fields = ['id', 'name', 'email', 'major', 'year_level', 'preferred_study_format', 'languages_spoken', 'bio', 'password', 'is_staff', 'is_superuser']
 
     def create(self, validated_data):
         password = validated_data.pop('password')
@@ -29,7 +31,10 @@ class GroupSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def get_member_count(self, obj):
-        return obj.members.count()
+        count = obj.members.count()
+        if obj.creator and obj.creator not in obj.members.all():
+            count += 1
+        return count
     
     def get_joined(self, obj):
         request = self.context.get('request')
@@ -70,7 +75,10 @@ class GroupDetailSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def get_member_count(self, obj):
-        return obj.members.count()
+        count = obj.members.count()
+        if obj.creator and obj.creator not in obj.members.all():
+            count += 1
+        return count
     
     def get_joined(self, obj):
         request = self.context.get('request')

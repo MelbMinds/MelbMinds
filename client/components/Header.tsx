@@ -52,7 +52,7 @@ export default function Header() {
               </DropdownMenu>
             ) : (
               <Link href="/auth">
-                <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-bold px-6 py-2 rounded-lg text-lg ml-2">Sign In</Button>
+                <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif px-4">Sign In</Button>
               </Link>
             )}
           </div>

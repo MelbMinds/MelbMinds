@@ -46,6 +46,7 @@ import { StarRating } from "@/components/ui/star-rating"
 import { PopupAlert } from "@/components/ui/popup-alert"
 import { Progress } from "@/components/ui/progress"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { useRouter } from "next/navigation"
 
 // Helper function to check if a time string is on a quarter-hour mark
 function isQuarterHour(timeStr: string) {
@@ -117,6 +118,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null)
 
+  const isStaff = user?.is_staff || user?.is_superuser;
+  const router = useRouter();
+  const [showSignInPopup, setShowSignInPopup] = useState(false);
+
   useEffect(() => {
     const fetchGroup = async () => {
       setLoading(true)
@@ -146,20 +151,20 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         .then(setMembers)
     }
   }, [group?.id])
-  // Fetch chat messages if joined or is creator
+  // Fetch chat messages if joined, creator, or staff
   useEffect(() => {
-    if (group?.id && (joined || isGroupCreator())) {
+    if (group?.id && (joined || isGroupCreator() || isStaff)) {
       fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
         .then(res => res.json())
         .then(setMessages)
     }
-  }, [group?.id, joined, tokens])
+  }, [group?.id, joined, tokens, isStaff])
 
   // Fetch sessions
   useEffect(() => {
-    if (group?.id && (joined || isGroupCreator())) {
+    if (group?.id && (joined || isGroupCreator() || isStaff)) {
       const fetchSessions = () => {
         fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
@@ -167,19 +172,15 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           .then(res => res.json())
           .then(setSessions)
       }
-      
       fetchSessions()
-      
-      // Refresh sessions every 30 seconds to catch auto-deleted sessions
       const interval = setInterval(fetchSessions, 30000)
-      
       return () => clearInterval(interval)
     }
-  }, [group?.id, joined, tokens])
+  }, [group?.id, joined, tokens, isStaff])
 
   // Fetch notifications
   const fetchNotifications = () => {
-    if (group?.id && (joined || isGroupCreator())) {
+    if (group?.id && (joined || isGroupCreator() || isStaff)) {
       setLoadingNotifications(true);
       fetch(`http://localhost:8000/api/groups/${group.id}/notifications/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
@@ -191,13 +192,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   };
   useEffect(() => {
     fetchNotifications();
-    // Only run on mount or when group/joined/tokens change
-    // No polling interval
-  }, [group?.id, joined, tokens]);
+  }, [group?.id, joined, tokens, isStaff]);
 
   // Fetch files
   useEffect(() => {
-    if (group?.id && (joined || isGroupCreator())) {
+    if (group?.id && (joined || isGroupCreator() || isStaff)) {
       const fetchFiles = () => {
         setLoadingFiles(true)
         fetch(`http://localhost:8000/api/groups/${group.id}/files/`, {
@@ -207,10 +206,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           .then(setFiles)
           .finally(() => setLoadingFiles(false))
       }
-      
       fetchFiles()
     }
-  }, [group?.id, joined, tokens])
+  }, [group?.id, joined, tokens, isStaff])
 
   // Fetch user's rating
   useEffect(() => {
@@ -486,10 +484,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   // Fetch flashcard folders
   useEffect(() => {
-    if (group?.id && (joined || isGroupCreator()) && tokens?.access) {
+    if (group?.id && (joined || isGroupCreator() || isStaff) && tokens?.access) {
       fetchFlashcardFolders()
     }
-  }, [group?.id, joined, tokens])
+  }, [group?.id, joined, tokens, isStaff])
 
   const fetchFlashcardFolders = async () => {
     if (!tokens?.access || !group?.id) return
@@ -1124,6 +1122,17 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  const handleJoinRequestWithAuth = async () => {
+    if (!user) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('showSignInPopup', '1');
+      }
+      router.push("/auth");
+      return;
+    }
+    handleJoinRequest();
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
   if (!group) return null
@@ -1363,7 +1372,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     ) : (
                       <Button 
                         className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif"
-                        onClick={handleJoinRequest}
+                        onClick={handleJoinRequestWithAuth}
                       >
                         <UserPlus className="mr-2 h-4 w-4" />
                         Join Group

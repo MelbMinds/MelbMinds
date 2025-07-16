@@ -683,7 +683,7 @@ class GroupChatView(APIView):
 
     def get(self, request, group_id):
         group = Group.objects.get(id=group_id)
-        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
             return Response({'detail': 'Not a group member'}, status=403)
         messages = Message.objects.filter(group=group).order_by('timestamp')
         serializer = MessageSerializer(messages, many=True)
@@ -691,7 +691,7 @@ class GroupChatView(APIView):
 
     def post(self, request, group_id):
         group = Group.objects.get(id=group_id)
-        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
             return Response({'detail': 'Not a group member'}, status=403)
         
         # Content moderation for chat messages
@@ -734,7 +734,7 @@ class GroupSessionListCreateView(APIView):
 
     def get(self, request, group_id):
         group = Group.objects.get(id=group_id)
-        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
             return Response({'detail': 'Not a group member'}, status=403)
         
         # Always clean up past sessions on every request
@@ -782,7 +782,7 @@ class GroupSessionRetrieveUpdateDeleteView(APIView):
     def get(self, request, session_id):
         session = self.get_object(session_id)
         group = session.group
-        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
             return Response({'detail': 'Not a group member'}, status=403)
         serializer = GroupSessionSerializer(session)
         return Response(serializer.data)
@@ -817,7 +817,7 @@ class GroupSessionRetrieveUpdateDeleteView(APIView):
 @permission_classes([IsAuthenticated])
 def group_notifications(request, group_id):
     group = Group.objects.get(id=group_id)
-    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
         return Response({'detail': 'Not a group member'}, status=403)
     
     # Clean up past sessions before fetching notifications
@@ -837,7 +837,7 @@ def group_notifications(request, group_id):
 @permission_classes([IsAuthenticated])
 def clear_group_notifications(request, group_id):
     group = Group.objects.get(id=group_id)
-    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
         return Response({'detail': 'Not a group member'}, status=403)
     GroupNotification.objects.filter(group=group).delete()
     return Response({'detail': 'All notifications cleared.'}, status=204)
@@ -1936,7 +1936,7 @@ def file_list(request, group_id):
 @permission_classes([IsAuthenticated])
 def notification_list(request, group_id):
     group = Group.objects.get(id=group_id)
-    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
         return Response({'detail': 'Not a group member'}, status=403)
     # Clean up past sessions before fetching notifications
     cleanup_past_sessions()
@@ -2128,3 +2128,23 @@ def reset_password(request):
         return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def message_detail(request, message_id):
+    from .models import Message
+    try:
+        msg = Message.objects.get(id=message_id)
+        group = msg.group
+        # Allow if member, creator, or staff
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
+            return Response({'detail': 'Not a group member'}, status=403)
+        return Response({
+            'id': msg.id,
+            'group_id': msg.group.id,
+            'user_id': msg.user.id,
+            'text': msg.text,
+            'timestamp': msg.timestamp,
+        })
+    except Message.DoesNotExist:
+        return Response({'error': 'Message not found'}, status=404)
