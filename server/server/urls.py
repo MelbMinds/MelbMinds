@@ -20,7 +20,7 @@ from django.contrib import admin
 from django.urls import path
 from . import views
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import request_password_reset, reset_password
+from .views import request_password_reset, reset_password, GroupListCreateView, UpdateGroupView, GroupSessionRetrieveUpdateDeleteView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -54,7 +54,7 @@ urlpatterns = [
     path('api/reports/', views.reports, name='reports'),
     path('api/popular-subjects/', views.popular_subjects, name='popular_subjects'),
     path('api/groups/<int:group_id>/notifications/clear/', views.clear_group_notifications, name='clear_group_notifications'),
-    path('api/groups/messages/<int:message_id>/', views.message_detail, name='message_detail'),
+    path('api/sessions/<int:session_id>/', GroupSessionRetrieveUpdateDeleteView.as_view(), name='session_detail'),
 ]
 
 urlpatterns += [
