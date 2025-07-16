@@ -44,6 +44,7 @@ from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 def cleanup_past_sessions():
     """
@@ -2101,17 +2102,26 @@ class GroupRetrieveView(generics.RetrieveAPIView):
         
         data['similar_groups'] = similar_groups_serialized
 
-        # Add progress bar data
-        from datetime import datetime, timedelta
+        # Add progress bar data (only count ended sessions)
+        from datetime import datetime
+        import pytz
+        australia_tz = pytz.timezone('Australia/Sydney')
+        now_local = timezone.now().astimezone(australia_tz)
+        current_date = now_local.date()
+        current_time = now_local.time().replace(microsecond=0)
+        current_seconds = current_time.hour * 3600 + current_time.minute * 60 + current_time.second
         sessions = group.sessions.all()
         total_seconds = 0
         for session in sessions:
-            # Calculate duration in seconds
-            start = datetime.combine(session.date, session.start_time)
-            end = datetime.combine(session.date, session.end_time)
-            duration = (end - start).total_seconds()
-            if duration > 0:
-                total_seconds += duration
+            session_end_time = session.end_time.replace(microsecond=0)
+            session_seconds = session_end_time.hour * 3600 + session_end_time.minute * 60 + session_end_time.second
+            # Only count sessions that have ended
+            if session.date < current_date or (session.date == current_date and session_seconds < current_seconds):
+                start = datetime.combine(session.date, session.start_time)
+                end = datetime.combine(session.date, session.end_time)
+                duration = (end - start).total_seconds()
+                if duration > 0:
+                    total_seconds += duration
         total_hours = round(total_seconds / 3600, 2)
         target_hours = group.target_hours or 1
         progress_percentage = min(100, round((total_hours / target_hours) * 100, 2)) if target_hours else 0
