@@ -45,6 +45,7 @@ import { format } from "date-fns"
 import { StarRating } from "@/components/ui/star-rating"
 import { PopupAlert } from "@/components/ui/popup-alert"
 import { Progress } from "@/components/ui/progress"
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 
 // Helper function to check if a time string is on a quarter-hour mark
 function isQuarterHour(timeStr: string) {
@@ -108,6 +109,13 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [editingTargetHours, setEditingTargetHours] = useState(false)
   const [targetHoursInput, setTargetHoursInput] = useState(group?.target_study_hours || 10)
   const [targetHoursError, setTargetHoursError] = useState<string | null>(null)
+
+  // Reporting and deleting state
+  const [reportingMessage, setReportingMessage] = useState<any>(null)
+  const [reportingFile, setReportingFile] = useState<any>(null)
+  const [reportReason, setReportReason] = useState("")
+  const [reportSubmitting, setReportSubmitting] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState<number | null>(null)
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -657,7 +665,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     });
     setSessionLoading(false);
     if (res.ok) {
-      setSessionForm({ date: '', start_time: '', end_time: '', location: '', description: '' });
+      setSessionForm({ date: '', start_hour: '', start_minute: '', end_hour: '', end_minute: '', location: '', description: '' });
       fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
@@ -684,10 +692,14 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   }
   const handleEditSession = (session: any) => {
     setEditingSession(session)
+    const [start_hour, start_minute] = session.start_time.split(":");
+    const [end_hour, end_minute] = session.end_time.split(":");
     setSessionForm({
       date: session.date,
-      start_time: session.start_time,
-      end_time: session.end_time,
+      start_hour: start_hour || '',
+      start_minute: start_minute || '',
+      end_hour: end_hour || '',
+      end_minute: end_minute || '',
       location: session.location,
       description: session.description || ''
     })
@@ -722,7 +734,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     setSessionLoading(false);
     if (res.ok) {
       setEditingSession(null);
-      setSessionForm({ date: '', start_time: '', end_time: '', location: '', description: '' });
+      setSessionForm({ date: '', start_hour: '', start_minute: '', end_hour: '', end_minute: '', location: '', description: '' });
       fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
@@ -2185,6 +2197,31 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
       </div>
+
+      {/* Reporting Dialogs */}
+      {(reportingMessage || reportingFile) && (
+        <Dialog open={!!(reportingMessage || reportingFile)} onOpenChange={open => { if (!open) { setReportingMessage(null); setReportingFile(null); setReportReason(""); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Report {reportingMessage ? 'Message' : 'File'}</DialogTitle>
+            </DialogHeader>
+            <div className="mb-2">Please provide details for reporting this {reportingMessage ? 'message' : 'file'}:</div>
+            <Textarea
+              value={reportReason}
+              onChange={e => setReportReason(e.target.value)}
+              placeholder="Describe the issue..."
+              rows={3}
+              className="mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setReportingMessage(null); setReportingFile(null); setReportReason(""); }} disabled={reportSubmitting}>Cancel</Button>
+              <Button onClick={handleReportSubmit} disabled={reportSubmitting || !reportReason.trim()}>
+                {reportSubmitting ? 'Reporting...' : 'Submit Report'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
     </div>
   )
