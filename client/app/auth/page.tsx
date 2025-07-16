@@ -35,11 +35,10 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined' && localStorage.getItem('showSignInPopup')) {
-      toast({ title: 'Sign in first', variant: 'destructive' });
+      toast({ title: "Let's sign in first!", variant: 'grey' });
       localStorage.removeItem('showSignInPopup');
     }
-    // Manual toast test
-    toast({ title: 'Test Toast', description: 'If you see this, toasts are working!', variant: 'destructive' });
+    // Manual toast test removed
   }, []);
 
   const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Masters", "PhD"]
