@@ -65,7 +65,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   // Add state for sessions
   const [sessions, setSessions] = useState<any[]>([])
-  const [sessionForm, setSessionForm] = useState({ date: '', start_time: '', end_time: '', location: '', description: '' })
+  const [sessionForm, setSessionForm] = useState({ date: '', start_hour: '', start_minute: '', end_hour: '', end_minute: '', location: '', description: '' })
   const [editingSession, setEditingSession] = useState<any>(null)
   const [sessionLoading, setSessionLoading] = useState(false)
 
@@ -619,26 +619,33 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleSessionFormChange = (e: any) => {
     setSessionForm({ ...sessionForm, [e.target.name]: e.target.value })
   }
-  const handleCreateSession = async (e: any) => {
+  const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSessionLoading(true);
-    setSessionError(null);
-    let { date, start_time, end_time, location, description } = sessionForm;
-    // Ensure start_time and end_time are in HH:MM:SS format
-    if (start_time && start_time.length === 5) start_time = start_time + ':00';
-    if (end_time && end_time.length === 5) end_time = end_time + ':00';
+    setSessionError("");
+    const { date, start_hour, start_minute, end_hour, end_minute, location, description } = sessionForm;
+    if (!date || !start_hour || !start_minute || !end_hour || !end_minute) {
+      setSessionError("Please fill in all required fields.");
+      return;
+    }
+    // Combine hour and minute into 'HH:MM:00' format
+    const start_time = `${start_hour}:${start_minute}:00`;
+    const end_time = `${end_hour}:${end_minute}:00`;
     // Frontend validation for quarter-hour and order
     if (!isQuarterHour(start_time) || !isQuarterHour(end_time)) {
       setSessionError('Start and end times must be on a quarter-hour mark (:00, :15, :30, :45).');
-      setSessionLoading(false);
       return;
     }
     if (end_time <= start_time) {
       setSessionError('End time must be after start time.');
-      setSessionLoading(false);
       return;
     }
-    const payload = { date, start_time, end_time, location, description };
+    const payload = {
+      date,
+      start_time,
+      end_time,
+      location,
+      description,
+    };
     const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
       method: 'POST',
       headers: {
@@ -684,21 +691,23 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       description: session.description || ''
     })
   }
-  const handleUpdateSession = async (e: any) => {
+  const handleUpdateSession = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSessionLoading(true);
-    setSessionError(null);
-    let { date, start_time, end_time, location, description } = sessionForm;
-    if (start_time && start_time.length === 5) start_time = start_time + ':00';
-    if (end_time && end_time.length === 5) end_time = end_time + ':00';
+    setSessionError("");
+    const { date, start_hour, start_minute, end_hour, end_minute, location, description } = sessionForm;
+    if (!date || !start_hour || !start_minute || !end_hour || !end_minute) {
+      setSessionError("Please fill in all required fields.");
+      return;
+    }
+    // Combine hour and minute into 'HH:MM:00' format
+    const start_time = `${start_hour}:${start_minute}:00`;
+    const end_time = `${end_hour}:${end_minute}:00`;
     if (!isQuarterHour(start_time) || !isQuarterHour(end_time)) {
       setSessionError('Start and end times must be on a quarter-hour mark (:00, :15, :30, :45).');
-      setSessionLoading(false);
       return;
     }
     if (end_time <= start_time) {
       setSessionError('End time must be after start time.');
-      setSessionLoading(false);
       return;
     }
     const res = await fetch(`http://localhost:8000/api/sessions/${editingSession.id}/`, {
@@ -1597,20 +1606,59 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   <TabsContent value="sessions" className="space-y-4">
                     <h3 className="text-lg font-serif font-medium text-deep-blue mb-2">Upcoming Sessions</h3>
                     {isGroupCreator() && (
-                      <form onSubmit={editingSession ? handleUpdateSession : handleCreateSession} className="mb-6 space-y-2 bg-white p-4 rounded-lg shadow">
-                        <div className="flex flex-wrap gap-2">
-                          <input type="date" name="date" value={sessionForm.date} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
-                          <input type="time" name="start_time" step="900" value={sessionForm.start_time} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
-                          <input type="time" name="end_time" step="900" value={sessionForm.end_time} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
-                          <input type="text" name="location" value={sessionForm.location} onChange={handleSessionFormChange} required placeholder="Location" className="border rounded px-2 py-1" />
-                          <input type="text" name="description" value={sessionForm.description} onChange={handleSessionFormChange} placeholder="Description (optional)" className="border rounded px-2 py-1 flex-1" />
-                          <Button type="submit" className="bg-deep-blue text-white" disabled={sessionLoading}>
-                            {editingSession ? 'Update' : 'Create'}
-                          </Button>
-                          {editingSession && (
-                            <Button type="button" variant="outline" onClick={() => { setEditingSession(null); setSessionForm({ date: '', start_time: '', end_time: '', location: '', description: '' }) }}>Cancel</Button>
-                          )}
+                      <form onSubmit={editingSession ? handleUpdateSession : handleCreateSession} className="mb-6 space-y-4 bg-white p-4 rounded-lg shadow">
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                          <div>
+                            <Label htmlFor="session-date">Date</Label>
+                            <input type="date" id="session-date" name="date" value={sessionForm.date} onChange={handleSessionFormChange} required className="border rounded px-2 py-1 w-full" />
+                          </div>
+                          <div>
+                            <Label>Start Time</Label>
+                            <div className="flex gap-2">
+                              <select name="start_hour" value={sessionForm.start_hour || ''} onChange={handleSessionFormChange} required className="border rounded px-2 py-1">
+                                <option value="">Hour</option>
+                                {[...Array(24).keys()].map(h => <option key={h} value={h.toString().padStart(2, '0')}>{h.toString().padStart(2, '0')}</option>)}
+                              </select>
+                              <span className="self-center">:</span>
+                              <select name="start_minute" value={sessionForm.start_minute || ''} onChange={handleSessionFormChange} required className="border rounded px-2 py-1">
+                                <option value="">Min</option>
+                                {[0, 15, 30, 45].map(m => <option key={m} value={m.toString().padStart(2, '0')}>{m.toString().padStart(2, '0')}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <Label>End Time</Label>
+                            <div className="flex gap-2">
+                              <select name="end_hour" value={sessionForm.end_hour || ''} onChange={handleSessionFormChange} required className="border rounded px-2 py-1">
+                                <option value="">Hour</option>
+                                {[...Array(24).keys()].map(h => <option key={h} value={h.toString().padStart(2, '0')}>{h.toString().padStart(2, '0')}</option>)}
+                              </select>
+                              <span className="self-center">:</span>
+                              <select name="end_minute" value={sessionForm.end_minute || ''} onChange={handleSessionFormChange} required className="border rounded px-2 py-1">
+                                <option value="">Min</option>
+                                {[0, 15, 30, 45].map(m => <option key={m} value={m.toString().padStart(2, '0')}>{m.toString().padStart(2, '0')}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <Label htmlFor="session-location">Location</Label>
+                            <input type="text" id="session-location" name="location" value={sessionForm.location} onChange={handleSessionFormChange} required placeholder="Location" className="border rounded px-2 py-1 w-full" />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button type="submit" className="bg-deep-blue text-white w-full" disabled={sessionLoading}>
+                              {editingSession ? 'Update' : 'Create'}
+                            </Button>
+                            {editingSession && (
+                              <Button type="button" variant="outline" onClick={() => { setEditingSession(null); setSessionForm({ date: '', start_hour: '', start_minute: '', end_hour: '', end_minute: '', location: '', description: '' }) }}>Cancel</Button>
+                            )}
+                          </div>
                         </div>
+                        <div className="mt-2">
+                          <Label htmlFor="session-description">Description (optional)</Label>
+                          <input type="text" id="session-description" name="description" value={sessionForm.description} onChange={handleSessionFormChange} placeholder="Description (optional)" className="border rounded px-2 py-1 w-full" />
+                        </div>
+                        {/* Validation error display */}
+                        {sessionError && <div className="text-red-500 text-sm mt-2">{sessionError}</div>}
                       </form>
                     )}
                     <div className="space-y-2">

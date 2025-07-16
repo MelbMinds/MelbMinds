@@ -139,7 +139,6 @@ class GroupSession(models.Model):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='sessions')
     creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_sessions')
     date = models.DateField()
-    # Deprecated: time = models.TimeField()
     start_time = models.TimeField()
     end_time = models.TimeField()
     location = models.CharField(max_length=255)

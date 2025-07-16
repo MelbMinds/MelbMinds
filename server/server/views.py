@@ -51,6 +51,7 @@ def cleanup_past_sessions():
     """
     from django.utils import timezone
     import pytz
+    from datetime import datetime, timedelta
     
     # Get current time in Australia/Sydney timezone
     australia_tz = pytz.timezone('Australia/Sydney')
@@ -76,9 +77,18 @@ def cleanup_past_sessions():
     
     # Create notifications for each past session before deleting
     for session in past_sessions:
+        # Calculate session duration in hours
+        start_dt = datetime.combine(session.date, session.start_time)
+        end_dt = datetime.combine(session.date, session.end_time)
+        duration_hours = max(0, (end_dt - start_dt).total_seconds() / 3600)
+        # Add duration to group's target_hours (if you want to track progress, otherwise just recalculate dynamically)
+        group = session.group
+        if hasattr(group, 'target_hours') and group.target_hours is not None:
+            group.target_hours = float(group.target_hours) + duration_hours
+            group.save(update_fields=["target_hours"])
         GroupNotification.objects.create(
-            group=session.group,
-            message=f"Session at {session.location} on {session.date} from {session.start_time} to {session.end_time} just started."
+            group=group,
+            message=f"Session at {session.location} on {session.date} from {session.start_time} to {session.end_time} just ended. {duration_hours:.2f} hours added to group progress."
         )
         # Delete the session
         session.delete()
