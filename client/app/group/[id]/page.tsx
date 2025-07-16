@@ -43,6 +43,14 @@ import { toast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
 import { StarRating } from "@/components/ui/star-rating"
 import { PopupAlert } from "@/components/ui/popup-alert"
+import { Progress } from "@/components/ui/progress"
+
+// Helper function to check if a time string is on a quarter-hour mark
+function isQuarterHour(timeStr: string) {
+  if (!timeStr) return false;
+  const [h, m, s] = timeStr.split(':').map(Number);
+  return [0, 15, 30, 45].includes(m) && (!s || s === 0);
+}
 
 export default function StudyGroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -57,7 +65,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   // Add state for sessions
   const [sessions, setSessions] = useState<any[]>([])
-  const [sessionForm, setSessionForm] = useState({ date: '', time: '', location: '', description: '' })
+  const [sessionForm, setSessionForm] = useState({ date: '', start_time: '', end_time: '', location: '', description: '' })
   const [editingSession, setEditingSession] = useState<any>(null)
   const [sessionLoading, setSessionLoading] = useState(false)
 
@@ -94,6 +102,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [sessionError, setSessionError] = useState<string | null>(null)
 
   const [editingFolder, setEditingFolder] = useState<any>(null)
+
+  // Add state for editing target hours
+  const [editingTargetHours, setEditingTargetHours] = useState(false)
+  const [targetHoursInput, setTargetHoursInput] = useState(group?.target_study_hours || 10)
+  const [targetHoursError, setTargetHoursError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -607,13 +620,25 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     setSessionForm({ ...sessionForm, [e.target.name]: e.target.value })
   }
   const handleCreateSession = async (e: any) => {
-    e.preventDefault()
-    setSessionLoading(true)
-    let { date, time, location, description } = sessionForm
-    // Ensure time is in HH:MM:SS format
-    if (time && time.length === 5) time = time + ':00'
-    const payload = { date, time, location, description }
-    console.log('Session creation payload:', payload)
+    e.preventDefault();
+    setSessionLoading(true);
+    setSessionError(null);
+    let { date, start_time, end_time, location, description } = sessionForm;
+    // Ensure start_time and end_time are in HH:MM:SS format
+    if (start_time && start_time.length === 5) start_time = start_time + ':00';
+    if (end_time && end_time.length === 5) end_time = end_time + ':00';
+    // Frontend validation for quarter-hour and order
+    if (!isQuarterHour(start_time) || !isQuarterHour(end_time)) {
+      setSessionError('Start and end times must be on a quarter-hour mark (:00, :15, :30, :45).');
+      setSessionLoading(false);
+      return;
+    }
+    if (end_time <= start_time) {
+      setSessionError('End time must be after start time.');
+      setSessionLoading(false);
+      return;
+    }
+    const payload = { date, start_time, end_time, location, description };
     const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
       method: 'POST',
       headers: {
@@ -621,20 +646,18 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
       },
       body: JSON.stringify(payload)
-    })
-    setSessionLoading(false)
+    });
+    setSessionLoading(false);
     if (res.ok) {
-      setSessionForm({ date: '', time: '', location: '', description: '' })
+      setSessionForm({ date: '', start_time: '', end_time: '', location: '', description: '' });
       fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
         .then(res => res.json())
-        .then(setSessions)
-      toast({ title: 'Session created!' })
+        .then(setSessions);
+      toast({ title: 'Session created!' });
     } else {
-      const err = await res.json()
-      console.error('Session creation error:', err)
-      // Find the first string error in the response
+      const err = await res.json();
       let errorMsg = err?.error || err?.detail || null;
       if (!errorMsg && typeof err === 'object') {
         for (const key in err) {
@@ -648,42 +671,56 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           }
         }
       }
-      setSessionError(errorMsg || 'Error creating session')
+      setSessionError(errorMsg || 'Error creating session');
     }
   }
   const handleEditSession = (session: any) => {
     setEditingSession(session)
     setSessionForm({
       date: session.date,
-      time: session.time,
+      start_time: session.start_time,
+      end_time: session.end_time,
       location: session.location,
       description: session.description || ''
     })
   }
   const handleUpdateSession = async (e: any) => {
-    e.preventDefault()
-    setSessionLoading(true)
+    e.preventDefault();
+    setSessionLoading(true);
+    setSessionError(null);
+    let { date, start_time, end_time, location, description } = sessionForm;
+    if (start_time && start_time.length === 5) start_time = start_time + ':00';
+    if (end_time && end_time.length === 5) end_time = end_time + ':00';
+    if (!isQuarterHour(start_time) || !isQuarterHour(end_time)) {
+      setSessionError('Start and end times must be on a quarter-hour mark (:00, :15, :30, :45).');
+      setSessionLoading(false);
+      return;
+    }
+    if (end_time <= start_time) {
+      setSessionError('End time must be after start time.');
+      setSessionLoading(false);
+      return;
+    }
     const res = await fetch(`http://localhost:8000/api/sessions/${editingSession.id}/`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
       },
-      body: JSON.stringify(sessionForm)
-    })
-    setSessionLoading(false)
+      body: JSON.stringify({ date, start_time, end_time, location, description })
+    });
+    setSessionLoading(false);
     if (res.ok) {
-      setEditingSession(null)
-      setSessionForm({ date: '', time: '', location: '', description: '' })
+      setEditingSession(null);
+      setSessionForm({ date: '', start_time: '', end_time: '', location: '', description: '' });
       fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
         .then(res => res.json())
-        .then(setSessions)
-      toast({ title: 'Session updated!' })
+        .then(setSessions);
+      toast({ title: 'Session updated!' });
     } else {
-      const err = await res.json()
-      // Find the first string error in the response
+      const err = await res.json();
       let errorMsg = err?.error || err?.detail || null;
       if (!errorMsg && typeof err === 'object') {
         for (const key in err) {
@@ -697,7 +734,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           }
         }
       }
-      setSessionError(errorMsg || 'Error updating session')
+      setSessionError(errorMsg || 'Error updating session');
     }
   }
   const handleDeleteSession = async (sessionId: number) => {
@@ -1563,14 +1600,15 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       <form onSubmit={editingSession ? handleUpdateSession : handleCreateSession} className="mb-6 space-y-2 bg-white p-4 rounded-lg shadow">
                         <div className="flex flex-wrap gap-2">
                           <input type="date" name="date" value={sessionForm.date} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
-                          <input type="time" name="time" value={sessionForm.time} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
+                          <input type="time" name="start_time" step="900" value={sessionForm.start_time} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
+                          <input type="time" name="end_time" step="900" value={sessionForm.end_time} onChange={handleSessionFormChange} required className="border rounded px-2 py-1" />
                           <input type="text" name="location" value={sessionForm.location} onChange={handleSessionFormChange} required placeholder="Location" className="border rounded px-2 py-1" />
                           <input type="text" name="description" value={sessionForm.description} onChange={handleSessionFormChange} placeholder="Description (optional)" className="border rounded px-2 py-1 flex-1" />
                           <Button type="submit" className="bg-deep-blue text-white" disabled={sessionLoading}>
                             {editingSession ? 'Update' : 'Create'}
                           </Button>
                           {editingSession && (
-                            <Button type="button" variant="outline" onClick={() => { setEditingSession(null); setSessionForm({ date: '', time: '', location: '', description: '' }) }}>Cancel</Button>
+                            <Button type="button" variant="outline" onClick={() => { setEditingSession(null); setSessionForm({ date: '', start_time: '', end_time: '', location: '', description: '' }) }}>Cancel</Button>
                           )}
                         </div>
                       </form>
@@ -1580,7 +1618,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       {sessions.map(session => (
                         <div key={session.id} className="flex items-center justify-between bg-white p-3 rounded shadow">
                           <div>
-                            <div className="font-medium text-deep-blue">{format(new Date(session.date + 'T' + session.time), 'eeee, MMM d, yyyy h:mm a')}</div>
+                            <div className="font-medium text-deep-blue">
+                              {format(new Date(session.date + 'T' + session.start_time), 'eeee, MMM d, yyyy h:mm a')} - {format(new Date(session.date + 'T' + session.end_time), 'h:mm a')}
+                            </div>
                             <div className="text-sm text-gray-600">{session.location}</div>
                             {session.description && <div className="text-xs text-gray-500">{session.description}</div>}
                           </div>
@@ -1970,6 +2010,58 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      {/* Progress Bar and Target Hours Admin Control */}
+      <div className="mb-6">
+        <div className="flex items-center gap-4">
+          <span className="font-medium text-gray-700">Study Progress:</span>
+          <div className="flex-1">
+            <Progress value={group.progress_percentage} className="h-3" />
+            <div className="flex justify-between text-xs text-gray-600 mt-1">
+              <span>{group.total_study_hours} / {group.target_study_hours} hours</span>
+              <span>{group.progress_percentage}%</span>
+            </div>
+          </div>
+          {isGroupCreator() && !editingTargetHours && (
+            <Button size="sm" variant="outline" onClick={() => { setEditingTargetHours(true); setTargetHoursInput(group.target_study_hours) }}>Edit Target</Button>
+          )}
+          {isGroupCreator() && editingTargetHours && (
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setTargetHoursError(null);
+              if (!Number.isInteger(Number(targetHoursInput)) || Number(targetHoursInput) <= 0) {
+                setTargetHoursError("Target hours must be a positive integer");
+                return;
+              }
+              setLoadingActions(true);
+              try {
+                const res = await fetch(`http://localhost:8000/api/groups/${group.id}/update/`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json', ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` }) },
+                  body: JSON.stringify({ target_study_hours: Number(targetHoursInput) })
+                });
+                if (res.ok) {
+                  const updated = await res.json();
+                  setGroup(updated);
+                  setEditingTargetHours(false);
+                  toast({ title: 'Target hours updated!' });
+                } else {
+                  const data = await res.json();
+                  setTargetHoursError(data.error || 'Failed to update');
+                }
+              } catch {
+                setTargetHoursError('Network error');
+              } finally {
+                setLoadingActions(false);
+              }
+            }} className="flex items-center gap-2">
+              <Input type="number" min={1} value={targetHoursInput} onChange={e => setTargetHoursInput(e.target.value)} className="w-20" />
+              <Button size="sm" type="submit" disabled={loadingActions}>Save</Button>
+              <Button size="sm" variant="ghost" type="button" onClick={() => setEditingTargetHours(false)}>Cancel</Button>
+              {targetHoursError && <span className="text-xs text-red-500 ml-2">{targetHoursError}</span>}
+            </form>
+          )}
+        </div>
+      </div>
 
     </div>
   )

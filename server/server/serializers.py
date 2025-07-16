@@ -134,8 +134,37 @@ class GroupSessionSerializer(serializers.ModelSerializer):
     creator_name = serializers.CharField(source='creator.name', read_only=True)
     class Meta:
         model = GroupSession
-        fields = ['id', 'group', 'creator', 'creator_name', 'date', 'time', 'location', 'description', 'created_at', 'updated_at']
-        read_only_fields = ['group', 'creator', 'creator_name', 'created_at', 'updated_at'] 
+        fields = ['id', 'group', 'creator', 'creator_name', 'date', 'start_time', 'end_time', 'location', 'description', 'created_at', 'updated_at']
+        read_only_fields = ['group', 'creator', 'creator_name', 'created_at', 'updated_at']
+
+    def validate(self, data):
+        from datetime import datetime, date, time
+        import pytz
+        # Get date, start_time, end_time from data or instance
+        session_date = data.get('date') or getattr(self.instance, 'date', None)
+        start_time = data.get('start_time') or getattr(self.instance, 'start_time', None)
+        end_time = data.get('end_time') or getattr(self.instance, 'end_time', None)
+
+        # 1. Start time and end time must be provided
+        if not session_date or not start_time or not end_time:
+            raise serializers.ValidationError('Date, start time, and end time are required.')
+
+        # 2. Start time cannot be in the past (if date is today)
+        tz = pytz.timezone('Australia/Sydney')
+        now = datetime.now(tz)
+        if session_date == now.date() and start_time < now.time():
+            raise serializers.ValidationError('Start time cannot be in the past.')
+
+        # 3. End time must be after start time
+        if end_time <= start_time:
+            raise serializers.ValidationError('End time must be after start time.')
+
+        # 4. Both times must be on quarter-hour marks
+        for t, label in [(start_time, 'Start time'), (end_time, 'End time')]:
+            if t.minute not in (0, 15, 30, 45) or (hasattr(t, 'second') and t.second != 0):
+                raise serializers.ValidationError(f'{label} ({t}) must be on a quarter-hour mark (:00, :15, :30, :45).')
+
+        return data
 
 class GroupFileSerializer(serializers.ModelSerializer):
     uploaded_by_name = serializers.CharField(source='uploaded_by.name', read_only=True)

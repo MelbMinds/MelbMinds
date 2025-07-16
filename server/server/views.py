@@ -63,8 +63,8 @@ def cleanup_past_sessions():
     past_sessions = []
     
     for session in all_sessions:
-        session_time = session.time.replace(microsecond=0)
-        session_seconds = session_time.hour * 3600 + session_time.minute * 60 + session_time.second
+        session_end_time = session.end_time.replace(microsecond=0)
+        session_seconds = session_end_time.hour * 3600 + session_end_time.minute * 60 + session_end_time.second
         # Check if session is in the past
         if session.date < current_date:
             past_sessions.append(session)
@@ -77,7 +77,7 @@ def cleanup_past_sessions():
     for session in past_sessions:
         GroupNotification.objects.create(
             group=session.group,
-            message=f"Session at {session.location} on {session.date} {session.time} just started."
+            message=f"Session at {session.location} on {session.date} from {session.start_time} to {session.end_time} just started."
         )
         # Delete the session
         session.delete()
@@ -587,7 +587,24 @@ class GroupRetrieveView(generics.RetrieveAPIView):
             })
         
         data['similar_groups'] = similar_groups_serialized
-        
+
+        # Add progress bar data
+        from datetime import datetime, timedelta
+        sessions = group.sessions.all()
+        total_seconds = 0
+        for session in sessions:
+            # Calculate duration in seconds
+            start = datetime.combine(session.date, session.start_time)
+            end = datetime.combine(session.date, session.end_time)
+            duration = (end - start).total_seconds()
+            if duration > 0:
+                total_seconds += duration
+        total_hours = round(total_seconds / 3600, 2)
+        target_hours = group.target_hours or 1
+        progress_percentage = min(100, round((total_hours / target_hours) * 100, 2)) if target_hours else 0
+        data['total_study_hours'] = total_hours
+        data['progress_percentage'] = progress_percentage
+        data['target_hours'] = target_hours
         return Response(data)
 
 class JoinGroupView(APIView):
@@ -716,9 +733,9 @@ class GroupSessionListCreateView(APIView):
         now = timezone.now()
         sessions = GroupSession.objects.filter(
             Q(date__gt=now.date()) |
-            Q(date=now.date(), time__gte=now.time()),
+            Q(date=now.date(), end_time__gte=now.time()),
             group=group
-        ).order_by('date', 'time')
+        ).order_by('date', 'start_time')
         serializer = GroupSessionSerializer(sessions, many=True)
         return Response(serializer.data)
 
@@ -740,7 +757,7 @@ class GroupSessionListCreateView(APIView):
             session = serializer.save(group=group, creator=request.user)
             GroupNotification.objects.create(
                 group=group,
-                message=f"New session created at {session.location} on {session.date} {session.time}."
+                message=f"New session created at {session.location} on {session.date} from {session.start_time} to {session.end_time}."
             )
             return Response(serializer.data, status=201)
         return Response(serializer.errors, status=400)
@@ -864,7 +881,7 @@ def trigger_cleanup(request):
 @permission_classes([AllowAny])
 def create_test_session(request):
     """Create a test session in the past (for testing cleanup)"""
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, time as dtime
     from .models import User, Group
     
     # Get or create test user and group
@@ -896,13 +913,16 @@ def create_test_session(request):
     )
     
     # Create a session from 2 hours ago (today but past time)
-    past_time = datetime.now() - timedelta(hours=2)
+    now = datetime.now()
+    past_start = (now - timedelta(hours=2)).replace(second=0, microsecond=0)
+    past_end = (now - timedelta(hours=1)).replace(second=0, microsecond=0)
     
     session = GroupSession.objects.create(
         group=group,
         creator=user,
-        date=past_time.date(),
-        time=past_time.time(),
+        date=past_start.date(),
+        start_time=past_start.time(),
+        end_time=past_end.time(),
         location='Past Test Location',
         description='This session should be deleted by cleanup'
     )
@@ -911,7 +931,8 @@ def create_test_session(request):
         "message": f"Created test session: {session}",
         "session_id": session.id,
         "session_date": session.date,
-        "session_time": session.time
+        "session_start_time": session.start_time,
+        "session_end_time": session.end_time
     })
 
 @api_view(['POST'])
