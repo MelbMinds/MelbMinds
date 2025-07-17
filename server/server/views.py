@@ -43,6 +43,7 @@ from uuid import UUID
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
 import threading
+from rest_framework.decorators import action
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -694,17 +695,41 @@ class GroupSessionListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request, group_id):
+        import logging
+        logger = logging.getLogger(__name__)
         group = Group.objects.get(id=group_id)
         if group.creator != request.user:
+            logger.warning(f"User {request.user} is not the creator of group {group_id}.")
             return Response({'detail': 'Only the group creator can create sessions'}, status=403)
         
         # Content moderation for session description
-        description_validation = perspective_moderator.validate_user_input('session description', request.data.get('description', ''))
+        description = request.data.get('description', '')
+        description_validation = perspective_moderator.validate_user_input('session description', description)
         
         if not description_validation['valid']:
+            logger.warning(f"Session description moderation failed: {description_validation['message']}")
             return Response({
                 'error': description_validation['message']
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Restrict sessions to not go past midnight and not allow midnight as a time
+        start_time = request.data.get('start_time')
+        end_time = request.data.get('end_time')
+        if start_time and end_time:
+            from datetime import datetime, time as dtime
+            try:
+                start_dt = datetime.strptime(start_time, '%H:%M:%S').time()
+                end_dt = datetime.strptime(end_time, '%H:%M:%S').time()
+                # Disallow midnight (00:00:00) for either start or end
+                if start_dt == dtime(0, 0, 0) or end_dt == dtime(0, 0, 0):
+                    logger.warning(f"Session creation failed: Start or end time is midnight (00:00:00). Start: {start_time}, End: {end_time}")
+                    return Response({'error': 'Sessions cannot start or end at midnight (00:00). Please choose a time between 00:01 and 23:59.'}, status=status.HTTP_400_BAD_REQUEST)
+                if end_dt <= start_dt:
+                    logger.warning(f"Session creation failed: End time {end_time} is not after start time {start_time}.")
+                    return Response({'error': 'End time must be after start time and sessions cannot go past midnight.'}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                logger.error(f"Time parsing error: {e}")
+                return Response({'error': 'Invalid time format.'}, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = GroupSessionSerializer(data=request.data)
         if serializer.is_valid():
@@ -713,7 +738,10 @@ class GroupSessionListCreateView(APIView):
                 group=group,
                 message=f"New session created at {session.location} on {session.date} from {session.start_time} to {session.end_time}."
             )
+            logger.info(f"Session created successfully for group {group_id} by user {request.user}.")
             return Response(serializer.data, status=201)
+        else:
+            logger.error(f"Session creation failed. Data: {request.data}. Errors: {serializer.errors}")
         return Response(serializer.errors, status=400)
 
 class GroupSessionRetrieveUpdateDeleteView(APIView):
@@ -2159,3 +2187,28 @@ class JoinGroupView(APIView):
             return Response({'detail': 'Successfully joined the group'}, status=status.HTTP_200_OK)
         except Group.DoesNotExist:
             return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def join_session(request, session_id):
+    """Join a group session, add user to attendees, and notify them."""
+    from .models import GroupSession, GroupNotification
+    user = request.user
+    try:
+        session = GroupSession.objects.get(id=session_id)
+        if user in session.attendees.all():
+            return Response({'detail': 'Already joined this session.'}, status=status.HTTP_200_OK)
+        session.attendees.add(user)
+        session.save()
+        # Create notification for the user (dashboard)
+        GroupNotification.objects.create(
+            group=session.group,
+            message=f"You joined a session at {session.location} on {session.date} from {session.start_time} to {session.end_time}."
+        )
+        return Response({
+            'detail': 'Successfully joined the session.',
+            'attendee_count': session.attendees.count(),
+            'attendees': list(session.attendees.values_list('id', flat=True)),
+        }, status=status.HTTP_200_OK)
+    except GroupSession.DoesNotExist:
+        return Response({'detail': 'Session not found.'}, status=status.HTTP_404_NOT_FOUND)

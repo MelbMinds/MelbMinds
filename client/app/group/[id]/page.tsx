@@ -46,6 +46,7 @@ import { StarRating } from "@/components/ui/star-rating"
 import { PopupAlert } from "@/components/ui/popup-alert"
 import { Progress } from "@/components/ui/progress"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from "@/components/ui/select"
 
 // Helper function to check if a time string is on a quarter-hour mark
 function isQuarterHour(timeStr: string) {
@@ -111,6 +112,51 @@ function isEndTimeAfterStartTime(
   const end = new Date(`${date}T${String(end_hour).padStart(2, '0')}:${String(end_minute).padStart(2, '0')}:00`);
   return end > start;
 }
+
+// Define categorized UniMelb locations with emoji headers
+const uniMelbLocations = {
+  '📚 Libraries': [
+    'Baillieu Library',
+    'Law Library',
+    'Giblin Eunson Library',
+    'Brownless Biomedical Library',
+    'Eastern Resource Centre (ERC)',
+    'Architecture Library',
+    'Veterinary Science Library',
+    'Music Library',
+  ],
+  '🏢 Buildings (General Study Spaces)': [
+    'Old Arts Building',
+    'Arts West',
+    'Peter Hall Building',
+    'Alan Gilbert Building',
+    'Sidney Myer Asia Centre',
+    'Elisabeth Murdoch Building',
+    'Melbourne School of Design (MSD)',
+    'Doug McDonell Building',
+    'Biosciences Building',
+    'Glyn Davis Building',
+  ],
+  '☕ Cafes (Popular for Studying)': [
+    'House of Cards Café',
+    'Standing Room Coffee',
+    "Castro's Kiosk",
+    'Seven Seeds (nearby)',
+    'Tsubu Bar',
+    'Dr Dax Kitchen',
+    'Queensberry Pour House',
+    'Stovetop Café',
+  ],
+  '🌿 Outdoor Spaces': [
+    'South Lawn',
+    'University Square',
+    'System Garden',
+    'Concrete Lawns',
+    'Northern Plaza',
+    'Alumni Courtyard',
+    'Student Precinct Outdoor Area',
+  ],
+};
 
 export default function StudyGroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -196,6 +242,49 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   // Add state for optimistic messages
   const [optimisticMessages, setOptimisticMessages] = useState<any[]>([])
 
+  // Add state for new session
+  const [newSession, setNewSession] = useState({
+    topic: '',
+    date: '',
+    startTime: '',
+    endTime: '',
+    type: '',
+    location: '',
+    extraDetails: '',
+    description: '',
+  });
+
+  // Add state for time options
+  const [timeOptions, setTimeOptions] = useState([
+    { value: '09:00', display: '9:00 AM' },
+    { value: '10:00', display: '10:00 AM' },
+    { value: '11:00', display: '11:00 AM' },
+    { value: '12:00', display: '12:00 PM' },
+    { value: '13:00', display: '1:00 PM' },
+    { value: '14:00', display: '2:00 PM' },
+    { value: '15:00', display: '3:00 PM' },
+    { value: '16:00', display: '4:00 PM' },
+    { value: '17:00', display: '5:00 PM' },
+    { value: '18:00', display: '6:00 PM' },
+    { value: '19:00', display: '7:00 PM' },
+    { value: '20:00', display: '8:00 PM' },
+    { value: '21:00', display: '9:00 PM' },
+    { value: '22:00', display: '10:00 PM' },
+    { value: '23:00', display: '11:00 PM' },
+  ]);
+
+  // Add state for show schedule modal
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+
+  // Add state for session creation loading and notification
+  const [creatingSession, setCreatingSession] = useState(false)
+  const [showSessionSuccess, setShowSessionSuccess] = useState(false)
+
+  // Add state for loading join per session
+  const [joiningSessionId, setJoiningSessionId] = useState<number | null>(null);
+
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+
   useEffect(() => {
     const fetchGroup = async () => {
       setLoading(true)
@@ -240,11 +329,13 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     if (activeTab === 'meetups' && group?.id && (joined || isGroupCreator())) {
       const fetchSessions = () => {
+        setSessionsLoading(true);
         fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
         })
           .then(res => res.json())
           .then(setSessions)
+          .finally(() => setSessionsLoading(false));
       }
       fetchSessions()
       const interval = setInterval(fetchSessions, 30000)
@@ -718,34 +809,49 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     setSessionError("");
-    const { date, startTime, endTime, type, location, extraDetails, description } = sessionForm;
+    setCreatingSession(true);
+    const { date, startTime, endTime, location, description = '', topic, extraDetails, type } = sessionForm;
     if (!isEndTimeAfterStartTime(date, startTime, '', endTime, '')) {
       setSessionError("End time must be after start time.");
+      setCreatingSession(false);
       return;
     }
-    if (!date || !startTime || !endTime || !type || !location) {
+    if (!date || !startTime || !endTime || !location || !type) {
       setSessionError("Please fill in all required fields.");
+      setCreatingSession(false);
       return;
     }
-    // Format times for backend
-    const start_time = `${startTime.length === 5 ? startTime : startTime + ':00'}`;
-    const end_time = `${endTime.length === 5 ? endTime : endTime + ':00'}`;
+    // Format times for backend as 'HH:MM:00'
+    const start_time = startTime.length === 5 ? `${startTime}:00` : startTime;
+    const end_time = endTime.length === 5 ? `${endTime}:00` : endTime;
+    // Compose description with topic and extraDetails if present
+    let fullDescription = description || '';
+    if (topic) fullDescription = `Topic: ${topic}\n` + fullDescription;
+    if (extraDetails) fullDescription += `\nDetails: ${extraDetails}`;
     try {
       const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         method: 'POST',
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, start_time, end_time, location, description, extraDetails, type }),
+        body: JSON.stringify({ date, start_time, end_time, location, meeting_format: type, description: fullDescription }),
       });
       if (res.ok) {
         setSessionForm({ topic: '', date: '', startTime: '', endTime: '', type: '', location: '', extraDetails: '', description: '' });
         setShowSessionModal(false);
-        fetchSessions && fetchSessions();
+        setShowSessionSuccess(true);
+        // Refresh sessions after creation
+        fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        })
+          .then(res => res.json())
+          .then(setSessions);
       } else {
         const data = await res.json();
         setSessionError(data.error || data.detail || 'Failed to create session.');
       }
     } catch (err) {
       setSessionError('Failed to create session.');
+    } finally {
+      setCreatingSession(false);
     }
   };
   const handleEditSession = (session: any) => {
@@ -786,7 +892,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         'Content-Type': 'application/json',
         ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
       },
-      body: JSON.stringify({ date, start_time, end_time, location: sessionForm.location, description, extraDetails })
+      body: JSON.stringify({ date, start_time, end_time, location: sessionForm.location, description: sessionForm.description, extraDetails })
     });
     setSessionLoading(false);
     if (res.ok) {
@@ -1192,6 +1298,45 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       }
     }
   }
+
+  // Add a function to join a session
+  const handleJoinSession = async (sessionId: number) => {
+    if (!tokens?.access) return;
+    setJoiningSessionId(sessionId);
+    try {
+      const res = await fetch(`http://localhost:8000/api/sessions/${sessionId}/join/`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${tokens.access}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast({ title: 'Joined session!', description: 'You have joined this session.' });
+        // Refetch sessions from backend to update attendees
+        await fetchSessions();
+      }
+    } catch (e) {
+      // handle error
+    } finally {
+      setJoiningSessionId(null);
+    }
+  };
+
+  // Fetch sessions function
+  const fetchSessions = async () => {
+    if (!group?.id) return;
+    setSessionsLoading(true);
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      });
+      const data = await res.json();
+      setSessions(data);
+    } catch (e) {
+      // handle error
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
@@ -1922,13 +2067,31 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                   <label className="text-sm font-medium text-gray-700">
                                     {sessionForm.type === "Virtual" ? "Virtual Platform" : "Location"} *
                                   </label>
-                                  <Input
-                                    placeholder={sessionForm.type === "Virtual" ? "e.g., Zoom, Microsoft Teams, Google Meet" : "e.g., Doug McDonell Building"}
-                                    value={sessionForm.location || ''}
-                                    onChange={e => setSessionForm({ ...sessionForm, location: e.target.value })}
-                                    className="w-full"
-                                    required
-                                  />
+                                  {sessionForm.type === "In-person" ? (
+                                    <select
+                                      value={sessionForm.location}
+                                      onChange={e => setSessionForm({ ...sessionForm, location: e.target.value })}
+                                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#00264D]"
+                                      required
+                                    >
+                                      <option value="">Select location...</option>
+                                      {Object.entries(uniMelbLocations).map(([category, locations]) => [
+                                        <optgroup key={category} label={category}>
+                                          {locations.map(loc => (
+                                            <option key={loc} value={loc}>{loc}</option>
+                                          ))}
+                                        </optgroup>
+                                      ])}
+                                    </select>
+                                  ) : (
+                                    <Input
+                                      placeholder={sessionForm.type === "Virtual" ? "e.g., Zoom, Microsoft Teams, Google Meet" : "e.g., Doug McDonell Building"}
+                                      value={sessionForm.location || ''}
+                                      onChange={e => setSessionForm({ ...sessionForm, location: e.target.value })}
+                                      className="w-full"
+                                      required
+                                    />
+                                  )}
                                 </div>
                                 {/* Extra Details */}
                                 <div className="space-y-2">
@@ -1991,28 +2154,33 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                     )}
                                   </div>
                                 </div>
+                                {/* Actions */}
+                                <div className="pt-6 border-t border-gray-200 flex justify-end space-x-3">
+                                  <Button variant="outline" type="button" onClick={() => setShowSessionModal(false)} className="bg-transparent">
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    type="submit"
+                                    className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif flex items-center justify-center"
+                                    disabled={
+                                      !sessionForm.topic ||
+                                      !sessionForm.date ||
+                                      !sessionForm.startTime ||
+                                      !sessionForm.endTime ||
+                                      !sessionForm.location ||
+                                      !sessionForm.type ||
+                                      creatingSession
+                                    }
+                                  >
+                                    {creatingSession ? (
+                                      <span className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></span>
+                                    ) : (
+                                      <CalendarPlus className="mr-2 h-4 w-4" />
+                                    )}
+                                    {creatingSession ? 'Creating...' : 'Schedule Session'}
+                                  </Button>
+                                </div>
                               </form>
-                            </div>
-                            {/* Actions */}
-                            <div className="pt-6 border-t border-gray-200 flex justify-end space-x-3">
-                              <Button variant="outline" type="button" onClick={() => setShowSessionModal(false)} className="bg-transparent">
-                                Cancel
-                              </Button>
-                              <Button
-                                type="submit"
-                                className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif"
-                                disabled={
-                                  !sessionForm.topic ||
-                                  !sessionForm.date ||
-                                  !sessionForm.startTime ||
-                                  !sessionForm.endTime ||
-                                  !sessionForm.location ||
-                                  !sessionForm.type
-                                }
-                              >
-                                <CalendarPlus className="mr-2 h-4 w-4" />
-                                Schedule Session
-                              </Button>
                             </div>
                           </DialogContent>
                         </Dialog>
@@ -2020,38 +2188,50 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     </div>
 
                     <div className="space-y-4">
-                      {sessions.length === 0 ? (
+                      {sessionsLoading ? (
+                        <div className="text-gray-500">Loading sessions...</div>
+                      ) : sessions.length === 0 ? (
                         <div className="text-gray-500">No sessions scheduled.</div>
                       ) : (
-                        sessions.map((session, index) => (
-                          <div key={index} className="p-4 bg-white rounded-lg border">
-                            <div className="flex justify-between items-start mb-3">
-                              <div>
-                                <h4 className="font-semibold text-deep-blue text-lg">{session.description || "Study Session"}</h4>
-                                <p className="text-gray-600">
-                                  {format(new Date(session.date + 'T' + session.start_time), 'eeee, MMM d')} • {format(new Date(session.date + 'T' + session.start_time), 'h:mm a')} - {format(new Date(session.date + 'T' + session.end_time), 'h:mm a')}
-                                </p>
+                        sessions.map((session, index) => {
+                          // Debug log
+                          console.log('Session', session.id, 'attendees:', session.attendees, 'user.id:', user && user.id);
+                          const alreadyJoined = Array.isArray(session.attendees) && user && session.attendees.map(Number).includes(Number(user.id));
+                          return (
+                            <div key={index} className="p-4 bg-white rounded-lg border">
+                              <div className="flex justify-between items-start mb-3">
+                                <div>
+                                  <h4 className="font-semibold text-deep-blue text-lg">{session.description || "Study Session"}</h4>
+                                  <p className="text-gray-600">
+                                    {format(new Date(session.date + 'T' + session.start_time), 'eeee, MMM d')} • {format(new Date(session.date + 'T' + session.start_time), 'h:mm a')} - {format(new Date(session.date + 'T' + session.end_time), 'h:mm a')}
+                                  </p>
+                                </div>
+                                <Badge className={getFormatColor(session.meeting_format)}>
+                                  {session.meeting_format}
+                                </Badge>
                               </div>
-                              <Badge
-                                className={getFormatColor(session.meeting_format)}
-                              >
-                                {session.meeting_format}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center text-sm text-gray-600 mb-3">
-                              <MapPin className="mr-2 h-4 w-4" />
-                              {session.location}{session.extraDetails ? `, ${session.extraDetails}` : ""}
-                            </div>
-                            <div className="flex space-x-2">
-                              <Button size="sm" className="bg-deep-blue hover:bg-deep-blue/90 text-white">
-                                Join Session
-                              </Button>
+                              <div className="flex items-center text-sm text-gray-600 mb-3">
+                                <MapPin className="mr-2 h-4 w-4" />
+                                {session.location}{session.extraDetails ? `, ${session.extraDetails}` : ""}
+                              </div>
+                              <div className="flex items-center gap-4 mb-2">
+                                <span className="text-xs text-gray-500">{session.attendee_count || 0} joined</span>
+                              </div>
+                              {/* Only show Join Session button if not already joined and not loading */}
+                              {!alreadyJoined && (
+                                <Button size="sm" className="bg-deep-blue hover:bg-deep-blue/90 text-white" onClick={() => handleJoinSession(session.id)} disabled={joiningSessionId === session.id}>
+                                  {joiningSessionId === session.id ? (
+                                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></span>
+                                  ) : null}
+                                  {joiningSessionId === session.id ? 'Joining...' : 'Join Session'}
+                                </Button>
+                              )}
                               <Button size="sm" variant="outline" className="bg-transparent">
                                 Add to Calendar
                               </Button>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </TabsContent>
@@ -2457,6 +2637,13 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {showSessionSuccess && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-4">
+          <span>Session created!</span>
+          <button onClick={() => setShowSessionSuccess(false)} className="ml-2 text-white hover:text-gray-200 text-xl font-bold">×</button>
+        </div>
       )}
 
     </div>

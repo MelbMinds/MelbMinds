@@ -145,6 +145,7 @@ class GroupSession(models.Model):
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    attendees = models.ManyToManyField(User, related_name='joined_sessions', blank=True)
 
     def __str__(self):
         return f"Session for {self.group.group_name} on {self.date} from {self.start_time} to {self.end_time}"

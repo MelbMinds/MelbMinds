@@ -140,10 +140,18 @@ class MessageSerializer(serializers.ModelSerializer):
 
 class GroupSessionSerializer(serializers.ModelSerializer):
     creator_name = serializers.CharField(source='creator.name', read_only=True)
+    attendee_count = serializers.SerializerMethodField()
+    attendees = serializers.SerializerMethodField()
     class Meta:
         model = GroupSession
-        fields = ['id', 'group', 'creator', 'creator_name', 'date', 'start_time', 'end_time', 'location', 'description', 'created_at', 'updated_at']
-        read_only_fields = ['group', 'creator', 'creator_name', 'created_at', 'updated_at']
+        fields = ['id', 'group', 'creator', 'creator_name', 'date', 'start_time', 'end_time', 'location', 'description', 'created_at', 'updated_at', 'attendee_count', 'attendees']
+        read_only_fields = ['group', 'creator', 'creator_name', 'created_at', 'updated_at', 'attendee_count', 'attendees']
+
+    def get_attendee_count(self, obj):
+        return obj.attendees.count()
+
+    def get_attendees(self, obj):
+        return list(obj.attendees.values_list('id', flat=True))
 
     def validate(self, data):
         from datetime import datetime, date, time
@@ -166,11 +174,6 @@ class GroupSessionSerializer(serializers.ModelSerializer):
         # 3. End time must be after start time
         if end_time <= start_time:
             raise serializers.ValidationError('End time must be after start time.')
-
-        # 4. Both times must be on quarter-hour marks
-        for t, label in [(start_time, 'Start time'), (end_time, 'End time')]:
-            if t.minute not in (0, 15, 30, 45) or (hasattr(t, 'second') and t.second != 0):
-                raise serializers.ValidationError(f'{label} ({t}) must be on a quarter-hour mark (:00, :15, :30, :45).')
 
         return data
 

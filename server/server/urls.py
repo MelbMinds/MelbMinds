@@ -56,6 +56,7 @@ urlpatterns = [
     path('api/popular-subjects/', views.popular_subjects, name='popular_subjects'),
     path('api/groups/<int:group_id>/notifications/clear/', views.clear_group_notifications, name='clear_group_notifications'),
     path('api/sessions/<int:session_id>/', GroupSessionRetrieveUpdateDeleteView.as_view(), name='session_detail'),
+    path('api/sessions/<int:session_id>/join/', views.join_session, name='join_session'),
 ]
 
 urlpatterns += [
