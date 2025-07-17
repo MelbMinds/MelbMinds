@@ -42,6 +42,7 @@ from rest_framework.permissions import IsAdminUser
 from uuid import UUID
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
+import threading
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -496,6 +497,8 @@ class GroupListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = Group.objects.all()
+        # Optimization: prefetch related fields to avoid N+1 queries
+        queryset = queryset.select_related('creator').prefetch_related('members', 'ratings')
         
         # Get filter parameters
         search = self.request.query_params.get('search', '')
@@ -575,7 +578,7 @@ class UserProfileView(APIView):
     def get(self, request):
         user = request.user
         from .serializers import GroupSerializer
-        joined_groups = user.joined_groups.all()
+        joined_groups = user.joined_groups.select_related('creator').prefetch_related('members', 'ratings').all()
         groups_data = GroupSerializer(joined_groups, many=True).data
         serializer = UserProfileSerializer(user)
         data = serializer.data
@@ -629,22 +632,26 @@ class GroupChatView(APIView):
         group = Group.objects.get(id=group_id)
         if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
             return Response({'detail': 'Not a group member'}, status=403)
-        
-        # Content moderation for chat messages
         message_text = request.data.get('text', '')
-        message_check = is_content_clean('message', message_text)
-        
-        if not message_check['valid']:
-            return Response({'error': message_check['message']}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Use original message text (Perspective API blocks instead of sanitizing)
-        data = request.data.copy()
-        
-        serializer = MessageSerializer(data=data)
-        if serializer.is_valid():
-            serializer.save(user=request.user, group=group)
-            return Response(serializer.data, status=201)
-        return Response(serializer.errors, status=400)
+        # Save the message immediately
+        msg = Message.objects.create(group=group, user=request.user, text=message_text)
+        # Moderate in background
+        def moderate_message(msg_id, text):
+            result = is_content_clean('message', text)
+            if not result['valid']:
+                # Option 1: Mark as flagged (add a field to Message if you want)
+                # Option 2: Delete the message (for demo, we'll delete)
+                Message.objects.filter(id=msg_id).delete()
+        threading.Thread(target=moderate_message, args=(msg.id, message_text)).start()
+        return Response({
+            'id': msg.id,
+            'user_id': msg.user.id,
+            'user_name': msg.user.name,
+            'text': msg.text,
+            'timestamp': msg.timestamp,
+            'is_sender': True,
+            'is_group_creator': group.creator == request.user,
+        }, status=201)
 
 class GroupMembersView(APIView):
     def get(self, request, group_id):
@@ -780,6 +787,7 @@ def clear_group_notifications(request, group_id):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@cache_page(60)
 def stats_summary(request):
     # Clean up past sessions before calculating stats
     cleanup_past_sessions()
@@ -1820,6 +1828,12 @@ def message_list(request, group_id):
         if not text:
             return Response({'error': 'Message text required'}, status=400)
         msg = Message.objects.create(group=group, user=user, text=text)
+        # Moderate in background
+        def moderate_message(msg_id, text):
+            result = is_content_clean('message', text)
+            if not result['valid']:
+                Message.objects.filter(id=msg_id).delete()
+        threading.Thread(target=moderate_message, args=(msg.id, text)).start()
         return Response({
             'id': msg.id,
             'user_id': msg.user.id,
@@ -1925,6 +1939,7 @@ def similar_groups(request, group_id):
 
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
+@cache_page(60)
 def user_growth(request):
     from .models import User
     from django.utils import timezone

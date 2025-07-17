@@ -99,7 +99,13 @@ const UNIMELB_LOCATIONS = [
 const SORTED_UNIMELB_LOCATIONS = [...UNIMELB_LOCATIONS].sort((a, b) => a.localeCompare(b));
 
 // Add a helper to compare start and end times
-function isEndTimeAfterStartTime(date, start_hour, start_minute, end_hour, end_minute) {
+function isEndTimeAfterStartTime(
+  date: string,
+  start_hour: string,
+  start_minute: string,
+  end_hour: string,
+  end_minute: string
+) {
   if (!date || start_hour === '' || start_minute === '' || end_hour === '' || end_minute === '') return true;
   const start = new Date(`${date}T${String(start_hour).padStart(2, '0')}:${String(start_minute).padStart(2, '0')}:00`);
   const end = new Date(`${date}T${String(end_hour).padStart(2, '0')}:${String(end_minute).padStart(2, '0')}:00`);
@@ -119,7 +125,16 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   // Add state for sessions
   const [sessions, setSessions] = useState<any[]>([])
-  const [sessionForm, setSessionForm] = useState({ date: '', start_hour: '', start_minute: '', end_hour: '', end_minute: '', location: '', description: '', locationDetails: '' })
+  const [sessionForm, setSessionForm] = useState({
+    topic: '',
+    date: '',
+    startTime: '',
+    endTime: '',
+    type: '',
+    location: '',
+    extraDetails: '',
+    description: '',
+  })
   const [editingSession, setEditingSession] = useState<any>(null)
   const [sessionLoading, setSessionLoading] = useState(false)
 
@@ -172,6 +187,15 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   // Add state for modal
   const [showSessionModal, setShowSessionModal] = useState(false);
 
+  // Add state for sending message
+  const [sendingMessage, setSendingMessage] = useState(false)
+
+  // Add state for active tab
+  const [activeTab, setActiveTab] = useState(joined ? 'chat' : 'members')
+
+  // Add state for optimistic messages
+  const [optimisticMessages, setOptimisticMessages] = useState<any[]>([])
+
   useEffect(() => {
     const fetchGroup = async () => {
       setLoading(true)
@@ -212,9 +236,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }, [group?.id, joined, tokens])
 
-  // Fetch sessions
+  // Fetch sessions only when meetups tab is selected
   useEffect(() => {
-    if (group?.id && (joined || isGroupCreator())) {
+    if (activeTab === 'meetups' && group?.id && (joined || isGroupCreator())) {
       const fetchSessions = () => {
         fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
@@ -222,15 +246,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           .then(res => res.json())
           .then(setSessions)
       }
-      
       fetchSessions()
-      
-      // Refresh sessions every 30 seconds to catch auto-deleted sessions
       const interval = setInterval(fetchSessions, 30000)
-      
       return () => clearInterval(interval)
     }
-  }, [group?.id, joined, tokens])
+  }, [activeTab, group?.id, joined, tokens])
 
   // Fetch notifications
   const fetchNotifications = () => {
@@ -495,40 +515,55 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleSendMessage = async () => {
     if (!chatMessage.trim()) return
     if (!group?.id) return
-    const res = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
-      },
-      body: JSON.stringify({ text: chatMessage })
-    })
-    if (res.ok) {
-      setChatMessage("")
-      // Refresh messages
-      const data = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
-        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
-      }).then(r => r.json())
-      setMessages(data)
-    } else {
-      const data = await res.json()
-      // Find the first string error in the response
-      let errorMsg = data?.error || data?.detail || null;
-      if (!errorMsg && typeof data === 'object') {
-        for (const key in data) {
-          if (typeof data[key] === 'string') {
-            errorMsg = data[key];
-            break;
-          }
-          if (Array.isArray(data[key]) && typeof data[key][0] === 'string') {
-            errorMsg = data[key][0];
-            break;
+    setSendingMessage(true)
+    const tempId = `temp-${Date.now()}`
+    const optimisticMsg = {
+      id: tempId,
+      user_id: user?.id,
+      user_name: user?.name,
+      text: chatMessage,
+      timestamp: new Date().toISOString(),
+      is_sender: true,
+      is_group_creator: isGroupCreator(),
+      optimistic: true
+    }
+    setOptimisticMessages((prev) => [...prev, optimisticMsg])
+    setChatMessage("")
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
+        },
+        body: JSON.stringify({ text: optimisticMsg.text })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setMessages((prev) => [...prev, data])
+        setOptimisticMessages((prev) => prev.filter((msg) => msg.id !== tempId))
+      } else {
+        setOptimisticMessages((prev) => prev.filter((msg) => msg.id !== tempId))
+        const data = await res.json()
+        let errorMsg = data?.error || data?.detail || null;
+        if (!errorMsg && typeof data === 'object') {
+          for (const key in data) {
+            if (typeof data[key] === 'string') {
+              errorMsg = data[key];
+              break;
+            }
+            if (Array.isArray(data[key]) && typeof data[key][0] === 'string') {
+              errorMsg = data[key][0];
+              break;
+            }
           }
         }
+        if (errorMsg) {
+          setChatError(errorMsg)
+        }
       }
-      if (errorMsg) {
-        setChatError(errorMsg)
-      }
+    } finally {
+      setSendingMessage(false)
     }
   }
 
@@ -683,64 +718,60 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     setSessionError("");
-    const { date, start_hour, start_minute, end_hour, end_minute, location, description, locationDetails } = sessionForm;
-    // Frontend validation for time
-    if (!isEndTimeAfterStartTime(date, start_hour, start_minute, end_hour, end_minute)) {
+    const { date, startTime, endTime, type, location, extraDetails, description } = sessionForm;
+    if (!isEndTimeAfterStartTime(date, startTime, '', endTime, '')) {
       setSessionError("End time must be after start time.");
       return;
     }
-    if (!date || !start_hour || !start_minute || !end_hour || !end_minute) {
+    if (!date || !startTime || !endTime || !type || !location) {
       setSessionError("Please fill in all required fields.");
       return;
     }
-    // Ensure correct time format
-    const start_time = `${String(start_hour).padStart(2, '0')}:${String(start_minute).padStart(2, '0')}:00`;
-    const end_time = `${String(end_hour).padStart(2, '0')}:${String(end_minute).padStart(2, '0')}:00`;
+    // Format times for backend
+    const start_time = `${startTime.length === 5 ? startTime : startTime + ':00'}`;
+    const end_time = `${endTime.length === 5 ? endTime : endTime + ':00'}`;
     try {
       const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         method: 'POST',
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, start_time, end_time, location, description, locationDetails })
+        body: JSON.stringify({ date, start_time, end_time, location, description, extraDetails, type }),
       });
       if (res.ok) {
-        setSessionForm({ date: '', start_hour: '', start_minute: '', end_hour: '', end_minute: '', location: '', description: '', locationDetails: '' });
+        setSessionForm({ topic: '', date: '', startTime: '', endTime: '', type: '', location: '', extraDetails: '', description: '' });
         setShowSessionModal(false);
         fetchSessions && fetchSessions();
       } else {
         const data = await res.json();
-        // Only show error inline, not as a global dialog
-        setSessionError(data?.error || data?.detail || 'Failed to create session.');
+        setSessionError(data.error || data.detail || 'Failed to create session.');
       }
     } catch (err) {
-      setSessionError('Network error. Please try again.');
+      setSessionError('Failed to create session.');
     }
   };
   const handleEditSession = (session: any) => {
     setEditingSession(session)
-    const [start_hour, start_minute] = session.start_time.split(":");
-    const [end_hour, end_minute] = session.end_time.split(":");
     setSessionForm({
-      date: session.date,
-      start_hour: start_hour || '',
-      start_minute: start_minute || '',
-      end_hour: end_hour || '',
-      end_minute: end_minute || '',
-      location: session.location,
+      topic: session.topic || '',
+      date: session.date || '',
+      startTime: session.startTime || '',
+      endTime: session.endTime || '',
+      type: session.type || '',
+      location: session.location || '',
+      extraDetails: session.extraDetails || '',
       description: session.description || '',
-      locationDetails: session.locationDetails || '',
     })
   }
   const handleUpdateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     setSessionError("");
-    const { date, start_hour, start_minute, end_hour, end_minute, location, description, locationDetails } = sessionForm;
-    if (!date || !start_hour || !start_minute || !end_hour || !end_minute) {
+    const { date, startTime, endTime, type, extraDetails } = sessionForm;
+    if (!date || !startTime || !endTime || !type || !extraDetails) {
       setSessionError("Please fill in all required fields.");
       return;
     }
     // Combine hour and minute into 'HH:MM:00' format
-    const start_time = `${start_hour}:${start_minute}:00`;
-    const end_time = `${end_hour}:${end_minute}:00`;
+    const start_time = `${startTime}:00:00`;
+    const end_time = `${endTime}:00:00`;
     if (!isQuarterHour(start_time) || !isQuarterHour(end_time)) {
       setSessionError('Start and end times must be on a quarter-hour mark (:00, :15, :30, :45).');
       return;
@@ -755,12 +786,21 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         'Content-Type': 'application/json',
         ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
       },
-      body: JSON.stringify({ date, start_time, end_time, location, description, locationDetails })
+      body: JSON.stringify({ date, start_time, end_time, location: sessionForm.location, description, extraDetails })
     });
     setSessionLoading(false);
     if (res.ok) {
       setEditingSession(null);
-      setSessionForm({ date: '', start_hour: '', start_minute: '', end_hour: '', end_minute: '', location: '', description: '', locationDetails: '' });
+      setSessionForm({
+        topic: '',
+        date: '',
+        startTime: '',
+        endTime: '',
+        type: '',
+        location: '',
+        extraDetails: '',
+        description: '',
+      });
       fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
@@ -1029,7 +1069,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       case 'mp4':
       case 'avi':
       case 'mov':
-        return '🎥'
+        return '��'
       case 'mp3':
       case 'wav':
         return '🎵'
@@ -1452,7 +1492,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
             {/* Tabbed Content */}
             <Card className="shadow-lg border-0">
-              <Tabs defaultValue={joined ? "chat" : "members"} className="w-full">
+              <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue={joined ? "chat" : "members"} className="w-full">
                 <CardHeader>
                   <TabsList className={`grid w-full grid-cols-5`}>
                     <TabsTrigger value="chat" className="flex items-center gap-2">
@@ -1467,9 +1507,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       <Brain className="h-4 w-4" />
                       Flashcards
                     </TabsTrigger>
-                    <TabsTrigger value="sessions" className="flex items-center gap-2">
+                    <TabsTrigger value="meetups" className="flex items-center gap-2">
                       <CalendarIcon className="h-4 w-4" />
-                      Sessions
+                      Meetups
                     </TabsTrigger>
                     <TabsTrigger value="members" className="flex items-center gap-2">
                       <Users className="h-4 w-4" />
@@ -1493,8 +1533,8 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     <TabsContent value="chat" className="space-y-4">
                       <div className="h-96 overflow-y-auto space-y-4 p-4 bg-soft-gray rounded-lg">
                         {Array.isArray(messages) && messages.length > 0 ? (
-                          messages.map((msg: any) => (
-                            <div key={msg.id} className="flex space-x-3 group">
+                          [...messages, ...optimisticMessages].map((msg: any) => (
+                            <div key={msg.id} className={`flex space-x-3 group ${msg.optimistic ? 'opacity-60' : ''}`}>
                               <Avatar className="h-8 w-8">
                                 <AvatarFallback className="bg-deep-blue text-white text-xs">
                                   {msg.user_name?.split(" ").map((n: string) => n[0]).join("")}
@@ -1542,8 +1582,14 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                           onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                           className="flex-1"
                         />
-                        <Button onClick={handleSendMessage} className="bg-deep-blue hover:bg-deep-blue/90 text-white">
-                          <Send className="h-4 w-4" />
+                        <Button onClick={handleSendMessage} className="bg-deep-blue hover:bg-deep-blue/90 text-white" disabled={sendingMessage || !chatMessage.trim()}>
+                          {sendingMessage ? (
+                            <span className="inline-block w-4 h-4 mr-2 align-middle">
+                              <span className="block w-4 h-4 border-2 border-t-2 border-t-white border-white/30 rounded-full animate-spin"></span>
+                            </span>
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )} Send
                         </Button>
                       </div>
                     </TabsContent>
@@ -1783,166 +1829,230 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     </TabsContent>
                   )}
 
-                  {/* Sessions Tab */}
-                  <TabsContent value="sessions" className="space-y-4">
-                    <div className="flex items-center justify-between mb-4">
+                  {/* Meetups Tab */}
+                  <TabsContent value="meetups" className="space-y-4">
+                    <div className="flex justify-between items-center">
                       <h3 className="text-lg font-serif font-medium text-deep-blue">Upcoming Sessions</h3>
                       {isGroupCreator() && (
-                        <Button
-                          className="bg-[#00264D] text-white font-bold rounded-xl px-6 py-2 shadow hover:bg-[#001a33] transition-colors flex items-center gap-2"
-                          onClick={() => setShowSessionModal(true)}
-                        >
-                          <CalendarPlus className="h-5 w-5 mr-1" />
-                          Schedule Session
-                        </Button>
+                        <Dialog open={showSessionModal} onOpenChange={setShowSessionModal}>
+                          <DialogTrigger asChild>
+                            <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
+                              <CalendarPlus className="mr-2 h-4 w-4" />
+                              Schedule Session
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl w-full rounded-xl p-0 bg-white shadow-2xl border border-gray-200 overflow-hidden">
+                            <div className="p-6 border-b border-gray-200">
+                              <div className="flex justify-between items-center">
+                                <DialogTitle className="text-2xl font-serif font-bold text-deep-blue">Schedule New Session</DialogTitle>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setShowSessionModal(false)}
+                                  className="text-gray-500 hover:text-gray-700"
+                                >
+                                  ✕
+                                </Button>
+                              </div>
+                            </div>
+                            {/* Make the form content scrollable if too tall */}
+                            <div className="max-h-[70vh] overflow-y-auto">
+                              <form onSubmit={handleCreateSession} className="p-6 space-y-6">
+                                {/* Session Topic */}
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">Session Topic *</label>
+                                  <Input
+                                    placeholder="e.g., Functions and Modules Review"
+                                    value={sessionForm.topic || ''}
+                                    onChange={e => setSessionForm({ ...sessionForm, topic: e.target.value })}
+                                    className="w-full"
+                                    required
+                                  />
+                                </div>
+                                {/* Date and Time */}
+                                <div className="grid md:grid-cols-3 gap-4">
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Date *</label>
+                                    <Input
+                                      type="date"
+                                      value={sessionForm.date}
+                                      onChange={e => setSessionForm({ ...sessionForm, date: e.target.value })}
+                                      className="w-full"
+                                      required
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">Start Time *</label>
+                                    <Input
+                                      type="time"
+                                      value={sessionForm.startTime || ''}
+                                      onChange={e => setSessionForm({ ...sessionForm, startTime: e.target.value })}
+                                      className="w-full"
+                                      required
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700">End Time *</label>
+                                    <Input
+                                      type="time"
+                                      value={sessionForm.endTime || ''}
+                                      onChange={e => setSessionForm({ ...sessionForm, endTime: e.target.value })}
+                                      className="w-full"
+                                      required
+                                    />
+                                  </div>
+                                </div>
+                                {/* Session Type */}
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">Session Type *</label>
+                                  <select
+                                    value={sessionForm.type || ''}
+                                    onChange={e => setSessionForm({ ...sessionForm, type: e.target.value })}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#00264D]"
+                                    required
+                                  >
+                                    <option value="">Select type...</option>
+                                    <option value="In-person">In-person</option>
+                                    <option value="Virtual">Virtual</option>
+                                    <option value="Hybrid">Hybrid (In-person + Virtual)</option>
+                                  </select>
+                                </div>
+                                {/* Location */}
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">
+                                    {sessionForm.type === "Virtual" ? "Virtual Platform" : "Location"} *
+                                  </label>
+                                  <Input
+                                    placeholder={sessionForm.type === "Virtual" ? "e.g., Zoom, Microsoft Teams, Google Meet" : "e.g., Doug McDonell Building"}
+                                    value={sessionForm.location || ''}
+                                    onChange={e => setSessionForm({ ...sessionForm, location: e.target.value })}
+                                    className="w-full"
+                                    required
+                                  />
+                                </div>
+                                {/* Extra Details */}
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">
+                                    {sessionForm.type === "Virtual" ? "Meeting Details" : "Room & Floor Details"}
+                                  </label>
+                                  <Input
+                                    placeholder={sessionForm.type === "Virtual" ? "e.g., Meeting ID: 123-456-789, Password: study123" : "e.g., Room 234, Level 2, Near the library"}
+                                    value={sessionForm.extraDetails || ''}
+                                    onChange={e => setSessionForm({ ...sessionForm, extraDetails: e.target.value })}
+                                    className="w-full"
+                                  />
+                                </div>
+                                {/* Description */}
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-gray-700">Description (Optional)</label>
+                                  <Textarea
+                                    placeholder="Add any additional information about this session..."
+                                    value={sessionForm.description || ''}
+                                    onChange={e => setSessionForm({ ...sessionForm, description: e.target.value })}
+                                    rows={3}
+                                    className="w-full"
+                                  />
+                                </div>
+                                {/* Preview */}
+                                <div className="p-4 bg-soft-gray rounded-lg border-l-4 border-deep-blue">
+                                  <h4 className="font-medium text-deep-blue mb-2">Session Preview</h4>
+                                  <div className="space-y-1 text-sm text-gray-700">
+                                    {sessionForm.topic && (
+                                      <p>
+                                        <strong>Topic:</strong> {sessionForm.topic}
+                                      </p>
+                                    )}
+                                    {sessionForm.date && sessionForm.startTime && sessionForm.endTime && (
+                                      <p>
+                                        <strong>When:</strong>{' '}
+                                        {new Date(sessionForm.date).toLocaleDateString('en-AU', {
+                                          weekday: 'long',
+                                          year: 'numeric',
+                                          month: 'long',
+                                          day: 'numeric',
+                                        })}
+                                        , {sessionForm.startTime} - {sessionForm.endTime}
+                                      </p>
+                                    )}
+                                    {sessionForm.location && (
+                                      <p>
+                                        <strong>Where:</strong> {sessionForm.location}
+                                      </p>
+                                    )}
+                                    {sessionForm.extraDetails && (
+                                      <p>
+                                        <strong>Details:</strong> {sessionForm.extraDetails}
+                                      </p>
+                                    )}
+                                    {sessionForm.type && (
+                                      <p>
+                                        <strong>Type:</strong> {sessionForm.type}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </form>
+                            </div>
+                            {/* Actions */}
+                            <div className="pt-6 border-t border-gray-200 flex justify-end space-x-3">
+                              <Button variant="outline" type="button" onClick={() => setShowSessionModal(false)} className="bg-transparent">
+                                Cancel
+                              </Button>
+                              <Button
+                                type="submit"
+                                className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif"
+                                disabled={
+                                  !sessionForm.topic ||
+                                  !sessionForm.date ||
+                                  !sessionForm.startTime ||
+                                  !sessionForm.endTime ||
+                                  !sessionForm.location ||
+                                  !sessionForm.type
+                                }
+                              >
+                                <CalendarPlus className="mr-2 h-4 w-4" />
+                                Schedule Session
+                              </Button>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
                       )}
                     </div>
-                    <Dialog open={showSessionModal} onOpenChange={setShowSessionModal}>
-                      <DialogContent className="max-w-lg">
-                        <DialogHeader>
-                          <DialogTitle>Schedule a Study Session</DialogTitle>
-                        </DialogHeader>
-                        <form onSubmit={handleCreateSession} className="flex flex-col gap-4">
-                          <div className="flex flex-col md:flex-row gap-4 items-center">
-                            <div className="flex flex-col">
-                              <Label htmlFor="date" className="font-semibold text-deep-blue mb-1">Date</Label>
-                              <Input
-                                id="date"
-                                name="date"
-                                type="date"
-                                value={sessionForm.date}
-                                onChange={handleSessionFormChange}
-                                required
-                                className="rounded-lg border-gray-300 focus:ring-2 focus:ring-deep-blue min-w-[140px]"
-                              />
-                            </div>
-                            <div className="flex flex-col">
-                              <Label className="font-semibold text-deep-blue mb-1">Start</Label>
-                              <div className="flex gap-1">
-                                <select name="start_hour" value={sessionForm.start_hour} onChange={handleSessionFormChange} required className="rounded-lg border-gray-300 focus:ring-2 focus:ring-deep-blue">
-                                  <option value="">Hr</option>
-                                  {[...Array(24).keys()].map(h => <option key={h} value={h}>{h.toString().padStart(2, '0')}</option>)}
-                                </select>
-                                <span className="text-gray-400">:</span>
-                                <select name="start_minute" value={sessionForm.start_minute} onChange={handleSessionFormChange} required className="rounded-lg border-gray-300 focus:ring-2 focus:ring-deep-blue">
-                                  <option value="">Min</option>
-                                  {[0, 15, 30, 45].map(m => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
-                                </select>
+
+                    <div className="space-y-4">
+                      {sessions.length === 0 ? (
+                        <div className="text-gray-500">No sessions scheduled.</div>
+                      ) : (
+                        sessions.map((session, index) => (
+                          <div key={index} className="p-4 bg-white rounded-lg border">
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <h4 className="font-semibold text-deep-blue text-lg">{session.description || "Study Session"}</h4>
+                                <p className="text-gray-600">
+                                  {format(new Date(session.date + 'T' + session.start_time), 'eeee, MMM d')} • {format(new Date(session.date + 'T' + session.start_time), 'h:mm a')} - {format(new Date(session.date + 'T' + session.end_time), 'h:mm a')}
+                                </p>
                               </div>
-                            </div>
-                            <div className="flex flex-col">
-                              <Label className="font-semibold text-deep-blue mb-1">End</Label>
-                              <div className="flex gap-1">
-                                <select name="end_hour" value={sessionForm.end_hour} onChange={handleSessionFormChange} required className="rounded-lg border-gray-300 focus:ring-2 focus:ring-deep-blue">
-                                  <option value="">Hr</option>
-                                  {[...Array(24).keys()].map(h => <option key={h} value={h}>{h.toString().padStart(2, '0')}</option>)}
-                                </select>
-                                <span className="text-gray-400">:</span>
-                                <select name="end_minute" value={sessionForm.end_minute} onChange={handleSessionFormChange} required className="rounded-lg border-gray-300 focus:ring-2 focus:ring-deep-blue">
-                                  <option value="">Min</option>
-                                  {[0, 15, 30, 45].map(m => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex flex-col md:flex-row gap-4">
-                            <div className="flex flex-col min-w-[180px]">
-                              <Label htmlFor="location" className="font-semibold text-deep-blue mb-1">Location<span className="text-red-500">*</span></Label>
-                              <select
-                                id="location"
-                                name="location"
-                                className="rounded-lg border-gray-300 focus:ring-2 focus:ring-deep-blue py-2 px-3 bg-white"
-                                value={sessionForm.location}
-                                onChange={e => setSessionForm({ ...sessionForm, location: e.target.value })}
-                                required
+                              <Badge
+                                className={getFormatColor(session.meeting_format)}
                               >
-                                <option value="">Select...</option>
-                                {SORTED_UNIMELB_LOCATIONS.map(loc => (
-                                  <option key={loc} value={loc}>{loc}</option>
-                                ))}
-                              </select>
+                                {session.meeting_format}
+                              </Badge>
                             </div>
-                            <div className="flex flex-col min-w-[180px]">
-                              <Label htmlFor="locationDetails" className="font-semibold text-deep-blue mb-1">Extra Details</Label>
-                              <Input
-                                id="locationDetails"
-                                name="locationDetails"
-                                type="text"
-                                placeholder="e.g. Level 3, Room 305"
-                                value={sessionForm.locationDetails || ''}
-                                onChange={e => setSessionForm({ ...sessionForm, locationDetails: e.target.value })}
-                                className="rounded-lg border-gray-300 focus:ring-2 focus:ring-deep-blue"
-                              />
+                            <div className="flex items-center text-sm text-gray-600 mb-3">
+                              <MapPin className="mr-2 h-4 w-4" />
+                              {session.location}{session.extraDetails ? `, ${session.extraDetails}` : ""}
                             </div>
-                          </div>
-                          <div>
-                            <Label htmlFor="description" className="font-semibold text-deep-blue">Description <span className="text-gray-400 font-normal">(optional)</span></Label>
-                            <Textarea
-                              id="description"
-                              name="description"
-                              placeholder="Description (optional)"
-                              value={sessionForm.description}
-                              onChange={handleSessionFormChange}
-                              className="rounded-lg border-gray-300 focus:ring-2 focus:ring-deep-blue mt-1"
-                            />
-                          </div>
-                          {sessionError && <span className="text-red-500 text-sm ml-2">{sessionError}</span>}
-                          <div className="flex justify-end gap-2 mt-2">
-                            <Button
-                              type="submit"
-                              className="bg-[#00264D] text-white font-bold rounded-xl px-6 py-2 shadow hover:bg-[#001a33] transition-colors"
-                            >
-                              Create
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => setShowSessionModal(false)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
-                    <div className="space-y-2">
-                      {sessions.length === 0 && <div className="text-gray-500">No sessions scheduled.</div>}
-                      {sessions.map(session => (
-                        <div key={session.id} className="flex flex-col md:flex-row md:items-center justify-between bg-white p-5 rounded-xl border border-gray-200 shadow-sm mb-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-semibold text-deep-blue text-lg">
-                                {session.description || "Study Session"}
-                              </span>
-                              <span className={`ml-2 px-3 py-1 rounded-full text-xs font-semibold border ${getFormatColor(session.format || session.meeting_format)}`}>{session.format || session.meeting_format}</span>
-                            </div>
-                            <div className="text-gray-700 text-sm mb-1">
-                              {format(new Date(session.date + 'T' + session.start_time), 'eeee, MMM d')} • {format(new Date(session.date + 'T' + session.start_time), 'h:mm a')} - {format(new Date(session.date + 'T' + session.end_time), 'h:mm a')}
-                            </div>
-                            <div className="flex items-center text-gray-600 text-sm mb-1">
-                              <MapPin className="h-4 w-4 mr-1" />
-                              {session.location}{session.locationDetails ? `, ${session.locationDetails}` : ""}
-                            </div>
-                            <div className="flex items-center gap-3 mt-1">
-                              <Users className="h-4 w-4 text-gray-400" />
-                              <span className="text-xs text-gray-500">{session.attendees ? session.attendees.length : 0} joined</span>
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-2 mt-4 md:mt-0 md:ml-6">
-                            {(!joined && !isGroupCreator()) && (
-                              <Button className="bg-[#00264D] text-white font-bold rounded-xl px-6 py-2 shadow hover:bg-[#001a33] transition-colors">
+                            <div className="flex space-x-2">
+                              <Button size="sm" className="bg-deep-blue hover:bg-deep-blue/90 text-white">
                                 Join Session
                               </Button>
-                            )}
-                            {isGroupCreator() && (
-                              <div className="flex gap-2">
-                                <Button size="icon" variant="ghost" onClick={() => handleEditSession(session)}><Edit className="h-4 w-4" /></Button>
-                                <Button size="icon" variant="ghost" onClick={() => handleDeleteSession(session.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
-                              </div>
-                            )}
+                              <Button size="sm" variant="outline" className="bg-transparent">
+                                Add to Calendar
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </TabsContent>
 

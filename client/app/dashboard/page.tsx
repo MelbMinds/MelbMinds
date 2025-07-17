@@ -114,9 +114,9 @@ export default function DashboardPage() {
     if (createdGroups.length || joinedGroups.length) fetchSessions()
   }, [createdGroups, joinedGroups, tokens])
 
-  // Fetch recommendations
+  // Only fetch recommendations after groups are loaded
   useEffect(() => {
-    if (tokens?.access) {
+    if (tokens?.access && !loadingGroups) {
       setLoadingRecommendations(true)
       fetch("http://localhost:8000/api/recommendations/", {
         headers: { "Authorization": `Bearer ${tokens.access}` },
@@ -130,10 +130,10 @@ export default function DashboardPage() {
           setRecommendations([])
           setLoadingRecommendations(false)
         });
-    } else {
+    } else if (!tokens?.access) {
       setLoadingRecommendations(false)
     }
-  }, [tokens]);
+  }, [tokens, loadingGroups]);
 
   const handleLeaveGroup = async (groupId: number, groupName: string) => {
     if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return

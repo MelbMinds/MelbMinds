@@ -20,7 +20,7 @@ from django.contrib import admin
 from django.urls import path
 from . import views
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import request_password_reset, reset_password, GroupListCreateView, UpdateGroupView, GroupSessionRetrieveUpdateDeleteView
+from .views import request_password_reset, reset_password, GroupListCreateView, UpdateGroupView, GroupSessionRetrieveUpdateDeleteView, GroupRatingView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -42,7 +42,7 @@ urlpatterns = [
     path('api/groups/<int:group_id>/notifications/', views.notification_list, name='notification_list'),
     path('api/groups/<int:group_id>/ratings/', views.rating_list, name='rating_list'),
     path('api/groups/<int:group_id>/members/', views.GroupMembersView.as_view(), name='group_members'),
-    path('api/groups/<int:group_id>/rating/', views.GroupRatingView.as_view(), name='group_rating'),
+    path('api/groups/<int:group_id>/rating/', GroupRatingView.as_view(), name='group_rating'),
     path('api/groups/<int:group_id>/join/', views.JoinGroupView.as_view(), name='group_join'),
     path('api/similar-groups/<int:group_id>/', views.similar_groups, name='similar_groups'),
     path('api/recommendations/', views.group_recommendations, name='group_recommendations'),
