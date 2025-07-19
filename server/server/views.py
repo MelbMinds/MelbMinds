@@ -90,7 +90,12 @@ def cleanup_past_sessions():
             group=group,
             message=f"Session at {session.location} on {session.date} from {session.start_time} to {session.end_time} just ended. {duration_hours:.2f} hours added to group progress."
         )
-        # Delete the session
+        # Delete all attendees for this session before deleting the session
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM server_groupsession_attendees WHERE groupsession_id = %s", [session.id]
+            )
         session.delete()
     
     # Update the completed sessions counter
@@ -566,6 +571,7 @@ class GroupListCreateView(generics.ListCreateAPIView):
 class GroupRetrieveView(generics.RetrieveAPIView):
     queryset = Group.objects.all()
     serializer_class = GroupDetailSerializer
+    permission_classes = [AllowAny]
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
