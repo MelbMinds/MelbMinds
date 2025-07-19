@@ -2570,57 +2570,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       )}
 
       {/* Progress Bar and Target Hours Admin Control */}
-      <div className="mb-6">
-        <div className="flex items-center gap-4">
-          <span className="font-medium text-gray-700">Study Progress:</span>
-          <div className="flex-1">
-            <Progress value={group.progress_percentage} className="h-3" />
-            <div className="flex justify-between text-xs text-gray-600 mt-1">
-              <span>{group.total_study_hours} / {group.target_study_hours} hours</span>
-              <span>{group.progress_percentage}%</span>
-            </div>
-          </div>
-          {isGroupCreator() && !editingTargetHours && (
-            <Button size="sm" variant="outline" onClick={() => { setEditingTargetHours(true); setTargetHoursInput(group.target_study_hours) }}>Edit Target</Button>
-          )}
-          {isGroupCreator() && editingTargetHours && (
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              setTargetHoursError(null);
-              if (!Number.isInteger(Number(targetHoursInput)) || Number(targetHoursInput) <= 0) {
-                setTargetHoursError("Target hours must be a positive integer");
-                return;
-              }
-              setLoadingActions(true);
-              try {
-                const res = await fetch(`http://localhost:8000/api/groups/${group.id}/update/`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json', ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` }) },
-                  body: JSON.stringify({ target_study_hours: Number(targetHoursInput) })
-                });
-                if (res.ok) {
-                  const updated = await res.json();
-                  setGroup(updated);
-                  setEditingTargetHours(false);
-                  toastSuccess({ title: 'Target hours updated!' });
-                } else {
-                  const data = await res.json();
-                  setTargetHoursError(data.error || 'Failed to update');
-                }
-              } catch {
-                setTargetHoursError('Network error');
-              } finally {
-                setLoadingActions(false);
-              }
-            }} className="flex items-center gap-2">
-              <Input type="number" min={1} value={targetHoursInput} onChange={e => setTargetHoursInput(e.target.value)} className="w-20" />
-              <Button size="sm" type="submit" disabled={loadingActions}>Save</Button>
-              <Button size="sm" variant="ghost" type="button" onClick={() => setEditingTargetHours(false)}>Cancel</Button>
-              {targetHoursError && <span className="text-xs text-red-500 ml-2">{targetHoursError}</span>}
-            </form>
-          )}
-        </div>
-      </div>
+      
 
       {/* Reporting Dialogs */}
       {(reportingMessage || reportingFile) && (
