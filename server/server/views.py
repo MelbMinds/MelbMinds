@@ -40,9 +40,13 @@ import uuid
 import logging
 from rest_framework.permissions import IsAdminUser
 from uuid import UUID
+from django.views.decorators.cache import cache_page
+from django.utils.decorators import method_decorator
+import threading
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 def cleanup_past_sessions():
     """
@@ -497,6 +501,8 @@ class GroupListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = Group.objects.all()
+        # Optimization: prefetch related fields to avoid N+1 queries
+        queryset = queryset.select_related('creator').prefetch_related('members', 'ratings')
         
         # Get filter parameters
         search = self.request.query_params.get('search', '')
@@ -645,7 +651,7 @@ class UserProfileView(APIView):
     def get(self, request):
         user = request.user
         from .serializers import GroupSerializer
-        joined_groups = user.joined_groups.all()
+        joined_groups = user.joined_groups.select_related('creator').prefetch_related('members', 'ratings').all()
         groups_data = GroupSerializer(joined_groups, many=True).data
         serializer = UserProfileSerializer(user)
         data = serializer.data
@@ -699,22 +705,26 @@ class GroupChatView(APIView):
         group = Group.objects.get(id=group_id)
         if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
             return Response({'detail': 'Not a group member'}, status=403)
-        
-        # Content moderation for chat messages
         message_text = request.data.get('text', '')
-        message_check = is_content_clean('message', message_text)
-        
-        if not message_check['valid']:
-            return Response({'error': message_check['message']}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Use original message text (Perspective API blocks instead of sanitizing)
-        data = request.data.copy()
-        
-        serializer = MessageSerializer(data=data)
-        if serializer.is_valid():
-            serializer.save(user=request.user, group=group)
-            return Response(serializer.data, status=201)
-        return Response(serializer.errors, status=400)
+        # Save the message immediately
+        msg = Message.objects.create(group=group, user=request.user, text=message_text)
+        # Moderate in background
+        def moderate_message(msg_id, text):
+            result = is_content_clean('message', text)
+            if not result['valid']:
+                # Option 1: Mark as flagged (add a field to Message if you want)
+                # Option 2: Delete the message (for demo, we'll delete)
+                Message.objects.filter(id=msg_id).delete()
+        threading.Thread(target=moderate_message, args=(msg.id, message_text)).start()
+        return Response({
+            'id': msg.id,
+            'user_id': msg.user.id,
+            'user_name': msg.user.name,
+            'text': msg.text,
+            'timestamp': msg.timestamp,
+            'is_sender': True,
+            'is_group_creator': group.creator == request.user,
+        }, status=201)
 
 class GroupMembersView(APIView):
     def get(self, request, group_id):
@@ -850,6 +860,7 @@ def clear_group_notifications(request, group_id):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@cache_page(60)
 def stats_summary(request):
     # Clean up past sessions before calculating stats
     cleanup_past_sessions()
@@ -1891,6 +1902,12 @@ def message_list(request, group_id):
         if not text:
             return Response({'error': 'Message text required'}, status=400)
         msg = Message.objects.create(group=group, user=user, text=text)
+        # Moderate in background
+        def moderate_message(msg_id, text):
+            result = is_content_clean('message', text)
+            if not result['valid']:
+                Message.objects.filter(id=msg_id).delete()
+        threading.Thread(target=moderate_message, args=(msg.id, text)).start()
         return Response({
             'id': msg.id,
             'user_id': msg.user.id,
@@ -1996,6 +2013,7 @@ def similar_groups(request, group_id):
 
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
+@cache_page(60)
 def user_growth(request):
     from .models import User
     from django.utils import timezone
@@ -2135,6 +2153,86 @@ def reset_password(request):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# Apply caching to group detail view (GET only)
+@method_decorator(cache_page(60), name='dispatch')
+class GroupRetrieveView(generics.RetrieveAPIView):
+    queryset = Group.objects.all()
+    serializer_class = GroupDetailSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
+    def get(self, request, *args, **kwargs):
+        # Clean up past sessions when viewing a group
+        cleanup_past_sessions()
+        
+        # Get the group
+        group = self.get_object()
+        
+        # Find similar groups
+        similar_groups_data = find_similar_groups(group, limit=3)
+        
+        # Serialize the main group
+        serializer = self.get_serializer(group)
+        data = serializer.data
+        
+        # Add similar groups to the response
+        similar_groups_serialized = []
+        for similar_data in similar_groups_data:
+            similar_group = similar_data['group']
+            similar_serializer = GroupSerializer(similar_group)
+            similar_groups_serialized.append({
+                'group': similar_serializer.data,
+                'similarity_score': similar_data['score'],
+                'matching_factors': similar_data['factors']
+            })
+        
+        data['similar_groups'] = similar_groups_serialized
+
+        # Add progress bar data (only count ended sessions)
+        from datetime import datetime
+        import pytz
+        australia_tz = pytz.timezone('Australia/Sydney')
+        now_local = timezone.now().astimezone(australia_tz)
+        current_date = now_local.date()
+        current_time = now_local.time().replace(microsecond=0)
+        current_seconds = current_time.hour * 3600 + current_time.minute * 60 + current_time.second
+        sessions = group.sessions.all()
+        total_seconds = 0
+        for session in sessions:
+            session_end_time = session.end_time.replace(microsecond=0)
+            session_seconds = session_end_time.hour * 3600 + session_end_time.minute * 60 + session_end_time.second
+            # Only count sessions that have ended
+            if session.date < current_date or (session.date == current_date and session_seconds < current_seconds):
+                start = datetime.combine(session.date, session.start_time)
+                end = datetime.combine(session.date, session.end_time)
+                duration = (end - start).total_seconds()
+                if duration > 0:
+                    total_seconds += duration
+        total_hours = round(total_seconds / 3600, 2)
+        target_hours = group.target_hours or 1
+        progress_percentage = min(100, round((total_hours / target_hours) * 100, 2)) if target_hours else 0
+        data['total_study_hours'] = total_hours
+        data['progress_percentage'] = progress_percentage
+        data['target_hours'] = target_hours
+        return Response(data)
+
+class JoinGroupView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, group_id):
+        try:
+            group = Group.objects.get(id=group_id)
+            if group.creator == request.user:
+                return Response({'detail': 'You cannot join a group you created'}, status=status.HTTP_400_BAD_REQUEST)
+            if request.user in group.members.all():
+                return Response({'detail': 'You are already a member of this group'}, status=status.HTTP_400_BAD_REQUEST)
+            group.members.add(request.user)
+            return Response({'detail': 'Successfully joined the group'}, status=status.HTTP_200_OK)
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def message_detail(request, message_id):
