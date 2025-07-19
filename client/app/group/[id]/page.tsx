@@ -126,11 +126,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   // Add missing state and helpers
   const isStaff = user?.is_staff || false;
-  const [sendingMessage, setSendingMessage] = useState(false);
-  const [optimisticMessages, setOptimisticMessages] = useState<any[]>([]);
-  const [showSessionModal, setShowSessionModal] = useState(false);
-  const [activeTab, setActiveTab] = useState(joined ? "chat" : "members");
-  const router = useRouter();
+  const [showSignInPopup, setShowSignInPopup] = useState(false);
 
   // Add state for sessions
   const [sessions, setSessions] = useState<any[]>([])
@@ -193,9 +189,6 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null)
 
-  // Add state for modal
-  const [showSessionModal, setShowSessionModal] = useState(false);
-
   // Add state for sending message
   const [sendingMessage, setSendingMessage] = useState(false)
 
@@ -204,10 +197,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   // Add state for optimistic messages
   const [optimisticMessages, setOptimisticMessages] = useState<any[]>([])
+  const [showSessionModal, setShowSessionModal] = useState(false);
 
-  const isStaff = user?.is_staff || user?.is_superuser;
   const router = useRouter();
-  const [showSignInPopup, setShowSignInPopup] = useState(false);
 
   useEffect(() => {
     const fetchGroup = async () => {
