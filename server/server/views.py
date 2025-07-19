@@ -900,7 +900,7 @@ def stats_summary(request):
     ).count()
     subject_areas = Group.objects.values('subject_code').distinct().count()
     new_groups_today = Group.objects.filter(created_at__date=now.date()).count()
-    unimelb_students = User.objects.filter(email__iendswith='@unimelb.edu.au').count()
+    unimelb_students = User.objects.filter(email__iendswith='unimelb.edu.au').count()
     groups_created = Group.objects.count()
     # Use CompletedSessionCounter for sessions_completed
     try:

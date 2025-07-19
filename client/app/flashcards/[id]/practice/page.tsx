@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft, RotateCcw, Shuffle, SkipBack, SkipForward } from "lucide-react"
 import { useUser } from "@/components/UserContext"
-import { toast } from "@/components/ui/use-toast"
+import { toastSuccess } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { use } from "react"
 import { apiRequest } from "@/lib/api"
@@ -130,7 +130,7 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
     setCurrentIndex(0)
     setIsFlipped(false)
     
-    toast({
+    toastSuccess({
       title: "Shuffled!",
       description: "Flashcards have been randomized for this session.",
     })

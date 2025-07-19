@@ -171,6 +171,10 @@ function toast({ ...props }: Toast) {
   }
 }
 
+function toastSuccess({ ...props }: Toast) {
+  return toast({ ...props, variant: 'success' });
+}
+
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState)
 
@@ -191,4 +195,4 @@ function useToast() {
   }
 }
 
-export { useToast, toast }
+export { useToast, toast, toastSuccess }

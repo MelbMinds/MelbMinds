@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useUser } from "@/components/UserContext"
 import { format } from "date-fns"
-import { toast } from "@/components/ui/use-toast"
+import { toastSuccess } from "@/components/ui/use-toast"
 
 export default function DashboardPage() {
   const [notifications] = useState([
@@ -151,13 +151,13 @@ export default function DashboardPage() {
       if (res.ok) {
         // Remove from joined groups
         setJoinedGroups(prev => prev.filter(g => g.id !== groupId))
-        toast({ title: 'Successfully left the group!' })
+        toastSuccess({ title: 'Successfully left the group!' })
       } else {
         const data = await res.json()
-        toast({ title: 'Error leaving group', description: data.detail, variant: 'destructive' })
+        toastSuccess({ title: 'Error leaving group', description: data.detail, variant: 'destructive' })
       }
     } catch (error) {
-      toast({ title: 'Error leaving group', variant: 'destructive' })
+      toastSuccess({ title: 'Error leaving group', variant: 'destructive' })
     } finally {
       setLoadingActions(false)
     }
@@ -178,13 +178,13 @@ export default function DashboardPage() {
       if (res.ok) {
         // Remove from created groups
         setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
-        toast({ title: 'Group deleted successfully!' })
+        toastSuccess({ title: 'Group deleted successfully!' })
       } else {
         const data = await res.json()
-        toast({ title: 'Error deleting group', description: data.detail, variant: 'destructive' })
+        toastSuccess({ title: 'Error deleting group', description: data.detail, variant: 'destructive' })
       }
     } catch (error) {
-      toast({ title: 'Error deleting group', variant: 'destructive' })
+      toastSuccess({ title: 'Error deleting group', variant: 'destructive' })
     } finally {
       setLoadingActions(false)
     }

@@ -16,7 +16,7 @@ import { BookOpen, Users, MapPin, Video, Clock, Plus, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useUser } from "@/components/UserContext"
-import { toast } from "@/components/ui/use-toast"
+import { toastSuccess } from "@/components/ui/use-toast"
 
 export default function CreateGroupPage() {
   const { tokens } = useUser()
@@ -180,13 +180,19 @@ export default function CreateGroupPage() {
         }
         setError(errorMsg || "Failed to create group")
         if (errorMsg) {
-          toast({ title: 'Group Creation Error', description: errorMsg, variant: 'destructive' })
+          toastSuccess({ title: 'Group Creation Error', description: errorMsg, variant: 'destructive' })
         }
         setIsSubmitting(false)
         return
       }
       setIsSubmitting(false)
-      router.push("/discover")
+      toastSuccess({
+        title: "Group created!",
+        description: "Your study group was created successfully.",
+      });
+      setTimeout(() => {
+        router.push("/discover");
+      }, 1200);
     } catch (err) {
       setError("Network error. Please try again.")
       setIsSubmitting(false)
@@ -440,43 +446,6 @@ export default function CreateGroupPage() {
                 </CardContent>
               </Card>
 
-              {/* Group Guidelines */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Group Guidelines</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex items-start space-x-2">
-                      <Checkbox id="respectful" required />
-                      <Label htmlFor="respectful" className="text-sm leading-relaxed">
-                        I will ensure all group members are treated with respect and maintain a positive learning
-                        environment
-                      </Label>
-                    </div>
-                    <div className="flex items-start space-x-2">
-                      <Checkbox id="attendance" required />
-                      <Label htmlFor="attendance" className="text-sm leading-relaxed">
-                        I will encourage regular attendance and notify members of any schedule changes
-                      </Label>
-                    </div>
-                    <div className="flex items-start space-x-2">
-                      <Checkbox id="academic" required />
-                      <Label htmlFor="academic" className="text-sm leading-relaxed">
-                        I understand this group is for academic collaboration and will follow University of Melbourne's
-                        academic integrity policies
-                      </Label>
-                    </div>
-                    <div className="flex items-start space-x-2">
-                      <Checkbox id="moderation" required />
-                      <Label htmlFor="moderation" className="text-sm leading-relaxed">
-                        I agree to moderate the group responsibly and report any inappropriate behavior
-                      </Label>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
               {/* Group Personality */}
               <Card>
                 <CardHeader>
@@ -524,8 +493,52 @@ export default function CreateGroupPage() {
                   </div>
                 </CardContent>
               </Card>
-            </div>
 
+              {/* Group Guidelines */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Group Guidelines</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex items-start space-x-2">
+                      <Checkbox id="respectful" required />
+                      <Label htmlFor="respectful" className="text-sm leading-relaxed">
+                        I will ensure all group members are treated with respect and maintain a positive learning
+                        environment
+                      </Label>
+                    </div>
+                    <div className="flex items-start space-x-2">
+                      <Checkbox id="attendance" required />
+                      <Label htmlFor="attendance" className="text-sm leading-relaxed">
+                        I will encourage regular attendance and notify members of any schedule changes
+                      </Label>
+                    </div>
+                    <div className="flex items-start space-x-2">
+                      <Checkbox id="academic" required />
+                      <Label htmlFor="academic" className="text-sm leading-relaxed">
+                        I understand this group is for academic collaboration and will follow University of Melbourne's
+                        academic integrity policies
+                      </Label>
+                    </div>
+                    <div className="flex items-start space-x-2">
+                      <Checkbox id="moderation" required />
+                      <Label htmlFor="moderation" className="text-sm leading-relaxed">
+                        I agree to moderate the group responsibly and report any inappropriate behavior
+                      </Label>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              {/* Submit Button aligned with main form */}
+              <Button
+                type="submit"
+                className="w-full bg-[#003366] hover:bg-[#002244] text-white mt-8"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Creating Group..." : "Create Study Group"}
+              </Button>
+            </div>
             {/* Sidebar */}
             <div className="space-y-6">
               {/* Preview */}
@@ -618,15 +631,6 @@ export default function CreateGroupPage() {
                   </ul>
                 </CardContent>
               </Card>
-
-              {/* Submit Button */}
-              <Button
-                type="submit"
-                className="w-full bg-[#003366] hover:bg-[#002244] text-white"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Creating Group..." : "Create Study Group"}
-              </Button>
             </div>
           </div>
         </form>

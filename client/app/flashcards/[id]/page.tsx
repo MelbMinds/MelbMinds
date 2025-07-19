@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { ArrowLeft, Plus, Edit, Trash2, Play, Upload, X } from "lucide-react"
 import { useUser } from "@/components/UserContext"
-import { toast } from "@/components/ui/use-toast"
+import { toastSuccess } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { use } from "react"
 import { apiRequest } from "@/lib/api"
@@ -126,12 +126,12 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
       })
       setShowCreateDialog(false)
       
-      toast({
+      toastSuccess({
         title: "Success!",
         description: "Flashcard created successfully.",
       })
     } catch (err) {
-      toast({
+      toastSuccess({
         title: "Error",
         description: "Failed to create flashcard. Please try again.",
         variant: "destructive"
@@ -214,12 +214,12 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
         removeAnswerImage: false
       })
       
-      toast({
+      toastSuccess({
         title: "Success!",
         description: "Flashcard updated successfully.",
       })
     } catch (err) {
-      toast({
+      toastSuccess({
         title: "Error",
         description: "Failed to update flashcard. Please try again.",
         variant: "destructive"
@@ -240,12 +240,12 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
       
       setFlashcards(prev => prev.filter(card => card.id !== flashcardId))
       
-      toast({
+      toastSuccess({
         title: "Success!",
         description: "Flashcard deleted successfully.",
       })
     } catch (err) {
-      toast({
+      toastSuccess({
         title: "Error",
         description: "Failed to delete flashcard. Please try again.",
         variant: "destructive"
@@ -298,7 +298,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
     const fileExtension = file.name.toLowerCase().split('.').pop()
     
     if (fileExtension === 'heic' || fileExtension === 'heif') {
-      toast({
+      toastSuccess({
         title: "Unsupported Image Format",
         description: "HEIC/HEIF images are not supported. Please convert to JPEG or PNG format.",
         variant: "destructive"
@@ -307,7 +307,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
     }
     
     if (!validTypes.includes(file.type) && !['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension || '')) {
-      toast({
+      toastSuccess({
         title: "Invalid Image Format",
         description: "Please select a valid image file (JPEG, PNG, GIF, or WebP).",
         variant: "destructive"
@@ -318,7 +318,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
     // Check file size (max 5MB)
     const maxSize = 5 * 1024 * 1024 // 5MB
     if (file.size > maxSize) {
-      toast({
+      toastSuccess({
         title: "File Too Large",
         description: "Image must be smaller than 5MB. Please compress the image and try again.",
         variant: "destructive"
