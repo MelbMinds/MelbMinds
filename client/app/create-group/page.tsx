@@ -16,7 +16,7 @@ import { BookOpen, Users, MapPin, Video, Clock, Plus, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useUser } from "@/components/UserContext"
-import { toastSuccess } from "@/components/ui/use-toast"
+import { toastSuccess, toastFail } from "@/components/ui/use-toast"
 
 export default function CreateGroupPage() {
   const { tokens } = useUser()
@@ -180,7 +180,7 @@ export default function CreateGroupPage() {
         }
         setError(errorMsg || "Failed to create group")
         if (errorMsg) {
-          toastSuccess({ title: 'Group Creation Error', description: errorMsg, variant: 'destructive' })
+          toastFail({ title: 'Group Creation Error', description: errorMsg })
         }
         setIsSubmitting(false)
         return

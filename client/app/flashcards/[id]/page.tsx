@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { ArrowLeft, Plus, Edit, Trash2, Play, Upload, X } from "lucide-react"
 import { useUser } from "@/components/UserContext"
-import { toastSuccess } from "@/components/ui/use-toast"
+import { toastSuccess, toastFail } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { use } from "react"
 import { apiRequest } from "@/lib/api"
@@ -131,10 +131,9 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
         description: "Flashcard created successfully.",
       })
     } catch (err) {
-      toastSuccess({
+      toastFail({
         title: "Error",
         description: "Failed to create flashcard. Please try again.",
-        variant: "destructive"
       })
     } finally {
       setIsCreating(false)
@@ -219,10 +218,9 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
         description: "Flashcard updated successfully.",
       })
     } catch (err) {
-      toastSuccess({
+      toastFail({
         title: "Error",
         description: "Failed to update flashcard. Please try again.",
-        variant: "destructive"
       })
     } finally {
       setIsEditing(false)
@@ -245,10 +243,9 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
         description: "Flashcard deleted successfully.",
       })
     } catch (err) {
-      toastSuccess({
+      toastFail({
         title: "Error",
         description: "Failed to delete flashcard. Please try again.",
-        variant: "destructive"
       })
     } finally {
       setIsDeleting(false)
@@ -298,19 +295,17 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
     const fileExtension = file.name.toLowerCase().split('.').pop()
     
     if (fileExtension === 'heic' || fileExtension === 'heif') {
-      toastSuccess({
+      toastFail({
         title: "Unsupported Image Format",
         description: "HEIC/HEIF images are not supported. Please convert to JPEG or PNG format.",
-        variant: "destructive"
       })
       return
     }
     
     if (!validTypes.includes(file.type) && !['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension || '')) {
-      toastSuccess({
+      toastFail({
         title: "Invalid Image Format",
         description: "Please select a valid image file (JPEG, PNG, GIF, or WebP).",
-        variant: "destructive"
       })
       return
     }
@@ -318,10 +313,9 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
     // Check file size (max 5MB)
     const maxSize = 5 * 1024 * 1024 // 5MB
     if (file.size > maxSize) {
-      toastSuccess({
+      toastFail({
         title: "File Too Large",
         description: "Image must be smaller than 5MB. Please compress the image and try again.",
-        variant: "destructive"
       })
       return
     }
@@ -423,6 +417,38 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
     }
   }, [editFlashcard.questionImage, editFlashcard.answerImage])
 
+  useEffect(() => {
+    const handlePaste = async (e: KeyboardEvent) => {
+      const active = document.activeElement;
+      const isTextInput = active && (
+        active.tagName === 'INPUT' ||
+        active.tagName === 'TEXTAREA' ||
+        (active as HTMLElement).isContentEditable
+      );
+      if (isTextInput) return; // Let default paste happen
+      if ((showCreateDialog || editingFlashcard) && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        // For create dialog
+        if (showCreateDialog) {
+          if (!newFlashcard.questionImage) {
+            await handlePasteImage('question');
+          } else if (!newFlashcard.answerImage) {
+            await handlePasteImage('answer');
+          }
+        }
+        // For edit dialog
+        if (editingFlashcard) {
+          if (!editFlashcard.questionImage && !editFlashcard.removeQuestionImage) {
+            await handlePasteImage('question', true);
+          } else if (!editFlashcard.answerImage && !editFlashcard.removeAnswerImage) {
+            await handlePasteImage('answer', true);
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handlePaste);
+    return () => window.removeEventListener('keydown', handlePaste);
+  }, [showCreateDialog, editingFlashcard, newFlashcard, editFlashcard]);
+
   if (!user) {
     return (
       <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16 py-8">
@@ -459,6 +485,31 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
       </div>
     )
   }
+
+  const handlePasteImage = async (field: 'question' | 'answer', isEdit = false) => {
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      for (const item of clipboardItems) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type);
+            const file = new File([blob], `${field}-image.png`, { type });
+            if (isEdit) {
+              if (field === 'question') setEditFlashcard(prev => ({ ...prev, questionImage: file, removeQuestionImage: false }));
+              if (field === 'answer') setEditFlashcard(prev => ({ ...prev, answerImage: file, removeAnswerImage: false }));
+            } else {
+              if (field === 'question') setNewFlashcard(prev => ({ ...prev, questionImage: file }));
+              if (field === 'answer') setNewFlashcard(prev => ({ ...prev, answerImage: file }));
+            }
+            return;
+          }
+        }
+      }
+      toastFail({ title: 'No image found in clipboard', description: 'Please copy an image to your clipboard first.' });
+    } catch (e) {
+      toastFail({ title: 'Clipboard error', description: 'Could not access clipboard or no image found.' });
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16 py-8">
@@ -546,7 +597,9 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
                             accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                             onChange={e => handleImageUpload(e.target.files?.[0] || null, 'question')}
                           />
-                          <span className="text-sm text-gray-500">No image selected</span>
+                          { !newFlashcard.questionImage && (
+                            <Button type="button" variant="outline" onClick={() => handlePasteImage('question')}>Paste Image</Button>
+                          ) }
                         </div>
                       );
                     })()}
@@ -606,7 +659,9 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
                             accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                             onChange={e => handleImageUpload(e.target.files?.[0] || null, 'answer')}
                           />
-                          <span className="text-sm text-gray-500">No image selected</span>
+                          { !newFlashcard.answerImage && (
+                            <Button type="button" variant="outline" onClick={() => handlePasteImage('answer')}>Paste Image</Button>
+                          ) }
                         </div>
                       );
                     })()}
@@ -646,7 +701,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
                 <div className="mb-4">
                   <h3 className="font-semibold text-gray-900 mb-2">Question:</h3>
                   {flashcard.question && (
-                    <p className="text-gray-700 mb-2">{flashcard.question}</p>
+                    <p className="text-gray-700 mb-2 break-words">{flashcard.question}</p>
                   )}
                   {flashcard.question_image_url && (
                     <AuthenticatedImage

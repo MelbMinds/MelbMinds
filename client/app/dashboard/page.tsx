@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useUser } from "@/components/UserContext"
 import { format } from "date-fns"
-import { toastSuccess } from "@/components/ui/use-toast"
+import { toastSuccess, toastFail } from "@/components/ui/use-toast"
 
 export default function DashboardPage() {
   const [notifications] = useState([
@@ -154,10 +154,10 @@ export default function DashboardPage() {
         toastSuccess({ title: 'Successfully left the group!' })
       } else {
         const data = await res.json()
-        toastSuccess({ title: 'Error leaving group', description: data.detail, variant: 'destructive' })
+        toastFail({ title: 'Error leaving group', description: data.detail })
       }
     } catch (error) {
-      toastSuccess({ title: 'Error leaving group', variant: 'destructive' })
+      toastFail({ title: 'Error leaving group' })
     } finally {
       setLoadingActions(false)
     }
@@ -181,10 +181,10 @@ export default function DashboardPage() {
         toastSuccess({ title: 'Group deleted successfully!' })
       } else {
         const data = await res.json()
-        toastSuccess({ title: 'Error deleting group', description: data.detail, variant: 'destructive' })
+        toastFail({ title: 'Error deleting group', description: data.detail })
       }
     } catch (error) {
-      toastSuccess({ title: 'Error deleting group', variant: 'destructive' })
+      toastFail({ title: 'Error deleting group' })
     } finally {
       setLoadingActions(false)
     }
