@@ -43,10 +43,9 @@ from uuid import UUID
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
 import threading
-from rest_framework.decorators import action
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
-logger = logging.getLogger(__name__)
 
 def cleanup_past_sessions():
     """
@@ -94,7 +93,12 @@ def cleanup_past_sessions():
             group=group,
             message=f"Session at {session.location} on {session.date} from {session.start_time} to {session.end_time} just ended. {duration_hours:.2f} hours added to group progress."
         )
-        # Delete the session
+        # Delete all attendees for this session before deleting the session
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM server_groupsession_attendees WHERE groupsession_id = %s", [session.id]
+            )
         session.delete()
     
     # Update the completed sessions counter
@@ -486,8 +490,6 @@ class LogoutView(APIView):
         # This endpoint can be used to invalidate tokens if needed
         return Response({'detail': 'Logged out successfully'}, status=status.HTTP_200_OK)
 
-# Apply caching to group list view (GET only)
-@method_decorator(cache_page(60), name='dispatch')
 class GroupListCreateView(generics.ListCreateAPIView):
     serializer_class = GroupSerializer
 
@@ -571,8 +573,77 @@ class GroupListCreateView(generics.ListCreateAPIView):
         
         serializer.save(creator=self.request.user)
 
-# Apply caching to user profile view (GET only)
-@method_decorator(cache_page(60), name='dispatch')
+class GroupRetrieveView(generics.RetrieveAPIView):
+    queryset = Group.objects.all()
+    serializer_class = GroupDetailSerializer
+    permission_classes = [AllowAny]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
+    def get(self, request, *args, **kwargs):
+        # Clean up past sessions when viewing a group
+        cleanup_past_sessions()
+        
+        # Get the group
+        group = self.get_object()
+        
+        # Find similar groups
+        similar_groups_data = find_similar_groups(group, limit=3)
+        
+        # Serialize the main group
+        serializer = self.get_serializer(group)
+        data = serializer.data
+        
+        # Add similar groups to the response
+        similar_groups_serialized = []
+        for similar_data in similar_groups_data:
+            similar_group = similar_data['group']
+            similar_serializer = GroupSerializer(similar_group)
+            similar_groups_serialized.append({
+                'group': similar_serializer.data,
+                'similarity_score': similar_data['score'],
+                'matching_factors': similar_data['factors']
+            })
+        
+        data['similar_groups'] = similar_groups_serialized
+
+        # Add progress bar data
+        from datetime import datetime, timedelta
+        sessions = group.sessions.all()
+        total_seconds = 0
+        for session in sessions:
+            # Calculate duration in seconds
+            start = datetime.combine(session.date, session.start_time)
+            end = datetime.combine(session.date, session.end_time)
+            duration = (end - start).total_seconds()
+            if duration > 0:
+                total_seconds += duration
+        total_hours = round(total_seconds / 3600, 2)
+        target_hours = group.target_hours or 1
+        progress_percentage = min(100, round((total_hours / target_hours) * 100, 2)) if target_hours else 0
+        data['total_study_hours'] = total_hours
+        data['progress_percentage'] = progress_percentage
+        data['target_hours'] = target_hours
+        return Response(data)
+
+class JoinGroupView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, group_id):
+        try:
+            group = Group.objects.get(id=group_id)
+            if group.creator == request.user:
+                return Response({'detail': 'You cannot join a group you created'}, status=status.HTTP_400_BAD_REQUEST)
+            if request.user in group.members.all():
+                return Response({'detail': 'You are already a member of this group'}, status=status.HTTP_400_BAD_REQUEST)
+            group.members.add(request.user)
+            return Response({'detail': 'Successfully joined the group'}, status=status.HTTP_200_OK)
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -623,7 +694,7 @@ class GroupChatView(APIView):
 
     def get(self, request, group_id):
         group = Group.objects.get(id=group_id)
-        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
             return Response({'detail': 'Not a group member'}, status=403)
         messages = Message.objects.filter(group=group).order_by('timestamp')
         serializer = MessageSerializer(messages, many=True)
@@ -631,7 +702,7 @@ class GroupChatView(APIView):
 
     def post(self, request, group_id):
         group = Group.objects.get(id=group_id)
-        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
             return Response({'detail': 'Not a group member'}, status=403)
         message_text = request.data.get('text', '')
         # Save the message immediately
@@ -678,7 +749,7 @@ class GroupSessionListCreateView(APIView):
 
     def get(self, request, group_id):
         group = Group.objects.get(id=group_id)
-        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
             return Response({'detail': 'Not a group member'}, status=403)
         
         # Always clean up past sessions on every request
@@ -753,7 +824,7 @@ class GroupSessionRetrieveUpdateDeleteView(APIView):
     def get(self, request, session_id):
         session = self.get_object(session_id)
         group = session.group
-        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
             return Response({'detail': 'Not a group member'}, status=403)
         serializer = GroupSessionSerializer(session)
         return Response(serializer.data)
@@ -788,7 +859,7 @@ class GroupSessionRetrieveUpdateDeleteView(APIView):
 @permission_classes([IsAuthenticated])
 def group_notifications(request, group_id):
     group = Group.objects.get(id=group_id)
-    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
         return Response({'detail': 'Not a group member'}, status=403)
     
     # Clean up past sessions before fetching notifications
@@ -808,7 +879,7 @@ def group_notifications(request, group_id):
 @permission_classes([IsAuthenticated])
 def clear_group_notifications(request, group_id):
     group = Group.objects.get(id=group_id)
-    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
         return Response({'detail': 'Not a group member'}, status=403)
     GroupNotification.objects.filter(group=group).delete()
     return Response({'detail': 'All notifications cleared.'}, status=204)
@@ -1295,14 +1366,15 @@ class GroupRatingView(APIView):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-@cache_page(60)
 def group_recommendations(request):
     """Get personalized group recommendations for the user"""
     user = request.user
+    
     # Get all groups the user hasn't joined or created
     user_groups = set()
     user_groups.update(user.joined_groups.values_list('id', flat=True))
-    user_groups.update(user.created_groups.values_list('id', flat=True))
+    user_groups.add(user.created_groups.values_list('id', flat=True))
+    
     # Get all available groups excluding user's groups
     available_groups = Group.objects.exclude(id__in=user_groups)
     
@@ -1913,7 +1985,7 @@ def file_list(request, group_id):
 @permission_classes([IsAuthenticated])
 def notification_list(request, group_id):
     group = Group.objects.get(id=group_id)
-    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user):
+    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
         return Response({'detail': 'Not a group member'}, status=403)
     # Clean up past sessions before fetching notifications
     cleanup_past_sessions()
@@ -2212,3 +2284,22 @@ def join_session(request, session_id):
         }, status=status.HTTP_200_OK)
     except GroupSession.DoesNotExist:
         return Response({'detail': 'Session not found.'}, status=status.HTTP_404_NOT_FOUND)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def message_detail(request, message_id):
+    from .models import Message
+    try:
+        msg = Message.objects.get(id=message_id)
+        group = msg.group
+        # Allow if member, creator, or staff
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
+            return Response({'detail': 'Not a group member'}, status=403)
+        return Response({
+            'id': msg.id,
+            'group_id': msg.group.id,
+            'user_id': msg.user.id,
+            'text': msg.text,
+            'timestamp': msg.timestamp,
+        })
+    except Message.DoesNotExist:
+        return Response({'error': 'Message not found'}, status=404)

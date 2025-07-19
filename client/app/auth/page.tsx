@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useUser } from "@/components/UserContext"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,6 @@ import { Badge } from "@/components/ui/badge"
 import { Mail, Lock, User, Globe, Video, MapPin, UserCheck } from "lucide-react"
 import Link from "next/link"
 import { toast } from "@/components/ui/use-toast"
-import { PopupAlert } from "@/components/ui/popup-alert"
 
 export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -31,20 +30,16 @@ export default function AuthPage() {
   const [studyFormat, setStudyFormat] = useState("")
   const [languages, setLanguages] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [rememberMe, setRememberMe] = useState(false);
   const router = useRouter()
   const { setUser } = useUser()
 
-  // Add state for field errors
-  const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
-
-  // Email regex for validation
-  const emailRegex = /^[^@\s]+@student\.unimelb\.edu\.au$/i;
-
-  // Password strength check (min 8 chars, at least 1 letter and 1 number)
-  function isStrongPassword(pw: string) {
-    return pw.length >= 8 && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw);
-  }
+  useEffect(() => {
+    if (typeof window !== 'undefined' && localStorage.getItem('showSignInPopup')) {
+      toast({ title: "Let's sign in first!", variant: 'grey' });
+      localStorage.removeItem('showSignInPopup');
+    }
+    // Manual toast test removed
+  }, []);
 
   const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Masters", "PhD"]
   const majors = [
@@ -78,21 +73,9 @@ export default function AuthPage() {
   ]
 
   const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    setFieldErrors({});
-    // Client-side validation
-    if (!emailRegex.test(email)) {
-      setFieldErrors({ email: 'Must be a valid University of Melbourne email address.' });
-      setIsLoading(false);
-      return;
-    }
-    if (!password) {
-      setFieldErrors({ password: 'Password is required.' });
-      setIsLoading(false);
-      return;
-    }
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
     try {
       // 1. Get JWT tokens
       const tokenRes = await fetch("http://localhost:8000/api/token/", {
@@ -102,28 +85,23 @@ export default function AuthPage() {
           email,
           password,
         }),
-      });
+      })
       if (!tokenRes.ok) {
-        const data = await tokenRes.json();
+        const data = await tokenRes.json()
         let errorMsg = data?.error || data?.detail || null;
         if (errorMsg) {
-          if (
-            errorMsg.toLowerCase().includes('invalid credentials') ||
-            errorMsg.toLowerCase().includes('login failed') ||
-            errorMsg.toLowerCase().includes('invalid email') ||
-            errorMsg.toLowerCase().includes('invalid password')
-          ) {
-            setError('Invalid email or password');
+          if (errorMsg.toLowerCase().includes('invalid credentials')) {
+            setError('Invalid email or password')
           } else if (errorMsg.toLowerCase().includes('not verified') || errorMsg.toLowerCase().includes('verify')) {
-            setError('Please verify your email before logging in.');
+            setError('Please verify your email before logging in.')
           } else {
-            setError(errorMsg);
+            setError(errorMsg)
           }
         } else {
-          setError('Invalid email or password');
+          setError('Login failed')
         }
-        setIsLoading(false);
-        return;
+        setIsLoading(false)
+        return
       }
       const tokens = await tokenRes.json() // { access, refresh }
       // 2. Get user info using access token
@@ -140,12 +118,6 @@ export default function AuthPage() {
       }
       const userData = await userRes.json()
       setUser(userData, tokens)
-      // Store tokens in localStorage if rememberMe, else sessionStorage
-      if (rememberMe) {
-        localStorage.setItem("melbminds_tokens", JSON.stringify(tokens))
-      } else {
-        sessionStorage.setItem("melbminds_tokens", JSON.stringify(tokens))
-      }
       setIsLoading(false)
       router.push("/")
     } catch (err) {
@@ -155,25 +127,13 @@ export default function AuthPage() {
   }
 
   const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    setFieldErrors({});
-    // Client-side validation
-    const newFieldErrors: { [key: string]: string } = {};
-    if (!fullName.trim()) newFieldErrors.fullName = 'Full name is required.';
-    if (!emailRegex.test(email)) newFieldErrors.email = 'Must be a valid University of Melbourne email address.';
-    if (!year) newFieldErrors.year = 'Year level is required.';
-    if (!major) newFieldErrors.major = 'Major is required.';
-    if (!bio.trim()) newFieldErrors.bio = 'Bio is required.';
-    if (!studyFormat) newFieldErrors.studyFormat = 'Study format is required.';
-    if (!password) newFieldErrors.password = 'Password is required.';
-    else if (!isStrongPassword(password)) newFieldErrors.password = 'Password must be at least 8 characters and include a letter and a number.';
-    if (password !== confirmPassword) newFieldErrors.confirmPassword = 'Passwords do not match.';
-    if (Object.keys(newFieldErrors).length > 0) {
-      setFieldErrors(newFieldErrors);
-      setIsLoading(false);
-      return;
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
+    if (password !== confirmPassword) {
+      setError("Passwords do not match")
+      setIsLoading(false)
+      return
     }
     try {
       const res = await fetch("http://localhost:8000/api/register/", {
@@ -198,23 +158,22 @@ export default function AuthPage() {
           for (const key in data) {
             if (typeof data[key] === 'string') {
               errorMsg = data[key];
-              newFieldErrors[key] = data[key];
+              break;
             }
             if (Array.isArray(data[key]) && typeof data[key][0] === 'string') {
               errorMsg = data[key][0];
-              newFieldErrors[key] = data[key][0];
+              break;
             }
           }
         }
-        setFieldErrors(newFieldErrors);
         toast({
           title: 'Registration Failed',
           description: errorMsg || "Registration failed",
           variant: 'destructive',
-        });
-        setError(errorMsg || "Registration failed");
-        setIsLoading(false);
-        return;
+        })
+        setError(errorMsg || "Registration failed")
+        setIsLoading(false)
+        return
       }
       // Registration successful, show toast and prompt user to check email
       toast({
@@ -248,20 +207,10 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-deep-blue to-deep-blue/80 flex items-center justify-center p-4">
-      {/* Popup Alert for moderation errors only */}
-      <PopupAlert 
-        message={error && (typeof error === 'string' && (error.toLowerCase().includes('bad words') || error.toLowerCase().includes('inappropriate') || error.toLowerCase().includes('toxic') || error.toLowerCase().includes('moderation')) ? error : null)} 
-        onClose={() => setError(null)} 
-      />
-      <div className="w-full max-w-2xl">
-        <div className="w-full max-w-md mx-auto">
-          {/* General error for non-moderation errors, above the form */}
-          {error && !(typeof error === 'string' && (error.toLowerCase().includes('bad words') || error.toLowerCase().includes('inappropriate') || error.toLowerCase().includes('toxic') || error.toLowerCase().includes('moderation'))) && (
-            <div className="mb-4 w-full">
-              <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-2 rounded text-center text-sm">{error}</div>
-            </div>
-          )}
+    <>
+      <div className="min-h-screen bg-gradient-to-br from-deep-blue to-deep-blue/80 flex items-center justify-center p-4">
+        
+        <div className="w-full max-w-2xl">
           {/* Logo */}
           <div className="text-center mb-8">
             <Link href="/" className="inline-block text-white">
@@ -305,7 +254,6 @@ export default function AuthPage() {
                           required
                         />
                       </div>
-                      {fieldErrors.email && <div className="text-red-600 text-xs mt-1">{fieldErrors.email}</div>}
                     </div>
 
                     <div className="space-y-2">
@@ -324,12 +272,11 @@ export default function AuthPage() {
                           required
                         />
                       </div>
-                      {fieldErrors.password && <div className="text-red-600 text-xs mt-1">{fieldErrors.password}</div>}
                     </div>
 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <Checkbox id="remember" checked={rememberMe} onCheckedChange={setRememberMe} />
+                        <Checkbox id="remember" />
                         <Label htmlFor="remember" className="text-sm">
                           Remember me
                         </Label>
@@ -379,7 +326,6 @@ export default function AuthPage() {
                             required
                           />
                         </div>
-                        {fieldErrors.fullName && <div className="text-red-600 text-xs mt-1">{fieldErrors.fullName}</div>}
                       </div>
 
                       <div className="space-y-2">
@@ -398,7 +344,6 @@ export default function AuthPage() {
                             required
                           />
                         </div>
-                        {fieldErrors.email && <div className="text-red-600 text-xs mt-1">{fieldErrors.email}</div>}
                         <p className="text-sm text-gray-600">Must be a valid University of Melbourne email address</p>
                       </div>
 
@@ -419,7 +364,6 @@ export default function AuthPage() {
                               ))}
                             </SelectContent>
                           </Select>
-                          {fieldErrors.year && <div className="text-red-600 text-xs mt-1">{fieldErrors.year}</div>}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="major" className="text-base font-medium">
@@ -437,7 +381,6 @@ export default function AuthPage() {
                               ))}
                             </SelectContent>
                           </Select>
-                          {fieldErrors.major && <div className="text-red-600 text-xs mt-1">{fieldErrors.major}</div>}
                         </div>
                       </div>
                     </div>
@@ -460,7 +403,6 @@ export default function AuthPage() {
                           required
                         />
                         <p className="text-sm text-gray-600">Help others understand your study style and personality</p>
-                        {fieldErrors.bio && <div className="text-red-600 text-xs mt-1">{fieldErrors.bio}</div>}
                       </div>
 
                       <div className="space-y-2">
@@ -527,7 +469,6 @@ export default function AuthPage() {
                             required
                           />
                         </div>
-                        {fieldErrors.password && <div className="text-red-600 text-xs mt-1">{fieldErrors.password}</div>}
                       </div>
 
                       <div className="space-y-2">
@@ -546,7 +487,6 @@ export default function AuthPage() {
                             required
                           />
                         </div>
-                        {fieldErrors.confirmPassword && <div className="text-red-600 text-xs mt-1">{fieldErrors.confirmPassword}</div>}
                       </div>
                     </div>
 
@@ -562,7 +502,6 @@ export default function AuthPage() {
                           Privacy Policy
                         </Link>
                       </Label>
-                      {fieldErrors.terms && <div className="text-red-600 text-xs mt-1">{fieldErrors.terms}</div>}
                     </div>
 
                     <Button
@@ -595,6 +534,6 @@ export default function AuthPage() {
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

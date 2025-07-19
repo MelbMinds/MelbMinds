@@ -33,7 +33,7 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/profile/', views.UserProfileView.as_view(), name='user_profile'),
     path('api/stats/summary/', views.stats_summary, name='stats_summary'),
-    path('api/groups/', GroupListCreateView.as_view(), name='group_list'),
+    path('api/groups/', views.GroupListCreateView.as_view(), name='group_list'),
     path('api/groups/<int:group_id>/', views.group_detail, name='group_detail'),
     path('api/groups/<int:group_id>/update/', UpdateGroupView.as_view(), name='group_update'),
     path('api/groups/<int:group_id>/messages/', views.message_list, name='message_list'),
@@ -57,6 +57,7 @@ urlpatterns = [
     path('api/groups/<int:group_id>/notifications/clear/', views.clear_group_notifications, name='clear_group_notifications'),
     path('api/sessions/<int:session_id>/', GroupSessionRetrieveUpdateDeleteView.as_view(), name='session_detail'),
     path('api/sessions/<int:session_id>/join/', views.join_session, name='join_session'),
+    path('api/groups/messages/<int:message_id>/', views.message_detail, name='message_detail'),
 ]
 
 urlpatterns += [

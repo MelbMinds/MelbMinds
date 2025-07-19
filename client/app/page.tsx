@@ -109,7 +109,7 @@ export default function HomePage() {
                     className="bg-white text-deep-blue hover:bg-gray-50 w-full sm:w-auto font-serif text-lg px-8"
                   >
                     <Users className="mr-2 h-5 w-5" />
-                    Discover Study Groups
+                    Discover Groups
                   </Button>
                 </Link>
                 <Link href="/create-group">
@@ -118,7 +118,7 @@ export default function HomePage() {
                     variant="outline"
                     className="border-white text-white hover:bg-white hover:text-deep-blue w-full sm:w-auto bg-transparent font-serif text-lg px-8"
                   >
-                    Create a Group
+                    Create Group
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>

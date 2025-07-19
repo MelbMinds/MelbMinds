@@ -47,6 +47,7 @@ import { PopupAlert } from "@/components/ui/popup-alert"
 import { Progress } from "@/components/ui/progress"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from "@/components/ui/select"
+import { useRouter } from "next/navigation"
 
 // Helper function to check if a time string is on a quarter-hour mark
 function isQuarterHour(timeStr: string) {
@@ -169,6 +170,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [members, setMembers] = useState<any[]>([])
   const [messages, setMessages] = useState<any[]>([])
 
+  // Add missing state and helpers
+  const isStaff = user?.is_staff || false;
+  const [showSignInPopup, setShowSignInPopup] = useState(false);
+
   // Add state for sessions
   const [sessions, setSessions] = useState<any[]>([])
   const [sessionForm, setSessionForm] = useState({
@@ -230,9 +235,6 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null)
 
-  // Add state for modal
-  const [showSessionModal, setShowSessionModal] = useState(false);
-
   // Add state for sending message
   const [sendingMessage, setSendingMessage] = useState(false)
 
@@ -241,6 +243,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   // Add state for optimistic messages
   const [optimisticMessages, setOptimisticMessages] = useState<any[]>([])
+  const [showSessionModal, setShowSessionModal] = useState(false);
+
+  const router = useRouter();
 
   // Add state for new session
   const [newSession, setNewSession] = useState({
@@ -314,20 +319,20 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         .then(setMembers)
     }
   }, [group?.id])
-  // Fetch chat messages if joined or is creator
+  // Fetch chat messages if joined, creator, or staff
   useEffect(() => {
-    if (group?.id && (joined || isGroupCreator())) {
+    if (group?.id && (joined || isGroupCreator() || isStaff)) {
       fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
         .then(res => res.json())
         .then(setMessages)
     }
-  }, [group?.id, joined, tokens])
+  }, [group?.id, joined, tokens, isStaff])
 
   // Fetch sessions only when meetups tab is selected
   useEffect(() => {
-    if (activeTab === 'meetups' && group?.id && (joined || isGroupCreator())) {
+    if (activeTab === 'meetups' && group?.id && (joined || isGroupCreator() || isStaff)) {
       const fetchSessions = () => {
         setSessionsLoading(true);
         fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
@@ -341,11 +346,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       const interval = setInterval(fetchSessions, 30000)
       return () => clearInterval(interval)
     }
-  }, [activeTab, group?.id, joined, tokens])
+  }, [activeTab, group?.id, joined, tokens, isStaff])
 
   // Fetch notifications
   const fetchNotifications = () => {
-    if (group?.id && (joined || isGroupCreator())) {
+    if (group?.id && (joined || isGroupCreator() || isStaff)) {
       setLoadingNotifications(true);
       fetch(`http://localhost:8000/api/groups/${group.id}/notifications/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
@@ -357,13 +362,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   };
   useEffect(() => {
     fetchNotifications();
-    // Only run on mount or when group/joined/tokens change
-    // No polling interval
-  }, [group?.id, joined, tokens]);
+  }, [group?.id, joined, tokens, isStaff]);
 
   // Fetch files
   useEffect(() => {
-    if (group?.id && (joined || isGroupCreator())) {
+    if (group?.id && (joined || isGroupCreator() || isStaff)) {
       const fetchFiles = () => {
         setLoadingFiles(true)
         fetch(`http://localhost:8000/api/groups/${group.id}/files/`, {
@@ -373,10 +376,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           .then(setFiles)
           .finally(() => setLoadingFiles(false))
       }
-      
       fetchFiles()
     }
-  }, [group?.id, joined, tokens])
+  }, [group?.id, joined, tokens, isStaff])
 
   // Fetch user's rating
   useEffect(() => {
@@ -667,10 +669,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   // Fetch flashcard folders
   useEffect(() => {
-    if (group?.id && (joined || isGroupCreator()) && tokens?.access) {
+    if (group?.id && (joined || isGroupCreator() || isStaff) && tokens?.access) {
       fetchFlashcardFolders()
     }
-  }, [group?.id, joined, tokens])
+  }, [group?.id, joined, tokens, isStaff])
 
   const fetchFlashcardFolders = async () => {
     if (!tokens?.access || !group?.id) return
@@ -1299,6 +1301,18 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  const handleJoinRequestWithAuth = async () => {
+    if (!user) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('showSignInPopup', '1');
+      }
+      router.push("/auth");
+      return;
+    }
+    handleJoinRequest();
+  };
+
+
   // Add a function to join a session
   const handleJoinSession = async (sessionId: number) => {
     if (!tokens?.access) return;
@@ -1324,7 +1338,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   // Fetch sessions function
   const fetchSessions = async () => {
     if (!group?.id) return;
-    setSessionsLoading(true);
+    setSessionsLoading?.(true); // Only call if setSessionsLoading exists in scope
     try {
       const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
@@ -1332,9 +1346,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       const data = await res.json();
       setSessions(data);
     } catch (e) {
-      // handle error
+      // Optionally handle error (e.g., set an error state)
     } finally {
-      setSessionsLoading(false);
+      setSessionsLoading?.(false);
     }
   };
 
@@ -1402,55 +1416,8 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       <span className="text-sm text-gray-600">{group.total_study_hours} / {group.target_hours} hours</span>
                     </div>
                     <Progress value={group.progress_percentage} className="h-4 rounded-full bg-blue-200" />
-                    <div className="flex justify-end items-center text-xs text-gray-500 mt-1 gap-2">
+                    <div className="flex justify-end text-xs text-gray-500 mt-1">
                       <span>{group.progress_percentage}%</span>
-                      {isGroupCreator() && !editingTargetHours && (
-                        <Button 
-                          size="icon" 
-                          variant="default" 
-                          className="ml-2 bg-[#00264D] text-white rounded-xl shadow-md hover:bg-[#001a33] transition-colors w-9 h-9 flex items-center justify-center"
-                          onClick={() => { setEditingTargetHours(true); setTargetHoursInput(group.target_hours); }}
-                          aria-label="Change Target"
-                        >
-                          <Edit className="h-5 w-5" />
-                        </Button>
-                      )}
-                      {isGroupCreator() && editingTargetHours && (
-                        <form onSubmit={async (e) => {
-                          e.preventDefault();
-                          setTargetHoursError(null);
-                          if (!Number.isFinite(Number(targetHoursInput)) || Number(targetHoursInput) <= 0) {
-                            setTargetHoursError("Target hours must be a positive number");
-                            return;
-                          }
-                          setLoadingActions(true);
-                          try {
-                            const res = await fetch(`http://localhost:8000/api/groups/${group.id}/update/`, {
-                              method: 'PUT',
-                              headers: { 'Content-Type': 'application/json', ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` }) },
-                              body: JSON.stringify({ target_hours: Number(targetHoursInput) })
-                            });
-                            if (res.ok) {
-                              const updated = await res.json();
-                              setGroup(updated);
-                              setEditingTargetHours(false);
-                              toast({ title: 'Target hours updated!' });
-                            } else {
-                              const data = await res.json();
-                              setTargetHoursError(data.error || 'Failed to update');
-                            }
-                          } catch {
-                            setTargetHoursError('Network error');
-                          } finally {
-                            setLoadingActions(false);
-                          }
-                        }} className="flex items-center gap-2 ml-2">
-                          <Input type="number" min={1} value={targetHoursInput} onChange={e => setTargetHoursInput(e.target.value)} className="w-20 h-6 text-xs px-2 py-1" />
-                          <Button size="sm" type="submit" disabled={loadingActions}>Save</Button>
-                          <Button size="sm" variant="ghost" type="button" onClick={() => setEditingTargetHours(false)}>Cancel</Button>
-                          {targetHoursError && <span className="text-xs text-red-500 ml-2">{targetHoursError}</span>}
-                        </form>
-                      )}
                     </div>
                   </div>
                   {/* End Study Progress Bar */}
@@ -1624,7 +1591,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     ) : (
                       <Button 
                         className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif"
-                        onClick={handleJoinRequest}
+                        onClick={handleJoinRequestWithAuth}
                       >
                         <UserPlus className="mr-2 h-4 w-4" />
                         Join Group
@@ -1662,15 +1629,6 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     </TabsTrigger>
                   </TabsList>
                 </CardHeader>
-
-                {/* JOIN PROMPT: Show if not joined and not creator */}
-                {!(joined || isGroupCreator()) && (
-                  <div className="w-full px-6 pb-2">
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 text-blue-900 rounded text-center text-sm font-medium">
-                      Join the group to access all features (chat, files, flashcards, sessions, etc.)
-                    </div>
-                  </div>
-                )}
 
                 <CardContent>
                   {/* Chat Tab */}
@@ -2612,7 +2570,57 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       )}
 
       {/* Progress Bar and Target Hours Admin Control */}
-      
+      <div className="mb-6">
+        <div className="flex items-center gap-4">
+          <span className="font-medium text-gray-700">Study Progress:</span>
+          <div className="flex-1">
+            <Progress value={group.progress_percentage} className="h-3" />
+            <div className="flex justify-between text-xs text-gray-600 mt-1">
+              <span>{group.total_study_hours} / {group.target_study_hours} hours</span>
+              <span>{group.progress_percentage}%</span>
+            </div>
+          </div>
+          {isGroupCreator() && !editingTargetHours && (
+            <Button size="sm" variant="outline" onClick={() => { setEditingTargetHours(true); setTargetHoursInput(group.target_study_hours) }}>Edit Target</Button>
+          )}
+          {isGroupCreator() && editingTargetHours && (
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setTargetHoursError(null);
+              if (!Number.isInteger(Number(targetHoursInput)) || Number(targetHoursInput) <= 0) {
+                setTargetHoursError("Target hours must be a positive integer");
+                return;
+              }
+              setLoadingActions(true);
+              try {
+                const res = await fetch(`http://localhost:8000/api/groups/${group.id}/update/`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json', ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` }) },
+                  body: JSON.stringify({ target_study_hours: Number(targetHoursInput) })
+                });
+                if (res.ok) {
+                  const updated = await res.json();
+                  setGroup(updated);
+                  setEditingTargetHours(false);
+                  toast({ title: 'Target hours updated!' });
+                } else {
+                  const data = await res.json();
+                  setTargetHoursError(data.error || 'Failed to update');
+                }
+              } catch {
+                setTargetHoursError('Network error');
+              } finally {
+                setLoadingActions(false);
+              }
+            }} className="flex items-center gap-2">
+              <Input type="number" min={1} value={targetHoursInput} onChange={e => setTargetHoursInput(e.target.value)} className="w-20" />
+              <Button size="sm" type="submit" disabled={loadingActions}>Save</Button>
+              <Button size="sm" variant="ghost" type="button" onClick={() => setEditingTargetHours(false)}>Cancel</Button>
+              {targetHoursError && <span className="text-xs text-red-500 ml-2">{targetHoursError}</span>}
+            </form>
+          )}
+        </div>
+      </div>
 
       {/* Reporting Dialogs */}
       {(reportingMessage || reportingFile) && (
