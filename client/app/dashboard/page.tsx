@@ -612,34 +612,41 @@ export default function DashboardPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Notifications */}
-            <Card>
+            <Card className="shadow-xl border-0 bg-white">
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center">
-                    <Bell className="mr-2 h-5 w-5 text-yellow-500" />
-                    Notifications
+                <CardTitle className="flex items-center justify-between min-w-0">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium text-lg whitespace-normal break-words">Notifications</span>
                   </span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="icon" onClick={fetchNotifications} className="text-xs p-2" disabled={notifLoading} aria-label="Refresh notifications">
-                      <RotateCcw className={notifLoading ? "animate-spin" : ""} size={18} />
+                  <div className="flex gap-2 flex-shrink-0">
+                    <Button variant="outline" size="sm" onClick={fetchNotifications} className="p-1 h-8 w-8 min-w-0" disabled={notifLoading} aria-label="Refresh notifications">
+                      <RotateCcw className={notifLoading ? "animate-spin" : ""} size={16} />
                     </Button>
-                    <Button variant="outline" size="icon" onClick={handleClearAllNotifications} className="text-xs p-2" disabled={clearLoading} aria-label="Clear all notifications">
-                      <Trash2 className={clearLoading ? "opacity-50" : ""} size={18} />
+                    <Button variant="outline" size="sm" onClick={handleClearAllNotifications} className="p-1 h-8 w-8 min-w-0" disabled={clearLoading} aria-label="Clear all notifications">
+                      <Trash2 className={clearLoading ? "opacity-50" : ""} size={16} />
                     </Button>
                   </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {notifications.map((notification) => (
-                    <div key={notification.id} className="flex items-start space-x-3 p-3 rounded-lg bg-gray-50">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{notification.title}</p>
-                        <div className="flex items-center justify-between mt-1">
-                          <Badge variant="secondary" className="text-xs">
+                <div className="space-y-3">
+                  {notifications.length === 0 ? (
+                    <div className="text-gray-400 text-center py-8">No notifications yet.</div>
+                  ) : notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 min-w-0 overflow-hidden shadow-sm border border-gray-100 hover:bg-yellow-50 transition-colors group"
+                    >
+                      <div className="flex items-center justify-center h-10 w-10 rounded-full bg-yellow-100 flex-shrink-0">
+                        <Bell className="h-5 w-5 text-yellow-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium line-clamp-2 break-words max-w-full text-gray-900 group-hover:text-yellow-900 transition-colors">{notification.title}</p>
+                        <div className="flex items-center justify-between mt-1 min-w-0">
+                          <Badge variant="secondary" className="text-xs truncate max-w-[60%] bg-yellow-200 text-yellow-900 group-hover:bg-yellow-300">
                             {notification.group}
                           </Badge>
-                          <span className="text-xs text-gray-500">{notification.time}</span>
+                          <span className="text-xs text-gray-500 ml-2 truncate max-w-[40%]">{notification.time}</span>
                         </div>
                       </div>
                     </div>

@@ -39,6 +39,7 @@ import {
   FileEdit,
   Clipboard,
   Check,
+  RotateCcw,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
@@ -302,6 +303,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [copied, setCopied] = useState(false);
   const groupLink = typeof window !== 'undefined' ? `${window.location.origin}/group/${group?.id}` : '';
 
+  const GROUP_NOTIF_CLEAR_KEY = `group_notifications_cleared_at_${group?.id || ''}`;
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [clearLoading, setClearLoading] = useState(false);
+
   useEffect(() => {
     const fetchGroup = async () => {
       setLoading(true)
@@ -362,20 +367,78 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   }, [activeTab, group?.id, joined, tokens, isStaff]);
 
   // Fetch notifications
-  const fetchNotifications = () => {
-    if (group?.id && (joined || isGroupCreator() || isStaff)) {
-      setLoadingNotifications(true);
-      fetch(`http://localhost:8000/api/groups/${group.id}/notifications/`, {
-        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
-      })
-        .then(res => res.json())
-        .then(setNotifications)
-        .finally(() => setLoadingNotifications(false));
+  const fetchGroupNotifications = async () => {
+    setNotifLoading(true);
+    if (!group?.id) {
+      setNotifications([]);
+      setNotifLoading(false);
+      return;
     }
+    let allNotifications: any[] = [];
+    // Group notifications
+    const notifRes = await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/`, {
+      headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+    });
+    if (notifRes.ok) {
+      const notifs = await notifRes.json();
+      notifs.slice(0, 5).forEach((n: any) => {
+        allNotifications.push({
+          id: `notif-${group.id}-${n.id}`,
+          type: 'notification',
+          title: n.message,
+          time: n.created_at ? format(new Date(n.created_at), 'MMM d, h:mm a') : '',
+          rawTime: n.created_at ? new Date(n.created_at).getTime() : 0,
+          group: group.group_name || group.subject_code,
+        });
+      });
+    }
+    // Chat messages
+    const msgRes = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
+      headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+    });
+    if (msgRes.ok) {
+      const messages = await msgRes.json();
+      messages.slice(-5).forEach((msg: any) => {
+        if (user && msg.user_id !== user.id) {
+          allNotifications.push({
+            id: `msg-${group.id}-${msg.id}`,
+            type: 'message',
+            title: `New message from ${msg.user_name || 'Someone'}: ${msg.text.length > 40 ? msg.text.slice(0, 40) + '...' : msg.text}`,
+            time: msg.timestamp ? format(new Date(msg.timestamp), 'MMM d, h:mm a') : '',
+            rawTime: msg.timestamp ? new Date(msg.timestamp).getTime() : 0,
+            group: group.group_name || group.subject_code,
+          });
+        }
+      });
+    }
+    // Filter out notifications/messages created before the last clear for this group
+    const clearedAt = parseInt(localStorage.getItem(GROUP_NOTIF_CLEAR_KEY) || '0', 10);
+    allNotifications = allNotifications.filter(n => n.rawTime > clearedAt);
+    // Sort notifications by time (most recent first)
+    allNotifications.sort((a, b) => b.rawTime - a.rawTime);
+    const top5 = allNotifications.slice(0, 5);
+    setNotifications(top5);
+    setNotifLoading(false);
   };
+
   useEffect(() => {
-    fetchNotifications();
-  }, [group?.id, joined, tokens, isStaff]);
+    fetchGroupNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group?.id, user]);
+
+  const handleClearGroupNotifications = async () => {
+    setClearLoading(true);
+    if (!group?.id) return;
+    await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/clear/`, {
+      method: 'DELETE',
+      headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+    });
+    // Mark the time of clear, so all notifications/messages before this are hidden
+    const now = Date.now();
+    localStorage.setItem(GROUP_NOTIF_CLEAR_KEY, now.toString());
+    setNotifications([]);
+    setClearLoading(false);
+  };
 
   // Fetch files
   useEffect(() => {
@@ -2357,39 +2420,39 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             {/* Notifications Panel */}
             <Card className="shadow-lg border-0">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="font-serif font-medium text-deep-blue flex items-center gap-2">
-                    <Bell className="h-5 w-5 text-gold" /> Notifications
-                  </CardTitle>
-                  {notifications.length > 0 && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleClearNotifications}
-                      className="text-xs ml-4"
-                    >
-                      Clear All
+                <CardTitle className="font-serif font-medium text-deep-blue flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <span>Notifications</span>
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="icon" onClick={fetchGroupNotifications} className="text-xs p-0 min-w-[18px] min-h-[18px]" disabled={notifLoading} aria-label="Refresh notifications">
+                      <RotateCcw className={notifLoading ? "animate-spin" : ""} size={12} />
                     </Button>
-                  )}
-                </div>
+                    <Button variant="outline" size="icon" onClick={handleClearGroupNotifications} className="text-xs p-0 min-w-[18px] min-h-[18px]" disabled={clearLoading} aria-label="Clear all notifications">
+                      <Trash2 className={clearLoading ? "opacity-50" : ""} size={12} />
+                    </Button>
+                  </div>
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                {loadingNotifications ? (
-                  <div className="text-gray-500">Loading notifications...</div>
-                ) : notifications.length === 0 ? (
-                  <div className="text-gray-500">No notifications yet.</div>
-                ) : (
-                  <ul className="space-y-3">
-                    {notifications.map((n) => (
-                      <li key={n.id} className="bg-soft-gray rounded p-3 text-sm text-deep-blue">
-                        <span>{n.message}</span>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {new Date(n.created_at).toLocaleString()}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <div className="space-y-4">
+                  {notifications.length === 0 ? (
+                    <div className="text-gray-500">No notifications yet.</div>
+                  ) : notifications.map((notification) => (
+                    <div key={notification.id} className="rounded-lg bg-gray-50 p-4 min-w-0 overflow-hidden">
+                      <p className="text-sm font-medium mb-2 line-clamp-2 break-words max-w-full">{notification.title}</p>
+                      <div className="flex items-center justify-between min-w-0">
+                        <Badge variant="secondary" className="text-xs truncate max-w-[60%]">
+                          {notification.group}
+                        </Badge>
+                        <span className="text-xs text-gray-500 ml-2 truncate max-w-[40%]">{notification.time}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button variant="outline" className="w-full mt-4 bg-transparent" onClick={fetchGroupNotifications} disabled={notifLoading} aria-label="View all notifications">
+                  View All Notifications
+                </Button>
               </CardContent>
             </Card>
 
