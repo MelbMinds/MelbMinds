@@ -19,6 +19,7 @@ import {
 import { useUser } from "@/components/UserContext"
 import { format } from "date-fns"
 import { toastSuccess, toastFail } from "@/components/ui/use-toast"
+import Skeleton from "@/components/ui/Skeleton";
 
 export default function DashboardPage() {
   const [notifications] = useState([
@@ -107,8 +108,10 @@ export default function DashboardPage() {
           allSessions = allSessions.concat(data.map((s: any) => ({ ...s, group })))
         }
       }
+      // Safely filter out sessions with invalid date/time
+      allSessions = allSessions.filter(s => s.date && s.time && !isNaN(new Date(s.date + 'T' + s.time).getTime()));
       // Sort sessions by date+time ascending
-      allSessions.sort((a, b) => new Date(a.date + 'T' + a.time).getTime() - new Date(b.date + 'T' + b.time).getTime())
+      allSessions.sort((a, b) => new Date(a.date + 'T' + a.time).getTime() - new Date(b.date + 'T' + b.time).getTime());
       setSessions(allSessions)
     }
     if (createdGroups.length || joinedGroups.length) fetchSessions()
@@ -214,6 +217,129 @@ export default function DashboardPage() {
       default:
         return "bg-gray-100 text-gray-800"
     }
+  }
+
+  if (loadingGroups) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-[#003366] mb-2">Welcome back!</h1>
+            <p className="text-xl text-gray-600">Here's what's happening with your study groups</p>
+          </div>
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <Tabs defaultValue="groups" className="space-y-6">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="groups">My Groups</TabsTrigger>
+                  <TabsTrigger value="schedule">Schedule</TabsTrigger>
+                  <TabsTrigger value="recommended">Recommended</TabsTrigger>
+                </TabsList>
+                <TabsContent value="groups" className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-2xl font-bold text-[#003366]">My Study Groups</h2>
+                    <Button className="bg-[#003366] hover:bg-[#002244] text-white opacity-70 cursor-default" disabled>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Join More Groups
+                    </Button>
+                  </div>
+                  <div className="space-y-6">
+                    {/* Groups Created Skeleton */}
+                    <div>
+                      <button className="flex items-center gap-2 text-lg font-semibold text-[#003366] mb-4" disabled>
+                        <ChevronDown className="h-5 w-5" />
+                        Groups Created (0)
+                      </button>
+                      <div className="space-y-4">
+                        {[...Array(1)].map((_, i) => (
+                          <div key={i} className="relative bg-white rounded-lg shadow-lg border-l-4 border-l-[#003366] flex flex-col p-6 min-h-[220px]">
+                            {/* Badge and crown */}
+                            <div className="flex justify-between items-start mb-2">
+                              <Skeleton className="h-8 w-32 rounded-full" /> {/* Badge */}
+                              <Crown className="h-6 w-6 text-yellow-400" />
+                            </div>
+                            <Skeleton className="h-8 w-2/3 rounded mb-2" /> {/* Group name */}
+                            <Skeleton className="h-4 w-24 rounded mb-4" /> {/* Members */}
+                            <div className="flex items-center gap-2 mb-4">
+                              <Clock className="h-5 w-5 text-gray-400" />
+                              <Skeleton className="h-4 w-32 rounded" /> {/* Next session */}
+                            </div>
+                            <div className="flex gap-4 mt-auto">
+                              <Skeleton className="h-12 w-40 rounded" />
+                              <Skeleton className="h-12 w-40 rounded" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Groups Joined Skeleton */}
+                    <div>
+                      <button className="flex items-center gap-2 text-lg font-semibold text-[#003366] mb-4" disabled>
+                        <ChevronDown className="h-5 w-5" />
+                        Groups Joined (0)
+                      </button>
+                      <div className="space-y-4">
+                        {[...Array(1)].map((_, i) => (
+                          <div key={i} className="relative bg-white rounded-lg shadow-lg flex flex-col p-6 min-h-[220px]">
+                            {/* Badge */}
+                            <div className="flex justify-between items-start mb-2">
+                              <Skeleton className="h-8 w-32 rounded-full" /> {/* Badge */}
+                              <div className="w-6 h-6" /> {/* Empty space for alignment */}
+                            </div>
+                            <Skeleton className="h-8 w-2/3 rounded mb-2" /> {/* Group name */}
+                            <Skeleton className="h-4 w-24 rounded mb-4" /> {/* Members */}
+                            <div className="flex items-center gap-2 mb-4">
+                              <Clock className="h-5 w-5 text-gray-400" />
+                              <Skeleton className="h-4 w-32 rounded" /> {/* Next session */}
+                            </div>
+                            <div className="flex gap-4 mt-auto">
+                              <Skeleton className="h-12 w-40 rounded" />
+                              <Skeleton className="h-12 w-40 rounded" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+            {/* Sidebar Skeleton */}
+            <div className="flex flex-col gap-6">
+              {/* Recent Notifications Skeleton */}
+              <div className="bg-white rounded-lg shadow-lg border-0 w-full flex flex-col">
+                <div className="px-6 pt-6 pb-2 flex items-center gap-2">
+                  <Bell className="h-6 w-6" style={{ color: '#003366' }} />
+                  <CardTitle className="font-bold text-2xl font-sans" style={{ color: '#003366' }}>Recent Notifications</CardTitle>
+                </div>
+                <div className="px-6 pb-4 flex flex-col gap-3 mt-2">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                      <div className="flex flex-col gap-1 w-3/4">
+                        <Skeleton className="h-4 w-32 rounded mb-1" /> {/* Message */}
+                        <Skeleton className="h-4 w-20 rounded" /> {/* Badge */}
+                      </div>
+                      <Skeleton className="h-4 w-10 rounded" /> {/* Time */}
+                    </div>
+                  ))}
+                  <Skeleton className="h-12 w-full rounded mt-2" /> {/* View All Notifications button */}
+                </div>
+              </div>
+              {/* Quick Actions Skeleton */}
+              <div className="bg-white rounded-lg shadow-lg border-0 w-full flex flex-col">
+                <div className="px-6 pt-6 pb-2">
+                  <CardTitle style={{ color: '#003366' }}>Quick Actions</CardTitle>
+                </div>
+                <div className="px-6 pb-4 flex flex-col gap-3 mt-2">
+                  <Skeleton className="h-12 w-full rounded bg-[#003366] opacity-60" /> {/* Create Study Group button */}
+                  <Skeleton className="h-12 w-full rounded" /> {/* Find Groups button */}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -519,8 +645,8 @@ export default function DashboardPage() {
             {/* Notifications */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Bell className="mr-2 h-5 w-5" />
+                <CardTitle className="flex items-center" style={{ color: '#003366' }}>
+                  <Bell className="mr-2 h-5 w-5" style={{ color: '#003366' }} />
                   Recent Notifications
                 </CardTitle>
               </CardHeader>
@@ -549,7 +675,7 @@ export default function DashboardPage() {
             {/* Quick Actions */}
             <Card>
               <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
+                <CardTitle style={{ color: '#003366' }}>Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Link href="/create-group">

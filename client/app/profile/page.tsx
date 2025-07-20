@@ -31,6 +31,7 @@ import { useUser } from "@/components/UserContext"
 import { toast } from "@/components/ui/use-toast"
 import { PopupAlert } from "@/components/ui/popup-alert"
 import { apiClient } from "@/lib/api"
+import Skeleton from "@/components/ui/Skeleton";
 
 export default function ProfilePage() {
   const { tokens, setUser } = useUser()
@@ -61,7 +62,76 @@ export default function ProfilePage() {
   }, [tokens])
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+    return (
+      <div className="min-h-screen bg-soft-gray">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-8">
+            <h1 className="text-4xl lg:text-5xl font-serif font-bold text-deep-blue mb-2">My Profile</h1>
+            <p className="text-xl text-gray-600">Manage your account and study preferences</p>
+          </div>
+          <div className="grid lg:grid-cols-4 gap-8">
+            {/* Sidebar */}
+            <div className="lg:col-span-1 flex flex-col gap-6">
+              <div className="bg-white rounded-lg shadow-lg border-0 w-full flex flex-col items-center p-6 mb-6">
+                <Skeleton className="h-24 w-24 rounded-full mb-4" /> {/* Avatar */}
+                <Skeleton className="h-8 w-32 rounded mb-2" /> {/* Name */}
+                <Skeleton className="h-4 w-24 rounded mb-2" /> {/* Major/year */}
+                <Skeleton className="h-4 w-20 rounded mb-4" /> {/* Member since */}
+                <Button className="w-full bg-deep-blue text-white font-serif cursor-default opacity-70" disabled>
+                  <Edit3 className="mr-2 h-4 w-4" />
+                  Edit Profile
+                </Button>
+              </div>
+              <div className="bg-white rounded-lg shadow-lg border-0 w-full flex flex-col">
+                <div className="px-6 pt-6 pb-2">
+                  <CardTitle className="font-serif font-medium text-deep-blue">Quick Stats</CardTitle>
+                </div>
+                <div className="px-6 pb-4 flex flex-col gap-0 mt-2">
+                  <Skeleton className="h-4 w-3/4 rounded mb-2" />
+                  <Skeleton className="h-4 w-2/3 rounded mb-2" />
+                  <Skeleton className="h-4 w-1/2 rounded mb-2" />
+                  <Skeleton className="h-4 w-2/3 rounded mb-2" />
+                  <Skeleton className="h-4 w-1/3 rounded" />
+                </div>
+              </div>
+            </div>
+            {/* Main Content */}
+            <div className="lg:col-span-3 flex flex-col gap-6">
+              <Tabs value="profile">
+                <TabsList className="grid w-full grid-cols-4 mb-6">
+                  <TabsTrigger value="profile" disabled className="flex items-center gap-2">
+                    <User className="h-4 w-4" /> Profile Info
+                  </TabsTrigger>
+                  <TabsTrigger value="groups" disabled className="flex items-center gap-2">
+                    <Users className="h-4 w-4" /> My Groups
+                  </TabsTrigger>
+                  <TabsTrigger value="achievements" disabled className="flex items-center gap-2">
+                    <Star className="h-4 w-4" /> Achievements
+                  </TabsTrigger>
+                  <TabsTrigger value="settings" disabled className="flex items-center gap-2">
+                    <Edit3 className="h-4 w-4" /> Settings
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <Card className="shadow-lg border-0">
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="font-serif text-deep-blue">Profile Information</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <Skeleton className="h-8 w-1/2 rounded" />
+                  <Skeleton className="h-8 w-2/3 rounded" />
+                  <Skeleton className="h-8 w-1/3 rounded" />
+                  <Skeleton className="h-8 w-1/2 rounded" />
+                  <Skeleton className="h-8 w-1/4 rounded" />
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
