@@ -142,7 +142,7 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
-function toast({ ...props }: Toast) {
+function toast({ duration = 2000, ...props }: Toast & { duration?: number }) {
   const id = genId()
 
   const update = (props: ToasterToast) =>
@@ -158,6 +158,7 @@ function toast({ ...props }: Toast) {
       ...props,
       id,
       open: true,
+      duration,
       onOpenChange: (open) => {
         if (!open) dismiss()
       },
@@ -172,7 +173,11 @@ function toast({ ...props }: Toast) {
 }
 
 function toastSuccess({ ...props }: Toast) {
-  return toast({ ...props, variant: 'success' });
+  return toast({ ...props, variant: 'success', duration: 2000 });
+}
+
+function toastFail({ ...props }: Toast) {
+  return toast({ ...props, variant: 'fail', duration: 2000 });
 }
 
 function useToast() {
@@ -195,4 +200,4 @@ function useToast() {
   }
 }
 
-export { useToast, toast, toastSuccess }
+export { useToast, toast, toastSuccess, toastFail }

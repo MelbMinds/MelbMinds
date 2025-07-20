@@ -40,7 +40,7 @@ import {
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
 import { use } from "react"
-import { toastSuccess } from "@/components/ui/use-toast"
+import { toastFail, toastSuccess } from "@/components/ui/use-toast"
 import { format } from "date-fns"
 import { StarRating } from "@/components/ui/star-rating"
 import { PopupAlert } from "@/components/ui/popup-alert"
@@ -419,15 +419,15 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       })
       
       if (res.ok) {
-        toastSuccess({ title: 'Successfully left the group!' })
+        toastFail({ title: 'Successfully left the group!' })
         // Redirect to dashboard
         window.location.href = '/dashboard'
       } else {
         const data = await res.json()
-        toastSuccess({ title: 'Error leaving group', description: data.detail, variant: 'destructive' })
+        toastFail({ title: 'Error leaving group', description: data.detail })
       }
     } catch (error) {
-      toastSuccess({ title: 'Error leaving group', variant: 'destructive' })
+      toastFail({ title: 'Error leaving group' })
     } finally {
       setLoadingActions(false)
     }
@@ -447,15 +447,15 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       })
       
       if (res.ok) {
-        toastSuccess({ title: 'Group deleted successfully!' })
+        toastFail({ title: 'Group deleted successfully!' })
         // Redirect to dashboard
         window.location.href = '/dashboard'
       } else {
         const data = await res.json()
-        toastSuccess({ title: 'Error deleting group', description: data.detail, variant: 'destructive' })
+        toastFail({ title: 'Error deleting group', description: data.detail })
       }
     } catch (error) {
-      toastSuccess({ title: 'Error deleting group', variant: 'destructive' })
+      toastFail({ title: 'Error deleting group' })
     } finally {
       setLoadingActions(false)
     }
@@ -498,7 +498,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         const updatedGroup = await res.json()
         setGroup(updatedGroup)
         setIsEditing(false)
-        toastSuccess({ title: 'Group updated successfully!' })
+        toastFail({ title: 'Group updated successfully!' })
       } else {
         const data = await res.json()
         // Find the first string error in the response
@@ -518,7 +518,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         setUpdateError(errorMsg || data.error || data.detail)
       }
     } catch (error) {
-      toastSuccess({ title: 'Error updating group', variant: 'destructive' })
+      toastFail({ title: 'Error updating group' })
     } finally {
       setLoadingActions(false)
     }
@@ -586,7 +586,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       if (res.ok) {
         setHasRequested(true)
         setJoined(true)
-        toastSuccess({
+        toastFail({
           title: 'Congratulations!',
           description: 'You have successfully joined the group.',
         })
@@ -720,7 +720,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         setNewFolderName("")
         setShowCreateFolderDialog(false)
         
-        toastSuccess({
+        toastFail({
           title: "Success!",
           description: "Flashcard folder created successfully.",
         })
@@ -728,10 +728,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         throw new Error("Failed to create folder")
       }
     } catch (err) {
-      toastSuccess({
+      toastFail({
         title: "Error",
         description: "Failed to create folder. Please try again.",
-        variant: "destructive"
       })
     } finally {
       setIsCreatingFolder(false)
@@ -757,13 +756,13 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
       if (res.ok) {
         setFlashcardFolders(prev => prev.filter(f => f.id !== folder.id))
-        toastSuccess({ title: 'Folder deleted successfully!' })
+        toastFail({ title: 'Folder deleted successfully!' })
       } else {
         const error = await res.json()
-        toastSuccess({ title: 'Error deleting folder', description: error.detail, variant: 'destructive' })
+        toastFail({ title: 'Error deleting folder', description: error.detail })
       }
     } catch (error) {
-      toastSuccess({ title: 'Error deleting folder', variant: 'destructive' })
+      toastFail({ title: 'Error deleting folder' })
     }
   }
 
@@ -787,13 +786,13 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         setEditingFolder(null)
         setNewFolderName("")
         setShowCreateFolderDialog(false)
-        toastSuccess({ title: 'Folder updated successfully!' })
+        toastFail({ title: 'Folder updated successfully!' })
       } else {
         const error = await res.json()
-        toastSuccess({ title: 'Error updating folder', description: error.detail, variant: 'destructive' })
+        toastFail({ title: 'Error updating folder', description: error.detail })
       }
     } catch (error) {
-      toastSuccess({ title: 'Error updating folder', variant: 'destructive' })
+      toastFail({ title: 'Error updating folder' })
     } finally {
       setIsCreatingFolder(false)
     }
@@ -915,7 +914,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       })
         .then(res => res.json())
         .then(setSessions);
-      toastSuccess({ title: 'Session updated!' });
+      toastFail({ title: 'Session updated!' });
     } else {
       const err = await res.json();
       let errorMsg = err?.error || err?.detail || null;
@@ -944,9 +943,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     setSessionLoading(false)
     if (res.ok) {
       setSessions(sessions.filter(s => s.id !== sessionId))
-      toastSuccess({ title: 'Session deleted!' })
+      toastFail({ title: 'Session deleted!' })
     } else {
-      toastSuccess({ title: 'Error deleting session', variant: 'destructive' })
+      toastFail({ title: 'Error deleting session' })
     }
   }
 
@@ -960,9 +959,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     setLoadingNotifications(false)
     if (res.ok) {
       setNotifications([])
-      toastSuccess({ title: 'All notifications cleared!' })
+      toastFail({ title: 'All notifications cleared!' })
     } else {
-      toastSuccess({ title: 'Error clearing notifications', variant: 'destructive' })
+      toastFail({ title: 'Error clearing notifications' })
     }
   }
 
@@ -1007,7 +1006,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       if (res.ok) {
         const newFile = await res.json()
         setFiles(prev => [newFile, ...prev])
-        toastSuccess({ title: 'File uploaded successfully!' })
+        toastFail({ title: 'File uploaded successfully!' })
       } else {
         const error = await res.json()
         // Find the first string error in the response
@@ -1027,7 +1026,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         setFileError(errorMsg || error.detail || error.error)
       }
     } catch (error) {
-      toastSuccess({ title: 'Error uploading file', variant: 'destructive' })
+      toastFail({ title: 'Error uploading file' })
     } finally {
       setUploadingFile(false)
       setSelectedFile(null)
@@ -1059,7 +1058,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             // For S3 files, open the URL in a new tab (download attribute doesn't work cross-origin)
             window.open(data.download_url, '_blank')
           } else {
-            toastSuccess({ title: 'Error downloading file', variant: 'destructive' })
+            toastFail({ title: 'Error downloading file' })
           }
         } else if (contentType && contentType.includes('application/octet-stream')) {
           // For direct file downloads (streamed from S3)
@@ -1085,10 +1084,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           document.body.removeChild(a)
         }
       } else {
-        toastSuccess({ title: 'Error downloading file', variant: 'destructive' })
+        toastFail({ title: 'Error downloading file' })
       }
     } catch (error) {
-      toastSuccess({ title: 'Error downloading file', variant: 'destructive' })
+      toastFail({ title: 'Error downloading file' })
     }
   }
 
@@ -1105,12 +1104,12 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
       if (res.ok) {
         setFiles(prev => prev.filter(f => f.id !== file.id))
-        toastSuccess({ title: 'File deleted successfully!' })
+        toastFail({ title: 'File deleted successfully!' })
       } else {
-        toastSuccess({ title: 'Error deleting file', variant: 'destructive' })
+        toastFail({ title: 'Error deleting file' })
       }
     } catch (error) {
-      toastSuccess({ title: 'Error deleting file', variant: 'destructive' })
+      toastFail({ title: 'Error deleting file' })
     }
   }
 
@@ -1205,7 +1204,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       })
       if (res.ok) {
         setUserRating(newRating)
-        toastSuccess({ title: 'Thank you for rating!' })
+        toastFail({ title: 'Thank you for rating!' })
         // Optionally, refetch group data to update average rating
         const groupRes = await fetch(`http://localhost:8000/api/groups/${group.id}/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
@@ -1216,10 +1215,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         }
       } else {
         const err = await res.json()
-        toastSuccess({ title: 'Error submitting rating', description: err.detail, variant: 'destructive' })
+        toastFail({ title: 'Error submitting rating', description: err.detail })
       }
     } catch (error) {
-      toastSuccess({ title: 'Error submitting rating', variant: 'destructive' })
+      toastFail({ title: 'Error submitting rating' })
     } finally {
       setRatingLoading(false)
     }
@@ -1239,7 +1238,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       if (res.ok) {
         setMessages(messages.filter(m => m.id !== msgId))
       } else {
-        toastSuccess({ title: 'Error', description: 'Could not delete message', variant: 'destructive' })
+        toastFail({ title: 'Error', description: 'Could not delete message' })
       }
     } finally {
       setDeleteLoading(null)
@@ -1267,7 +1266,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           setReportingMessage(null)
           setReportReason("")
         } else {
-          toastSuccess({ title: 'Error', description: 'Could not report message', variant: 'destructive' })
+          toastFail({ title: 'Error', description: 'Could not report message' })
         }
       } finally {
         setReportSubmitting(false)
@@ -1292,10 +1291,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           setReportingFile(null)
           setReportReason("")
         } else {
-          toastSuccess({ title: 'Error reporting file', variant: 'destructive' })
+          toastFail({ title: 'Error reporting file' })
         }
       } catch (error) {
-        toastSuccess({ title: 'Error reporting file', variant: 'destructive' })
+        toastFail({ title: 'Error reporting file' })
       } finally {
         setReportSubmitting(false)
       }
@@ -1325,8 +1324,8 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       });
       const data = await res.json();
       if (res.ok) {
-        toastSuccess({ title: 'Joined session!', description: 'You have joined this session.' });
-        // Refetch sessions from backend to update attendees and ensure join button disappears
+        toastFail({ title: 'Joined session!', description: 'You have joined this session.' });
+        // Refetch sessions from backend to update attendees
         await fetchSessions();
       }
     } catch (e) {
@@ -2561,7 +2560,57 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       )}
 
       {/* Progress Bar and Target Hours Admin Control */}
-      
+      <div className="mb-6">
+        <div className="flex items-center gap-4">
+          <span className="font-medium text-gray-700">Study Progress:</span>
+          <div className="flex-1">
+            <Progress value={group.progress_percentage} className="h-3" />
+            <div className="flex justify-between text-xs text-gray-600 mt-1">
+              <span>{group.total_study_hours} / {group.target_study_hours} hours</span>
+              <span>{group.progress_percentage}%</span>
+            </div>
+          </div>
+          {isGroupCreator() && !editingTargetHours && (
+            <Button size="sm" variant="outline" onClick={() => { setEditingTargetHours(true); setTargetHoursInput(group.target_study_hours) }}>Edit Target</Button>
+          )}
+          {isGroupCreator() && editingTargetHours && (
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setTargetHoursError(null);
+              if (!Number.isInteger(Number(targetHoursInput)) || Number(targetHoursInput) <= 0) {
+                setTargetHoursError("Target hours must be a positive integer");
+                return;
+              }
+              setLoadingActions(true);
+              try {
+                const res = await fetch(`http://localhost:8000/api/groups/${group.id}/update/`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json', ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` }) },
+                  body: JSON.stringify({ target_study_hours: Number(targetHoursInput) })
+                });
+                if (res.ok) {
+                  const updated = await res.json();
+                  setGroup(updated);
+                  setEditingTargetHours(false);
+                  toastFail({ title: 'Target hours updated!' });
+                } else {
+                  const data = await res.json();
+                  setTargetHoursError(data.error || 'Failed to update');
+                }
+              } catch {
+                setTargetHoursError('Network error');
+              } finally {
+                setLoadingActions(false);
+              }
+            }} className="flex items-center gap-2">
+              <Input type="number" min={1} value={targetHoursInput} onChange={e => setTargetHoursInput(e.target.value)} className="w-20" />
+              <Button size="sm" type="submit" disabled={loadingActions}>Save</Button>
+              <Button size="sm" variant="ghost" type="button" onClick={() => setEditingTargetHours(false)}>Cancel</Button>
+              {targetHoursError && <span className="text-xs text-red-500 ml-2">{targetHoursError}</span>}
+            </form>
+          )}
+        </div>
+      </div>
 
       {/* Reporting Dialogs */}
       {(reportingMessage || reportingFile) && (
