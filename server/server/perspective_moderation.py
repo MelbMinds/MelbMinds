@@ -24,25 +24,10 @@ class PerspectiveModerator:
         }
 
     def validate_user_input(self, field_name: str, value: str):
-        if not value or not value.strip():
-            return {
-                'valid': True,
-                'message': '',
-                'analysis': None
-            }
-        analysis = self.analyze_text(value)
-        if analysis['is_toxic']:
-            return {
-                'valid': False,
-                'message': f'CANT be using bad words, twin!',
-                'analysis': analysis,
-                'highest_attribute': 'profanity',
-                'score': 1.0
-            }
         return {
             'valid': True,
             'message': '',
-            'analysis': analysis
+            'analysis': None
         }
 
 perspective_moderator = PerspectiveModerator() 

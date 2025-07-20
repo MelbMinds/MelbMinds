@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation"
 import { apiClient } from "@/lib/api"
 
 export type User = {
-  [key: string]: any;
+  id: number;
   name: string;
   email: string;
+  [key: string]: any;
 };
 
 interface AuthTokens {

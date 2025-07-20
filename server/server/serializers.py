@@ -114,6 +114,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
+            "id",
             "name", "email", "major", "year", "studyFormat",
             "languages", "bio", "joinDate", "avatar"
         ]
@@ -144,7 +145,7 @@ class GroupSessionSerializer(serializers.ModelSerializer):
     attendees = serializers.SerializerMethodField()
     class Meta:
         model = GroupSession
-        fields = ['id', 'group', 'creator', 'creator_name', 'date', 'start_time', 'end_time', 'location', 'description', 'created_at', 'updated_at', 'attendee_count', 'attendees']
+        fields = ['id', 'group', 'creator', 'creator_name', 'topic', 'date', 'start_time', 'end_time', 'location', 'meeting_format', 'description', 'extra_details', 'created_at', 'updated_at', 'attendee_count', 'attendees']
         read_only_fields = ['group', 'creator', 'creator_name', 'created_at', 'updated_at', 'attendee_count', 'attendees']
 
     def get_attendee_count(self, obj):
