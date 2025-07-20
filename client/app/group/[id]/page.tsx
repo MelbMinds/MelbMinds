@@ -2395,19 +2395,15 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Created</span>
-                    <span className="text-sm font-medium">2 weeks ago</span>
+                    <span className="text-sm font-medium">{group.created_at ? new Date(group.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Sessions held</span>
-                    <span className="text-sm font-medium">8</span>
+                    <span className="text-sm font-medium">{Array.isArray(sessions) ? sessions.length : 0}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Avg. attendance</span>
-                    <span className="text-sm font-medium">85%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Study hours</span>
-                    <span className="text-sm font-medium">{group.studyHours}h</span>
+                    <span className="text-sm font-medium">{Array.isArray(sessions) && sessions.length > 0 && group.member_count ? `${Math.round(sessions.reduce((sum, s) => sum + (s.attendee_count || 0), 0) / sessions.length / group.member_count * 100)}%` : 'N/A'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Languages</span>
