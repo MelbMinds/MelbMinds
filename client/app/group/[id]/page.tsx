@@ -37,6 +37,8 @@ import {
   MoreHorizontal,
   Flag,
   FileEdit,
+  Clipboard,
+  Check,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
@@ -294,6 +296,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [joiningSessionId, setJoiningSessionId] = useState<number | null>(null);
 
   const [sessionsLoading, setSessionsLoading] = useState(false);
+
+  // Add state for share link UI
+  const [showShareLink, setShowShareLink] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const groupLink = typeof window !== 'undefined' ? `${window.location.origin}/group/${group?.id}` : '';
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -1434,7 +1441,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="bg-transparent">
+                  <Button variant="outline" size="sm" className="bg-transparent" onClick={async () => {
+                    const groupLink = typeof window !== 'undefined' ? `${window.location.origin}/group/${group?.id}` : '';
+                    await navigator.clipboard.writeText(groupLink);
+                    toastSuccess({ title: 'Copied to clipboard' });
+                  }}>
                     <Share2 className="h-4 w-4 mr-1" />
                     Share
                   </Button>
