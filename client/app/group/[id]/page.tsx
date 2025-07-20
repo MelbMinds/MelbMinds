@@ -1506,16 +1506,29 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                 )}
 
                 <div className="grid md:grid-cols-2 gap-4 mb-6">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Clock className="mr-2 h-4 w-4" />
+                  {/* Upcoming Section replaces Schedule and Location */}
+                  <div className="col-span-2 flex items-center text-sm text-gray-600">
+                    <Calendar className="mr-2 h-4 w-4" />
                     <span>
-                      <strong>Schedule:</strong> {group.schedule}
-                    </span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <MapPin className="mr-2 h-4 w-4" />
-                    <span>
-                      <strong>Location:</strong> {group.location}
+                      <strong>Upcoming:</strong>{' '}
+                      {(() => {
+                        // Find the next upcoming session
+                        const now = new Date();
+                        const upcoming = Array.isArray(sessions)
+                          ? sessions
+                              .map((s) => ({
+                                ...s,
+                                start: new Date(`${s.date}T${s.start_time || s.startTime}`),
+                              }))
+                              .filter((s) => s.start > now)
+                              .sort((a, b) => a.start - b.start)[0]
+                          : null;
+                        if (upcoming) {
+                          return `${upcoming.topic ? upcoming.topic + ' - ' : ''}${upcoming.date} at ${upcoming.start_time || upcoming.startTime}${upcoming.location ? ' (' + upcoming.location + ')' : ''}`;
+                        } else {
+                          return 'No sessions upcoming.';
+                        }
+                      })()}
                     </span>
                   </div>
                 </div>
