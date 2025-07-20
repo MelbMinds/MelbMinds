@@ -58,6 +58,8 @@ urlpatterns = [
     path('api/sessions/<int:session_id>/', GroupSessionRetrieveUpdateDeleteView.as_view(), name='session_detail'),
     path('api/sessions/<int:session_id>/join/', views.join_session, name='join_session'),
     path('api/groups/messages/<int:message_id>/', views.message_detail, name='message_detail'),
+    path('api/files/<int:file_id>/delete/', views.GroupFileDeleteView.as_view(), name='file_delete'),
+    path('api/files/<int:file_id>/download/', views.GroupFileDownloadView.as_view(), name='file_download'),
 ]
 
 urlpatterns += [

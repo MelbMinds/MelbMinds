@@ -1315,7 +1315,7 @@ class GroupRatingView(APIView):
             return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
     
     def post(self, request, group_id):
-        """Create or update a rating for a group"""
+        """Create or update a rating for a group. Users can only have one rating per group, which can be updated."""
         try:
             group = Group.objects.get(id=group_id)
             rating_value = request.data.get('rating')
@@ -1327,10 +1327,6 @@ class GroupRatingView(APIView):
             if not (request.user in group.members.all() or request.user == group.creator):
                 return Response({'detail': 'You must be a member of this group to rate it'}, status=status.HTTP_403_FORBIDDEN)
             
-            # Prevent group creator from rating their own group
-            if request.user == group.creator:
-                return Response({'detail': 'Group creators cannot rate their own group'}, status=status.HTTP_403_FORBIDDEN)
-            
             # Validate rating value
             try:
                 rating_float = float(rating_value)
@@ -1339,7 +1335,7 @@ class GroupRatingView(APIView):
             except ValueError:
                 return Response({'detail': 'Invalid rating value'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Create or update rating
+            # Create or update rating (user can only have one rating per group)
             rating, created = GroupRating.objects.update_or_create(
                 user=request.user,
                 group=group,
@@ -1347,7 +1343,10 @@ class GroupRatingView(APIView):
             )
             
             serializer = GroupRatingSerializer(rating)
-            return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+            if created:
+                return Response({'message': 'Rating created successfully', **serializer.data}, status=status.HTTP_201_CREATED)
+            else:
+                return Response({'message': 'Rating updated successfully', **serializer.data}, status=status.HTTP_200_OK)
             
         except Group.DoesNotExist:
             return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
