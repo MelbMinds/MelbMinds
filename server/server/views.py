@@ -830,6 +830,7 @@ class GroupSessionRetrieveUpdateDeleteView(APIView):
         return Response(serializer.data)
 
     def put(self, request, session_id):
+        print("DEBUG: PUT /api/sessions/<id>/ called with data:", request.data)
         session = self.get_object(session_id)
         if session.creator != request.user:
             return Response({'detail': 'Only the group creator can edit sessions'}, status=403)

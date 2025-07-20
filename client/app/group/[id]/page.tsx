@@ -36,6 +36,7 @@ import {
   Folder,
   MoreHorizontal,
   Flag,
+  FileEdit,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
@@ -185,6 +186,10 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     location: '',
     extraDetails: '',
     description: '',
+    startHour: '',
+    startMinute: '',
+    endHour: '',
+    endMinute: '',
   })
   const [editingSession, setEditingSession] = useState<any>(null)
   const [sessionLoading, setSessionLoading] = useState(false)
@@ -828,13 +833,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     const end_time = endTime.length === 5 ? `${endTime}:00` : endTime;
     // Compose description with topic and extraDetails if present
     let fullDescription = description || '';
-    if (topic) fullDescription = `Topic: ${topic}\n` + fullDescription;
-    if (extraDetails) fullDescription += `\nDetails: ${extraDetails}`;
     try {
       const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         method: 'POST',
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, start_time, end_time, location, meeting_format: type, description: fullDescription }),
+        body: JSON.stringify({ topic, date, start_time, end_time, location, meeting_format: type, description: fullDescription, extra_details: extraDetails }),
       });
       if (res.ok) {
         setSessionForm({ topic: '', date: '', startTime: '', endTime: '', type: '', location: '', extraDetails: '', description: '' });
@@ -857,23 +860,29 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   };
   const handleEditSession = (session: any) => {
-    setEditingSession(session)
+    setEditingSession(session);
     setSessionForm({
       topic: session.topic || '',
       date: session.date || '',
-      startTime: session.startTime || '',
-      endTime: session.endTime || '',
-      type: session.type || '',
+      startTime: session.start_time ? session.start_time.slice(0,5) : '',
+      endTime: session.end_time ? session.end_time.slice(0,5) : '',
+      type: session.meeting_format || '',
       location: session.location || '',
-      extraDetails: session.extraDetails || '',
+      extraDetails: session.extra_details || '',
       description: session.description || '',
-    })
-  }
+      startHour: session.start_time ? session.start_time.split(':')[0] : '',
+      startMinute: session.start_time ? session.start_time.split(':')[1] : '',
+      endHour: session.end_time ? session.end_time.split(':')[0] : '',
+      endMinute: session.end_time ? session.end_time.split(':')[1] : '',
+    });
+    setShowSessionModal(true);
+  };
   const handleUpdateSession = async (e: React.FormEvent) => {
+    console.log('handleUpdateSession called', sessionForm);
     e.preventDefault();
     setSessionError("");
-    const { date, startTime, endTime, type, extraDetails } = sessionForm;
-    if (!date || !startTime || !endTime || !type || !extraDetails) {
+    const { topic, date, startTime, endTime, type, location } = sessionForm;
+    if (!topic || !date || !startTime || !endTime || !type || !location) {
       setSessionError("Please fill in all required fields.");
       return;
     }
@@ -888,27 +897,19 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       setSessionError('End time must be after start time.');
       return;
     }
+    console.log('About to send PUT request', { topic, date, start_time, end_time, location, meeting_format: type, description: sessionForm.description, extra_details: sessionForm.extraDetails });
     const res = await fetch(`http://localhost:8000/api/sessions/${editingSession.id}/`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })
       },
-      body: JSON.stringify({ date, start_time, end_time, location: sessionForm.location, description: sessionForm.description, extraDetails })
+      body: JSON.stringify({ topic, date, start_time, end_time, location, meeting_format: type, description: sessionForm.description, extra_details: sessionForm.extraDetails })
     });
     setSessionLoading(false);
     if (res.ok) {
       setEditingSession(null);
-      setSessionForm({
-        topic: '',
-        date: '',
-        startTime: '',
-        endTime: '',
-        type: '',
-        location: '',
-        extraDetails: '',
-        description: '',
-      });
+      setSessionForm({ topic: '', date: '', startTime: '', endTime: '', type: '', location: '', extraDetails: '', description: '', startHour: '', startMinute: '', endHour: '', endMinute: '' });
       fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
@@ -917,6 +918,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       toastFail({ title: 'Session updated!' });
     } else {
       const err = await res.json();
+      console.error('Session update error:', err);
       let errorMsg = err?.error || err?.detail || null;
       if (!errorMsg && typeof err === 'object') {
         for (const key in err) {
@@ -1403,10 +1405,6 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       <Star className="mr-1 h-4 w-4 text-yellow-400 fill-current" />
                       {group.average_rating ? `${group.average_rating.toFixed(1)} (${group.rating_count || 0})` : "No ratings"}
                     </div>
-                    <Badge className={`${getFormatColor(group.meeting_format)} flex items-center gap-1 border`}>
-                      {getFormatIcon(group.meeting_format)}
-                      {group.meeting_format}
-                    </Badge>
                     <span>{group.year_level}</span>
                   </div>
                   {/* Study Progress Bar */}
@@ -1953,7 +1951,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                             </div>
                             {/* Make the form content scrollable if too tall */}
                             <div className="max-h-[70vh] overflow-y-auto">
-                              <form onSubmit={handleCreateSession} className="p-6 space-y-6">
+                              <form onSubmit={editingSession ? handleUpdateSession : handleCreateSession} className="p-6 space-y-6">
                                 {/* Session Topic */}
                                 <div className="space-y-2">
                                   <label className="text-sm font-medium text-gray-700">Session Topic *</label>
@@ -1979,23 +1977,65 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                   </div>
                                   <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700">Start Time *</label>
-                                    <Input
-                                      type="time"
-                                      value={sessionForm.startTime || ''}
-                                      onChange={e => setSessionForm({ ...sessionForm, startTime: e.target.value })}
-                                      className="w-full"
-                                      required
-                                    />
+                                    <div className="flex gap-2">
+                                      <select
+                                        value={sessionForm.startHour || ''}
+                                        onChange={e => {
+                                          setSessionForm({ ...sessionForm, startHour: e.target.value, startTime: e.target.value && sessionForm.startMinute ? `${e.target.value}:${sessionForm.startMinute}` : '' });
+                                        }}
+                                        className="w-1/2 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#00264D]"
+                                        required
+                                      >
+                                        <option value="">Hour</option>
+                                        {[...Array(24).keys()].map(h => (
+                                          <option key={h} value={String(h).padStart(2, '0')}>{String(h).padStart(2, '0')}</option>
+                                        ))}
+                                      </select>
+                                      <select
+                                        value={sessionForm.startMinute || ''}
+                                        onChange={e => {
+                                          setSessionForm({ ...sessionForm, startMinute: e.target.value, startTime: sessionForm.startHour && e.target.value ? `${sessionForm.startHour}:${e.target.value}` : '' });
+                                        }}
+                                        className="w-1/2 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#00264D]"
+                                        required
+                                      >
+                                        <option value="">Min</option>
+                                        {['00', '15', '30', '45'].map(m => (
+                                          <option key={m} value={m}>{m}</option>
+                                        ))}
+                                      </select>
+                                    </div>
                                   </div>
                                   <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700">End Time *</label>
-                                    <Input
-                                      type="time"
-                                      value={sessionForm.endTime || ''}
-                                      onChange={e => setSessionForm({ ...sessionForm, endTime: e.target.value })}
-                                      className="w-full"
-                                      required
-                                    />
+                                    <div className="flex gap-2">
+                                      <select
+                                        value={sessionForm.endHour || ''}
+                                        onChange={e => {
+                                          setSessionForm({ ...sessionForm, endHour: e.target.value, endTime: e.target.value && sessionForm.endMinute ? `${e.target.value}:${sessionForm.endMinute}` : '' });
+                                        }}
+                                        className="w-1/2 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#00264D]"
+                                        required
+                                      >
+                                        <option value="">Hour</option>
+                                        {[...Array(24).keys()].map(h => (
+                                          <option key={h} value={String(h).padStart(2, '0')}>{String(h).padStart(2, '0')}</option>
+                                        ))}
+                                      </select>
+                                      <select
+                                        value={sessionForm.endMinute || ''}
+                                        onChange={e => {
+                                          setSessionForm({ ...sessionForm, endMinute: e.target.value, endTime: sessionForm.endHour && e.target.value ? `${sessionForm.endHour}:${e.target.value}` : '' });
+                                        }}
+                                        className="w-1/2 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#00264D]"
+                                        required
+                                      >
+                                        <option value="">Min</option>
+                                        {['00', '15', '30', '45'].map(m => (
+                                          <option key={m} value={m}>{m}</option>
+                                        ))}
+                                      </select>
+                                    </div>
                                   </div>
                                 </div>
                                 {/* Session Type */}
@@ -2112,7 +2152,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                   </Button>
                                   <Button
                                     type="submit"
-                                    className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif flex items-center justify-center"
+                                    className="bg-deep-blue hover:bg-deep-blue/90 text-white flex items-center justify-center"
                                     disabled={
                                       !sessionForm.topic ||
                                       !sessionForm.date ||
@@ -2126,9 +2166,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                     {creatingSession ? (
                                       <span className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></span>
                                     ) : (
-                                      <CalendarPlus className="mr-2 h-4 w-4" />
+                                      editingSession ? <Edit className="mr-2 h-4 w-4" /> : <CalendarPlus className="mr-2 h-4 w-4" />
                                     )}
-                                    {creatingSession ? 'Creating...' : 'Schedule Session'}
+                                    {creatingSession ? (editingSession ? 'Saving...' : 'Creating...') : (editingSession ? 'Save Changes' : 'Schedule Session')}
                                   </Button>
                                 </div>
                               </form>
@@ -2155,21 +2195,46 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                             console.log('Session', session.id, 'attendees:', session.attendees, 'user.id:', user && user.id);
                             const alreadyJoined = Array.isArray(session.attendees) && user && session.attendees.some((attId: any) => String(attId) === String(user.id));
                             return (
-                              <div key={index} className="p-4 bg-white rounded-lg border">
-                                <div className="flex justify-between items-start mb-3">
-                                  <div>
-                                    <h4 className="font-semibold text-deep-blue text-lg">{session.description || "Study Session"}</h4>
-                                    <p className="text-gray-600">
-                                      {format(new Date(session.date + 'T' + session.start_time), 'eeee, MMM d')} • {format(new Date(session.date + 'T' + session.start_time), 'h:mm a')} - {format(new Date(session.date + 'T' + session.end_time), 'h:mm a')}
-                                    </p>
+                              <div key={index} className="relative p-4 bg-white rounded-lg border">
+                                {isGroupCreator() && (
+                                  <div className="absolute top-2 right-2 z-10">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button size="icon" variant="ghost" aria-label="Session actions">
+                                          <MoreHorizontal className="h-5 w-5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => handleEditSession(session)}>
+                                          <Edit className="h-4 w-4 mr-2" /> Edit
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDeleteSession(session.id)} className="text-red-600">
+                                          <Trash2 className="h-4 w-4 mr-2" /> Delete
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
                                   </div>
-                                  <Badge className={getFormatColor(session.meeting_format)}>
+                                )}
+                                <div className="mb-3">
+                                  <h4 className="font-semibold text-deep-blue text-lg">{session.topic || "Untitled Session"}</h4>
+                                  <div className="flex items-center text-gray-600 mb-1">
+                                    <Clock className="mr-2 h-4 w-4" />
+                                    {format(new Date(session.date + 'T' + session.start_time), 'eeee, MMM d')} • {format(new Date(session.date + 'T' + session.start_time), 'h:mm a')} - {format(new Date(session.date + 'T' + session.end_time), 'h:mm a')}
+                                  </div>
+                                  <div className="flex items-center text-gray-600 mb-1">
+                                    <MapPin className="mr-2 h-4 w-4" />
+                                    {session.location}
+                                    {session.extra_details && `, ${session.extra_details}`}
+                                  </div>
+                                  <div className="flex items-center text-gray-600 mb-1">
+                                    {session.meeting_format === 'Virtual' ? <Video className="mr-2 h-4 w-4" /> : <Users className="mr-2 h-4 w-4" />}
                                     {session.meeting_format}
-                                  </Badge>
-                                </div>
-                                <div className="flex items-center text-sm text-gray-600 mb-3">
-                                  <MapPin className="mr-2 h-4 w-4" />
-                                  {session.location}{session.extraDetails ? `, ${session.extraDetails}` : ""}
+                                  </div>
+                                  {session.description && (
+                                    <div className="text-gray-600">
+                                      <strong>Description:</strong> {session.description}
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-4 mb-2">
                                   <span className="text-xs text-gray-500">{session.attendee_count || 0} joined</span>
