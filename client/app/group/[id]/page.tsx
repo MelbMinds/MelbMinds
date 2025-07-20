@@ -2138,50 +2138,57 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                       )}
                     </div>
 
-                    <div className="space-y-4">
-                      {sessionsLoading ? (
-                        <div className="text-gray-500">Loading sessions...</div>
-                      ) : sessions.length === 0 ? (
-                        <div className="text-gray-500">No sessions scheduled.</div>
-                      ) : (
-                        sessions.map((session, index) => {
-                          // Debug log
-                          console.log('Session', session.id, 'attendees:', session.attendees, 'user.id:', user && user.id);
-                          const alreadyJoined = Array.isArray(session.attendees) && user && session.attendees.map(String).includes(String(user.id));
-                          return (
-                            <div key={index} className="p-4 bg-white rounded-lg border">
-                              <div className="flex justify-between items-start mb-3">
-                                <div>
-                                  <h4 className="font-semibold text-deep-blue text-lg">{session.description || "Study Session"}</h4>
-                                  <p className="text-gray-600">
-                                    {format(new Date(session.date + 'T' + session.start_time), 'eeee, MMM d')} • {format(new Date(session.date + 'T' + session.start_time), 'h:mm a')} - {format(new Date(session.date + 'T' + session.end_time), 'h:mm a')}
-                                  </p>
+                    {(!user || !user.id) ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-deep-blue mx-auto"></div>
+                        <p className="mt-2 text-gray-600">Loading user...</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {sessionsLoading ? (
+                          <div className="text-gray-500">Loading sessions...</div>
+                        ) : sessions.length === 0 ? (
+                          <div className="text-gray-500">No sessions scheduled.</div>
+                        ) : (
+                          sessions.map((session, index) => {
+                            // Debug log
+                            console.log('Session', session.id, 'attendees:', session.attendees, 'user.id:', user && user.id);
+                            const alreadyJoined = Array.isArray(session.attendees) && user && session.attendees.some((attId: any) => String(attId) === String(user.id));
+                            return (
+                              <div key={index} className="p-4 bg-white rounded-lg border">
+                                <div className="flex justify-between items-start mb-3">
+                                  <div>
+                                    <h4 className="font-semibold text-deep-blue text-lg">{session.description || "Study Session"}</h4>
+                                    <p className="text-gray-600">
+                                      {format(new Date(session.date + 'T' + session.start_time), 'eeee, MMM d')} • {format(new Date(session.date + 'T' + session.start_time), 'h:mm a')} - {format(new Date(session.date + 'T' + session.end_time), 'h:mm a')}
+                                    </p>
+                                  </div>
+                                  <Badge className={getFormatColor(session.meeting_format)}>
+                                    {session.meeting_format}
+                                  </Badge>
                                 </div>
-                                <Badge className={getFormatColor(session.meeting_format)}>
-                                  {session.meeting_format}
-                                </Badge>
+                                <div className="flex items-center text-sm text-gray-600 mb-3">
+                                  <MapPin className="mr-2 h-4 w-4" />
+                                  {session.location}{session.extraDetails ? `, ${session.extraDetails}` : ""}
+                                </div>
+                                <div className="flex items-center gap-4 mb-2">
+                                  <span className="text-xs text-gray-500">{session.attendee_count || 0} joined</span>
+                                </div>
+                                {/* Only show Join Session button if not already joined and not loading */}
+                                {!alreadyJoined && (
+                                  <Button size="sm" className="bg-deep-blue hover:bg-deep-blue/90 text-white" onClick={() => handleJoinSession(session.id)} disabled={joiningSessionId === session.id}>
+                                    {joiningSessionId === session.id ? (
+                                      <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></span>
+                                    ) : null}
+                                    {joiningSessionId === session.id ? 'Joining...' : 'Join Session'}
+                                  </Button>
+                                )}
                               </div>
-                              <div className="flex items-center text-sm text-gray-600 mb-3">
-                                <MapPin className="mr-2 h-4 w-4" />
-                                {session.location}{session.extraDetails ? `, ${session.extraDetails}` : ""}
-                              </div>
-                              <div className="flex items-center gap-4 mb-2">
-                                <span className="text-xs text-gray-500">{session.attendee_count || 0} joined</span>
-                              </div>
-                              {/* Only show Join Session button if not already joined and not loading */}
-                              {!alreadyJoined && (
-                                <Button size="sm" className="bg-deep-blue hover:bg-deep-blue/90 text-white" onClick={() => handleJoinSession(session.id)} disabled={joiningSessionId === session.id}>
-                                  {joiningSessionId === session.id ? (
-                                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></span>
-                                  ) : null}
-                                  {joiningSessionId === session.id ? 'Joining...' : 'Join Session'}
-                                </Button>
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
                   </TabsContent>
 
                   {/* Members Tab */}

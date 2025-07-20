@@ -114,6 +114,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
+            "id",
             "name", "email", "major", "year", "studyFormat",
             "languages", "bio", "joinDate", "avatar"
         ]
