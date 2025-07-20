@@ -917,7 +917,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       if (res.ok) {
         setSessionForm({ topic: '', date: '', startTime: '', endTime: '', type: '', location: '', extraDetails: '', description: '' });
         setShowSessionModal(false);
-        setShowSessionSuccess(true);
+        toastSuccess({ title: 'Session created!' });
         // Refresh sessions after creation
         fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
