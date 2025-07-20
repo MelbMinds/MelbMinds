@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Users, Calendar, Bell, BookOpen, Clock, MapPin, Video, Plus, Settings, Star, TrendingUp, ChevronDown, ChevronRight, Crown } from "lucide-react"
+import { Users, Calendar, Bell, BookOpen, Clock, MapPin, Video, Plus, Settings, Star, TrendingUp, ChevronDown, ChevronRight, Crown, RotateCcw, Trash2 } from "lucide-react"
 import Link from "next/link"
 import {
   DropdownMenu,
@@ -22,29 +22,7 @@ import { toastSuccess, toastFail } from "@/components/ui/use-toast"
 import Skeleton from "@/components/ui/Skeleton";
 
 export default function DashboardPage() {
-  const [notifications] = useState([
-    {
-      id: 1,
-      type: "session",
-      title: "Python Study Group starts in 30 minutes",
-      time: "30 min",
-      group: "COMP10001",
-    },
-    {
-      id: 2,
-      type: "message",
-      title: "New message in Biology Study Circle",
-      time: "2 hours",
-      group: "BIOL10004",
-    },
-    {
-      id: 3,
-      type: "request",
-      title: "Join request approved for Legal Foundations",
-      time: "1 day",
-      group: "LAWS10001",
-    },
-  ])
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   const [createdGroups, setCreatedGroups] = useState<any[]>([])
   const [joinedGroups, setJoinedGroups] = useState<any[]>([])
@@ -117,26 +95,132 @@ export default function DashboardPage() {
     if (createdGroups.length || joinedGroups.length) fetchSessions()
   }, [createdGroups, joinedGroups, tokens])
 
-  // Only fetch recommendations after groups are loaded
+  // Fetch recommendations in parallel with groups, show top 5, load fast
   useEffect(() => {
     if (tokens?.access && !loadingGroups) {
-      setLoadingRecommendations(true)
+      setLoadingRecommendations(true);
       fetch("http://localhost:8000/api/recommendations/", {
         headers: { "Authorization": `Bearer ${tokens.access}` },
       })
         .then(res => res.json())
         .then(data => {
-          setRecommendations(data.recommendations || [])
-          setLoadingRecommendations(false)
+          setRecommendations((data.recommendations || []).slice(0, 5));
+          setLoadingRecommendations(false);
         })
         .catch(() => {
-          setRecommendations([])
-          setLoadingRecommendations(false)
+          setRecommendations([]);
+          setLoadingRecommendations(false);
         });
     } else if (!tokens?.access) {
-      setLoadingRecommendations(false)
+      setLoadingRecommendations(false);
     }
   }, [tokens, loadingGroups]);
+
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [clearLoading, setClearLoading] = useState(false);
+  const NOTIF_CLEAR_KEY = 'dashboard_notifications_cleared_at';
+
+  // Add a function to fetch notifications (for refresh button)
+  const fetchNotifications = useCallback(async () => {
+    setNotifLoading(true);
+    const cacheKey = 'dashboard_notifications_cache';
+    const cacheTimeKey = 'dashboard_notifications_cache_time';
+    const now = Date.now();
+    const allGroups = [...createdGroups, ...joinedGroups];
+    if (!allGroups.length) {
+      setNotifications([]);
+      setNotifLoading(false);
+      return;
+    }
+    let allNotifications: any[] = [];
+    // Fetch group notifications and chat messages for all groups in parallel
+    const notificationPromises = allGroups.map(async (group) => {
+      // Group notifications
+      const notifRes = await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      });
+      if (notifRes.ok) {
+        const notifs = await notifRes.json();
+        notifs.slice(0, 5).forEach((n: any) => {
+          allNotifications.push({
+            id: `notif-${group.id}-${n.id}`,
+            type: 'notification',
+            title: n.message,
+            time: n.created_at ? format(new Date(n.created_at), 'MMM d, h:mm a') : '',
+            rawTime: n.created_at ? new Date(n.created_at).getTime() : 0,
+            group: group.group_name || group.subject_code,
+          });
+        });
+      }
+      // Chat messages
+      const msgRes = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      });
+      if (msgRes.ok) {
+        const messages = await msgRes.json();
+        messages.slice(-5).forEach((msg: any) => {
+          // Only show chat notifications for messages not sent by the current user
+          if (user && msg.user_id !== user.id) {
+            allNotifications.push({
+              id: `msg-${group.id}-${msg.id}`,
+              type: 'message',
+              title: `New message from ${msg.user_name || 'Someone'}: ${msg.text.length > 40 ? msg.text.slice(0, 40) + '...' : msg.text}`,
+              time: msg.timestamp ? format(new Date(msg.timestamp), 'MMM d, h:mm a') : '',
+              rawTime: msg.timestamp ? new Date(msg.timestamp).getTime() : 0,
+              group: group.group_name || group.subject_code,
+            });
+          }
+        });
+      }
+    });
+    await Promise.all(notificationPromises);
+    // Filter out notifications/messages created before the last clear
+    const clearedAt = parseInt(localStorage.getItem(NOTIF_CLEAR_KEY) || '0', 10);
+    allNotifications = allNotifications.filter(n => n.rawTime > clearedAt);
+    // Sort notifications by time (most recent first)
+    allNotifications.sort((a, b) => b.rawTime - a.rawTime);
+    const top5 = allNotifications.slice(0, 5);
+    setNotifications(top5);
+    sessionStorage.setItem(cacheKey, JSON.stringify(top5));
+    sessionStorage.setItem(cacheTimeKey, now.toString());
+    setNotifLoading(false);
+  }, [createdGroups, joinedGroups, tokens, user]);
+
+  // Use fetchNotifications in useEffect
+  useEffect(() => {
+    const cacheKey = 'dashboard_notifications_cache';
+    const cacheTimeKey = 'dashboard_notifications_cache_time';
+    const now = Date.now();
+    const cacheTime = parseInt(sessionStorage.getItem(cacheTimeKey) || '0', 10);
+    if (sessionStorage.getItem(cacheKey) && now - cacheTime < 30000) {
+      setNotifications(JSON.parse(sessionStorage.getItem(cacheKey) || '[]'));
+      return;
+    }
+    if ((createdGroups.length || joinedGroups.length) && tokens?.access) fetchNotifications();
+  }, [createdGroups, joinedGroups, tokens, fetchNotifications]);
+
+  // Add clear all notifications function
+  const handleClearAllNotifications = async () => {
+    setClearLoading(true);
+    const allGroups = [...createdGroups, ...joinedGroups];
+    await Promise.all(
+      allGroups.map(async (group) => {
+        // Clear group notifications
+        await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/clear/`, {
+          method: 'DELETE',
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        });
+      })
+    );
+    // Mark the time of clear, so all notifications/messages before this are hidden
+    const now = Date.now();
+    localStorage.setItem(NOTIF_CLEAR_KEY, now.toString());
+    // Immediately clear notifications from UI and cache
+    setNotifications([]);
+    sessionStorage.removeItem('dashboard_notifications_cache');
+    sessionStorage.removeItem('dashboard_notifications_cache_time');
+    setClearLoading(false);
+  };
 
   const handleLeaveGroup = async (groupId: number, groupName: string) => {
     if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
@@ -547,7 +631,18 @@ export default function DashboardPage() {
                             <div className="space-y-2 mt-3">
                               <div className="flex items-center text-sm text-gray-600">
                                 <Clock className="mr-2 h-4 w-4" />
-                                {format(new Date(session.date + 'T' + session.time), 'eeee, MMM d, yyyy h:mm a')}
+                                {(() => {
+                                  const time = session.time || session.start_time;
+                                  if (session.date && time) {
+                                    try {
+                                      return format(new Date(session.date + 'T' + time), 'eeee, MMM d, yyyy h:mm a');
+                                    } catch {
+                                      return 'Invalid time';
+                                    }
+                                  } else {
+                                    return 'Invalid time';
+                                  }
+                                })()}
                               </div>
                               <div className="flex items-center text-sm text-gray-600">
                                 <MapPin className="mr-2 h-4 w-4" />
@@ -643,30 +738,47 @@ export default function DashboardPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Notifications */}
-            <Card>
+            <Card className="shadow-xl border-0 bg-white">
               <CardHeader>
-                <CardTitle className="flex items-center" style={{ color: '#003366' }}>
-                  <Bell className="mr-2 h-5 w-5" style={{ color: '#003366' }} />
-                  Recent Notifications
+                <CardTitle className="flex items-center justify-between min-w-0">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium text-lg whitespace-normal break-words">Notifications</span>
+                  </span>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <Button variant="outline" size="sm" onClick={fetchNotifications} className="p-1 h-8 w-8 min-w-0" disabled={notifLoading} aria-label="Refresh notifications">
+                      <RotateCcw className={notifLoading ? "animate-spin" : ""} size={16} />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleClearAllNotifications} className="p-1 h-8 w-8 min-w-0" disabled={clearLoading} aria-label="Clear all notifications">
+                      <Trash2 className={clearLoading ? "opacity-50" : ""} size={16} />
+                    </Button>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {notifications.map((notification) => (
-                    <div key={notification.id} className="flex items-start space-x-3 p-3 rounded-lg bg-gray-50">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{notification.title}</p>
-                        <div className="flex items-center justify-between mt-1">
-                          <Badge variant="secondary" className="text-xs">
+                <div className="space-y-3">
+                  {notifications.length === 0 ? (
+                    <div className="text-gray-400 text-center py-8">No notifications yet.</div>
+                  ) : notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 min-w-0 overflow-hidden shadow-sm border border-gray-100 hover:bg-yellow-50 transition-colors group"
+                    >
+                      <div className="flex items-center justify-center h-10 w-10 rounded-full bg-yellow-100 flex-shrink-0">
+                        <Bell className="h-5 w-5 text-yellow-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium line-clamp-2 break-words max-w-full text-gray-900 group-hover:text-yellow-900 transition-colors">{notification.title}</p>
+                        <div className="flex items-center justify-between mt-1 min-w-0">
+                          <Badge variant="secondary" className="text-xs truncate max-w-[60%] bg-yellow-200 text-yellow-900 group-hover:bg-yellow-300">
                             {notification.group}
                           </Badge>
-                          <span className="text-xs text-gray-500">{notification.time}</span>
+                          <span className="text-xs text-gray-500 ml-2 truncate max-w-[40%]">{notification.time}</span>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-                <Button variant="outline" className="w-full mt-4 bg-transparent">
+                <Button variant="outline" className="w-full mt-4 bg-transparent" onClick={fetchNotifications} disabled={notifLoading} aria-label="View all notifications">
                   View All Notifications
                 </Button>
               </CardContent>
