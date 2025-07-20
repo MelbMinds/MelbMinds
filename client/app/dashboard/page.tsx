@@ -115,6 +115,7 @@ export default function DashboardPage() {
 
   const [notifLoading, setNotifLoading] = useState(false);
   const [clearLoading, setClearLoading] = useState(false);
+  const NOTIF_CLEAR_KEY = 'dashboard_notifications_cleared_at';
 
   // Add a function to fetch notifications (for refresh button)
   const fetchNotifications = useCallback(async () => {
@@ -143,6 +144,7 @@ export default function DashboardPage() {
             type: 'notification',
             title: n.message,
             time: n.created_at ? format(new Date(n.created_at), 'MMM d, h:mm a') : '',
+            rawTime: n.created_at ? new Date(n.created_at).getTime() : 0,
             group: group.group_name || group.subject_code,
           });
         });
@@ -154,29 +156,32 @@ export default function DashboardPage() {
       if (msgRes.ok) {
         const messages = await msgRes.json();
         messages.slice(-5).forEach((msg: any) => {
-          allNotifications.push({
-            id: `msg-${group.id}-${msg.id}`,
-            type: 'message',
-            title: `New message from ${msg.user_name || 'Someone'}: ${msg.text.length > 40 ? msg.text.slice(0, 40) + '...' : msg.text}`,
-            time: msg.timestamp ? format(new Date(msg.timestamp), 'MMM d, h:mm a') : '',
-            group: group.group_name || group.subject_code,
-          });
+          // Only show chat notifications for messages not sent by the current user
+          if (user && msg.user_id !== user.id) {
+            allNotifications.push({
+              id: `msg-${group.id}-${msg.id}`,
+              type: 'message',
+              title: `New message from ${msg.user_name || 'Someone'}: ${msg.text.length > 40 ? msg.text.slice(0, 40) + '...' : msg.text}`,
+              time: msg.timestamp ? format(new Date(msg.timestamp), 'MMM d, h:mm a') : '',
+              rawTime: msg.timestamp ? new Date(msg.timestamp).getTime() : 0,
+              group: group.group_name || group.subject_code,
+            });
+          }
         });
       }
     });
     await Promise.all(notificationPromises);
+    // Filter out notifications/messages created before the last clear
+    const clearedAt = parseInt(localStorage.getItem(NOTIF_CLEAR_KEY) || '0', 10);
+    allNotifications = allNotifications.filter(n => n.rawTime > clearedAt);
     // Sort notifications by time (most recent first)
-    allNotifications.sort((a, b) => {
-      const aTime = new Date(a.time).getTime();
-      const bTime = new Date(b.time).getTime();
-      return bTime - aTime;
-    });
+    allNotifications.sort((a, b) => b.rawTime - a.rawTime);
     const top5 = allNotifications.slice(0, 5);
     setNotifications(top5);
     sessionStorage.setItem(cacheKey, JSON.stringify(top5));
     sessionStorage.setItem(cacheTimeKey, now.toString());
     setNotifLoading(false);
-  }, [createdGroups, joinedGroups, tokens]);
+  }, [createdGroups, joinedGroups, tokens, user]);
 
   // Use fetchNotifications in useEffect
   useEffect(() => {
@@ -204,6 +209,9 @@ export default function DashboardPage() {
         });
       })
     );
+    // Mark the time of clear, so all notifications/messages before this are hidden
+    const now = Date.now();
+    localStorage.setItem(NOTIF_CLEAR_KEY, now.toString());
     // Immediately clear notifications from UI and cache
     setNotifications([]);
     sessionStorage.removeItem('dashboard_notifications_cache');
