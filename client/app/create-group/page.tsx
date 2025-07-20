@@ -27,8 +27,6 @@ export default function CreateGroupPage() {
   const [format, setFormat] = useState("")
   const [yearLevel, setYearLevel] = useState("")
   const [language, setLanguage] = useState("")
-  const [location, setLocation] = useState("")
-  const [schedule, setSchedule] = useState("")
   const [tags, setTags] = useState<string[]>([])
   const [newTag, setNewTag] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -154,8 +152,6 @@ export default function CreateGroupPage() {
           year_level: yearLevel,
           meeting_format: format,
           primary_language: language,
-          meeting_schedule: schedule,
-          location,
           tags: tags.join(", "),
           group_guidelines: "Respectful, Attendance, Academic Integrity, Moderation", // or collect from checkboxes
           group_personality: personalities.join(", "),
@@ -352,36 +348,6 @@ export default function CreateGroupPage() {
                 </CardContent>
               </Card>
 
-              {/* Schedule & Location */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Schedule & Location</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="schedule">Meeting Schedule *</Label>
-                    <Input
-                      id="schedule"
-                      placeholder="e.g., Tuesdays 6PM, Fridays 2PM"
-                      value={schedule}
-                      onChange={(e) => setSchedule(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="location">Location *</Label>
-                    <Input
-                      id="location"
-                      placeholder="e.g., Doug McDonell Building + Online"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      required
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
               {/* Tags */}
               <Card>
                 <CardHeader>
@@ -566,37 +532,20 @@ export default function CreateGroupPage() {
                         </div>
                       )}
 
-                      {schedule && (
+                      {format && (
                         <div className="flex items-center text-sm text-gray-600">
-                          <Clock className="mr-2 h-4 w-4" />
-                          {schedule}
+                          <Video className="mr-2 h-4 w-4" />
+                          {format}
                         </div>
                       )}
 
-                      {location && (
+                      {language && (
                         <div className="flex items-center text-sm text-gray-600">
-                          <MapPin className="mr-2 h-4 w-4" />
-                          {location}
+                          <BookOpen className="mr-2 h-4 w-4" />
+                          {language}
                         </div>
                       )}
                     </div>
-
-                    {format && (
-                      <Badge
-                        className={
-                          format === "Online"
-                            ? "bg-blue-100 text-blue-800"
-                            : format === "In-person"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-purple-100 text-purple-800"
-                        }
-                      >
-                        {format === "Online" && <Video className="mr-1 h-3 w-3" />}
-                        {format === "In-person" && <MapPin className="mr-1 h-3 w-3" />}
-                        {format === "Hybrid" && <Users className="mr-1 h-3 w-3" />}
-                        {format}
-                      </Badge>
-                    )}
 
                     {tags.length > 0 && (
                       <div className="flex flex-wrap gap-1">
