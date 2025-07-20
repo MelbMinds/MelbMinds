@@ -1206,9 +1206,14 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         },
         body: JSON.stringify({ rating: newRating })
       })
+      const data = await res.json()
       if (res.ok) {
         setUserRating(newRating)
-        toastSuccess({ title: 'Thank you for rating!' })
+        if (data.message === 'Rating updated successfully') {
+          toastSuccess({ title: 'Rating updated successfully!' })
+        } else {
+          toastSuccess({ title: 'Thank you for rating!' })
+        }
         // Optionally, refetch group data to update average rating
         const groupRes = await fetch(`http://localhost:8000/api/groups/${group.id}/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
@@ -1218,8 +1223,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           setGroup(data)
         }
       } else {
-        const err = await res.json()
-        toastFail({ title: 'Error submitting rating', description: err.detail })
+        toastFail({ title: 'Error submitting rating', description: data.detail })
       }
     } catch (error) {
       toastFail({ title: 'Error submitting rating' })
