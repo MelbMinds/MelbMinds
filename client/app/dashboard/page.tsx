@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Users, Calendar, Bell, BookOpen, Clock, MapPin, Video, Plus, Settings, Star, TrendingUp, ChevronDown, ChevronRight, Crown } from "lucide-react"
+import { Users, Calendar, Bell, BookOpen, Clock, MapPin, Video, Plus, Settings, Star, TrendingUp, ChevronDown, ChevronRight, Crown, RotateCcw, Trash2 } from "lucide-react"
 import Link from "next/link"
 import {
   DropdownMenu,
@@ -21,29 +21,7 @@ import { format } from "date-fns"
 import { toastSuccess, toastFail } from "@/components/ui/use-toast"
 
 export default function DashboardPage() {
-  const [notifications] = useState([
-    {
-      id: 1,
-      type: "session",
-      title: "Python Study Group starts in 30 minutes",
-      time: "30 min",
-      group: "COMP10001",
-    },
-    {
-      id: 2,
-      type: "message",
-      title: "New message in Biology Study Circle",
-      time: "2 hours",
-      group: "BIOL10004",
-    },
-    {
-      id: 3,
-      type: "request",
-      title: "Join request approved for Legal Foundations",
-      time: "1 day",
-      group: "LAWS10001",
-    },
-  ])
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   const [createdGroups, setCreatedGroups] = useState<any[]>([])
   const [joinedGroups, setJoinedGroups] = useState<any[]>([])
@@ -114,26 +92,124 @@ export default function DashboardPage() {
     if (createdGroups.length || joinedGroups.length) fetchSessions()
   }, [createdGroups, joinedGroups, tokens])
 
-  // Only fetch recommendations after groups are loaded
+  // Fetch recommendations in parallel with groups, show top 5, load fast
   useEffect(() => {
     if (tokens?.access && !loadingGroups) {
-      setLoadingRecommendations(true)
+      setLoadingRecommendations(true);
       fetch("http://localhost:8000/api/recommendations/", {
         headers: { "Authorization": `Bearer ${tokens.access}` },
       })
         .then(res => res.json())
         .then(data => {
-          setRecommendations(data.recommendations || [])
-          setLoadingRecommendations(false)
+          setRecommendations((data.recommendations || []).slice(0, 5));
+          setLoadingRecommendations(false);
         })
         .catch(() => {
-          setRecommendations([])
-          setLoadingRecommendations(false)
+          setRecommendations([]);
+          setLoadingRecommendations(false);
         });
     } else if (!tokens?.access) {
-      setLoadingRecommendations(false)
+      setLoadingRecommendations(false);
     }
   }, [tokens, loadingGroups]);
+
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [clearLoading, setClearLoading] = useState(false);
+
+  // Add a function to fetch notifications (for refresh button)
+  const fetchNotifications = useCallback(async () => {
+    setNotifLoading(true);
+    const cacheKey = 'dashboard_notifications_cache';
+    const cacheTimeKey = 'dashboard_notifications_cache_time';
+    const now = Date.now();
+    const allGroups = [...createdGroups, ...joinedGroups];
+    if (!allGroups.length) {
+      setNotifications([]);
+      setNotifLoading(false);
+      return;
+    }
+    let allNotifications: any[] = [];
+    // Fetch group notifications and chat messages for all groups in parallel
+    const notificationPromises = allGroups.map(async (group) => {
+      // Group notifications
+      const notifRes = await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      });
+      if (notifRes.ok) {
+        const notifs = await notifRes.json();
+        notifs.slice(0, 5).forEach((n: any) => {
+          allNotifications.push({
+            id: `notif-${group.id}-${n.id}`,
+            type: 'notification',
+            title: n.message,
+            time: n.created_at ? format(new Date(n.created_at), 'MMM d, h:mm a') : '',
+            group: group.group_name || group.subject_code,
+          });
+        });
+      }
+      // Chat messages
+      const msgRes = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
+        headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+      });
+      if (msgRes.ok) {
+        const messages = await msgRes.json();
+        messages.slice(-5).forEach((msg: any) => {
+          allNotifications.push({
+            id: `msg-${group.id}-${msg.id}`,
+            type: 'message',
+            title: `New message from ${msg.user_name || 'Someone'}: ${msg.text.length > 40 ? msg.text.slice(0, 40) + '...' : msg.text}`,
+            time: msg.timestamp ? format(new Date(msg.timestamp), 'MMM d, h:mm a') : '',
+            group: group.group_name || group.subject_code,
+          });
+        });
+      }
+    });
+    await Promise.all(notificationPromises);
+    // Sort notifications by time (most recent first)
+    allNotifications.sort((a, b) => {
+      const aTime = new Date(a.time).getTime();
+      const bTime = new Date(b.time).getTime();
+      return bTime - aTime;
+    });
+    const top5 = allNotifications.slice(0, 5);
+    setNotifications(top5);
+    sessionStorage.setItem(cacheKey, JSON.stringify(top5));
+    sessionStorage.setItem(cacheTimeKey, now.toString());
+    setNotifLoading(false);
+  }, [createdGroups, joinedGroups, tokens]);
+
+  // Use fetchNotifications in useEffect
+  useEffect(() => {
+    const cacheKey = 'dashboard_notifications_cache';
+    const cacheTimeKey = 'dashboard_notifications_cache_time';
+    const now = Date.now();
+    const cacheTime = parseInt(sessionStorage.getItem(cacheTimeKey) || '0', 10);
+    if (sessionStorage.getItem(cacheKey) && now - cacheTime < 30000) {
+      setNotifications(JSON.parse(sessionStorage.getItem(cacheKey) || '[]'));
+      return;
+    }
+    if ((createdGroups.length || joinedGroups.length) && tokens?.access) fetchNotifications();
+  }, [createdGroups, joinedGroups, tokens, fetchNotifications]);
+
+  // Add clear all notifications function
+  const handleClearAllNotifications = async () => {
+    setClearLoading(true);
+    const allGroups = [...createdGroups, ...joinedGroups];
+    await Promise.all(
+      allGroups.map(async (group) => {
+        // Clear group notifications
+        await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/clear/`, {
+          method: 'DELETE',
+          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+        });
+      })
+    );
+    // Immediately clear notifications from UI and cache
+    setNotifications([]);
+    sessionStorage.removeItem('dashboard_notifications_cache');
+    sessionStorage.removeItem('dashboard_notifications_cache_time');
+    setClearLoading(false);
+  };
 
   const handleLeaveGroup = async (groupId: number, groupName: string) => {
     if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
@@ -421,7 +497,18 @@ export default function DashboardPage() {
                             <div className="space-y-2 mt-3">
                               <div className="flex items-center text-sm text-gray-600">
                                 <Clock className="mr-2 h-4 w-4" />
-                                {format(new Date(session.date + 'T' + session.time), 'eeee, MMM d, yyyy h:mm a')}
+                                {(() => {
+                                  const time = session.time || session.start_time;
+                                  if (session.date && time) {
+                                    try {
+                                      return format(new Date(session.date + 'T' + time), 'eeee, MMM d, yyyy h:mm a');
+                                    } catch {
+                                      return 'Invalid time';
+                                    }
+                                  } else {
+                                    return 'Invalid time';
+                                  }
+                                })()}
                               </div>
                               <div className="flex items-center text-sm text-gray-600">
                                 <MapPin className="mr-2 h-4 w-4" />
@@ -519,9 +606,19 @@ export default function DashboardPage() {
             {/* Notifications */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Bell className="mr-2 h-5 w-5" />
-                  Recent Notifications
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center">
+                    <Bell className="mr-2 h-5 w-5 text-yellow-500" />
+                    Notifications
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="icon" onClick={fetchNotifications} className="text-xs p-2" disabled={notifLoading} aria-label="Refresh notifications">
+                      <RotateCcw className={notifLoading ? "animate-spin" : ""} size={18} />
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={handleClearAllNotifications} className="text-xs p-2" disabled={clearLoading} aria-label="Clear all notifications">
+                      <Trash2 className={clearLoading ? "opacity-50" : ""} size={18} />
+                    </Button>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -540,7 +637,7 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
-                <Button variant="outline" className="w-full mt-4 bg-transparent">
+                <Button variant="outline" className="w-full mt-4 bg-transparent" onClick={fetchNotifications} disabled={notifLoading} aria-label="View all notifications">
                   View All Notifications
                 </Button>
               </CardContent>

@@ -96,6 +96,7 @@ class Group(models.Model):
     creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_groups', null=True, blank=True)
     members = models.ManyToManyField(User, related_name='joined_groups', blank=True)
     target_hours = models.PositiveIntegerField(default=10)  # Renamed from target_study_hours
+    total_study_hours = models.FloatField(default=0)
 
     def __str__(self):
         return self.group_name

@@ -1371,9 +1371,7 @@ def group_recommendations(request):
     user = request.user
     
     # Get all groups the user hasn't joined or created
-    user_groups = set()
-    user_groups.update(user.joined_groups.values_list('id', flat=True))
-    user_groups.add(user.created_groups.values_list('id', flat=True))
+    user_groups = set(user.joined_groups.values_list('id', flat=True)) | set(user.created_groups.values_list('id', flat=True))
     
     # Get all available groups excluding user's groups
     available_groups = Group.objects.exclude(id__in=user_groups)
