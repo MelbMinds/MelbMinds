@@ -412,7 +412,9 @@ export default function DashboardPage() {
               {/* Quick Actions Skeleton */}
               <div className="bg-white rounded-lg shadow-lg border-0 w-full flex flex-col">
                 <div className="px-6 pt-6 pb-2">
-                  <CardTitle style={{ color: '#003366' }}>Quick Actions</CardTitle>
+                  <CardTitle className="flex items-center min-w-0">
+                    <span className="font-medium text-lg whitespace-normal break-words">Quick Actions</span>
+                  </CardTitle>
                 </div>
                 <div className="px-6 pb-4 flex flex-col gap-3 mt-2">
                   <Skeleton className="h-12 w-full rounded bg-[#003366] opacity-60" /> {/* Create Study Group button */}
@@ -738,7 +740,7 @@ export default function DashboardPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Notifications */}
-            <Card className="shadow-xl border-0 bg-white">
+            <Card className="shadow border-0 bg-white">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between min-w-0">
                   <span className="flex items-center gap-2 min-w-0">
@@ -761,15 +763,12 @@ export default function DashboardPage() {
                   ) : notifications.map((notification) => (
                     <div
                       key={notification.id}
-                      className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 min-w-0 overflow-hidden shadow-sm border border-gray-100 hover:bg-yellow-50 transition-colors group"
+                      className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 min-w-0 overflow-hidden shadow-sm border border-gray-100 hover:bg-gray-100 transition-colors group"
                     >
-                      <div className="flex items-center justify-center h-10 w-10 rounded-full bg-yellow-100 flex-shrink-0">
-                        <Bell className="h-5 w-5 text-yellow-500" />
-                      </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium line-clamp-2 break-words max-w-full text-gray-900 group-hover:text-yellow-900 transition-colors">{notification.title}</p>
+                        <p className="text-sm font-medium line-clamp-2 break-words max-w-full text-gray-900 group-hover:text-gray-900 transition-colors">{notification.title}</p>
                         <div className="flex items-center justify-between mt-1 min-w-0">
-                          <Badge variant="secondary" className="text-xs truncate max-w-[60%] bg-yellow-200 text-yellow-900 group-hover:bg-yellow-300">
+                          <Badge variant="secondary" className="text-xs truncate max-w-[60%] bg-gray-200 text-gray-800 group-hover:bg-gray-300">
                             {notification.group}
                           </Badge>
                           <span className="text-xs text-gray-500 ml-2 truncate max-w-[40%]">{notification.time}</span>
@@ -787,7 +786,9 @@ export default function DashboardPage() {
             {/* Quick Actions */}
             <Card>
               <CardHeader>
-                <CardTitle style={{ color: '#003366' }}>Quick Actions</CardTitle>
+                <CardTitle className="flex items-center min-w-0">
+                  <span className="font-medium text-lg whitespace-normal break-words">Quick Actions</span>
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Link href="/create-group">

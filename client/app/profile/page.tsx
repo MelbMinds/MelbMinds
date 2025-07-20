@@ -332,7 +332,7 @@ export default function ProfilePage() {
                 <p className="text-gray-600 mb-2">
                   {profileData.major} • {profileData.year}
                 </p>
-                <p className="text-sm text-gray-500 mb-4">Member since {profileData.joinDate}</p>
+                <p className="text-sm text-gray-500 mb-4">Member since {profileData.joinDate ? profileData.joinDate.slice(0, 10) : ''}</p>
                 <Button
                   onClick={() => setIsEditing(!isEditing)}
                   className="w-full bg-deep-blue hover:bg-deep-blue/90 text-white font-serif"
@@ -352,26 +352,15 @@ export default function ProfilePage() {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Groups Joined</span>
-                    <span className="font-semibold text-deep-blue">{userStats.groupsJoined}</span>
+                    <span className="font-semibold text-deep-blue">{profileData.groups_joined ?? 0}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Sessions Attended</span>
-                    <span className="font-semibold text-deep-blue">{userStats.sessionsAttended}</span>
+                    <span className="font-semibold text-deep-blue">{profileData.sessions_attended ?? 0}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Study Hours</span>
-                    <span className="font-semibold text-deep-blue">{userStats.studyHours}h</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Average Rating</span>
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 text-gold fill-current mr-1" />
-                      <span className="font-semibold text-deep-blue">{userStats.averageRating}</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Study Streak</span>
-                    <span className="font-semibold text-deep-blue">{userStats.streakDays} days</span>
+                    <span className="font-semibold text-deep-blue">{profileData.study_hours ?? 0}h</span>
                   </div>
                 </div>
               </CardContent>
