@@ -342,11 +342,12 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           .then(setSessions)
           .finally(() => setSessionsLoading(false));
       }
-      fetchSessions()
-      const interval = setInterval(fetchSessions, 30000)
-      return () => clearInterval(interval)
+      fetchSessions();
+      // Removed polling interval for sessions
+      // const interval = setInterval(fetchSessions, 30000)
+      // return () => clearInterval(interval)
     }
-  }, [activeTab, group?.id, joined, tokens, isStaff])
+  }, [activeTab, group?.id, joined, tokens, isStaff]);
 
   // Fetch notifications
   const fetchNotifications = () => {
@@ -1325,11 +1326,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       const data = await res.json();
       if (res.ok) {
         toastSuccess({ title: 'Joined session!', description: 'You have joined this session.' });
-        // Refetch sessions from backend to update attendees
+        // Refetch sessions from backend to update attendees and ensure join button disappears
         await fetchSessions();
       }
     } catch (e) {
-      // handle error
+      // Optionally handle error (e.g., set an error state)
     } finally {
       setJoiningSessionId(null);
     }
@@ -1948,14 +1949,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                             <div className="p-6 border-b border-gray-200">
                               <div className="flex justify-between items-center">
                                 <DialogTitle className="text-2xl font-serif font-bold text-deep-blue">Schedule New Session</DialogTitle>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setShowSessionModal(false)}
-                                  className="text-gray-500 hover:text-gray-700"
-                                >
-                                  ✕
-                                </Button>
+                                
                               </div>
                             </div>
                             {/* Make the form content scrollable if too tall */}
@@ -2154,7 +2148,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                         sessions.map((session, index) => {
                           // Debug log
                           console.log('Session', session.id, 'attendees:', session.attendees, 'user.id:', user && user.id);
-                          const alreadyJoined = Array.isArray(session.attendees) && user && session.attendees.map(Number).includes(Number(user.id));
+                          const alreadyJoined = Array.isArray(session.attendees) && user && session.attendees.map(String).includes(String(user.id));
                           return (
                             <div key={index} className="p-4 bg-white rounded-lg border">
                               <div className="flex justify-between items-start mb-3">
@@ -2184,9 +2178,6 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                   {joiningSessionId === session.id ? 'Joining...' : 'Join Session'}
                                 </Button>
                               )}
-                              <Button size="sm" variant="outline" className="bg-transparent">
-                                Add to Calendar
-                              </Button>
                             </div>
                           );
                         })
