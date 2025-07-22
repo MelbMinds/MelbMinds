@@ -9,7 +9,7 @@ interface ApiResponse<T = any> {
 }
 
 class ApiClient {
-  private baseUrl = 'http://localhost:8000/api';
+  private baseUrl = 'https://melbminds-production.up.railway.app/api';
   private tokens: AuthTokens | null = null;
   private refreshPromise: Promise<AuthTokens> | null = null;
 

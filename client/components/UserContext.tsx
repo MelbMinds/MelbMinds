@@ -69,7 +69,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     if (!tokens?.refresh) return false
     
     try {
-      const response = await fetch("http://localhost:8000/api/token/refresh/", {
+      const response = await fetch("https://melbminds-production.up.railway.app/api/token/refresh/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -106,4 +106,4 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       {children}
     </UserContext.Provider>
   )
-} 
+}

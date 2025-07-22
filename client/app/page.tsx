@@ -19,7 +19,7 @@ export default function HomePage() {
       setStats(JSON.parse(cached));
       setLoadingStats(false);
     }
-    fetch("http://localhost:8000/api/stats/summary/")
+    fetch("https://melbminds-production.up.railway.app/api/stats/summary/")
       .then((res) => res.json())
       .then((data) => {
         setStats(data);

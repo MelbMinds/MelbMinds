@@ -23,7 +23,7 @@ export default function VerifyEmailPage() {
 
     const verifyEmail = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/verify-email/', {
+        const response = await fetch('https://melbminds-production.up.railway.app/api/verify-email/', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -139,4 +139,4 @@ export default function VerifyEmailPage() {
       </Card>
     </div>
   )
-} 
+}

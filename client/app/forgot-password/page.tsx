@@ -21,7 +21,7 @@ export default function ForgotPasswordPage() {
     setError(null);
     setSuccess(false);
     try {
-      const res = await fetch("http://localhost:8000/api/auth/request-password-reset/", {
+      const res = await fetch("https://melbminds-production.up.railway.app/api/auth/request-password-reset/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -95,4 +95,4 @@ export default function ForgotPasswordPage() {
       </Card>
     </div>
   );
-} 
+}
