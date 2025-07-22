@@ -1,0 +1,7 @@
+web: gunicorn server.wsgi
+
+# Optional: Run migrations before starting the server (uncomment if needed)
+# release: python manage.py migrate
+
+# Optional: Collect static files before starting the server (uncomment if needed)
+# release: python manage.py collectstatic --noinput
