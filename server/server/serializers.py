@@ -110,13 +110,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
     studyFormat = serializers.CharField(source='preferred_study_format')
     joinDate = serializers.SerializerMethodField()
     avatar = serializers.SerializerMethodField()
+    groups_joined = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             "id",
             "name", "email", "major", "year", "studyFormat",
-            "languages", "bio", "joinDate", "avatar"
+            "languages", "bio", "joinDate", "avatar",
+            "groups_joined",
         ]
     
     def get_languages(self, obj):
@@ -131,6 +133,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_avatar(self, obj):
         # No avatar field in model, return None or a placeholder
         return None
+
+    def get_groups_joined(self, obj):
+        return obj.joined_groups.count()
 
 class MessageSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)

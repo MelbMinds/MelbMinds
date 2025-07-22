@@ -52,6 +52,7 @@ import { Progress } from "@/components/ui/progress"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
+import Skeleton from "@/components/ui/Skeleton"
 
 // Helper function to check if a time string is on a quarter-hour mark
 function isQuarterHour(timeStr: string) {
@@ -1433,7 +1434,107 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  if (loading) return (
+    <div className="min-h-screen bg-soft-gray">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid lg:grid-cols-4 gap-8">
+          {/* Main Content (2 containers) */}
+          <div className="lg:col-span-3 flex flex-col gap-6">
+            {/* Group Header Skeleton */}
+            <div className="bg-white rounded-lg shadow-lg border-0 w-full p-8 flex flex-col gap-4 mb-6">
+              <div className="w-24 h-6 mb-2"><Skeleton className="h-6 w-24 rounded" /></div> {/* Subject badge */}
+              <Skeleton className="h-10 w-2/3 rounded mb-2" /> {/* Group name/title */}
+              <div className="flex gap-4 mb-2">
+                <Skeleton className="h-4 w-20 rounded" /> {/* Members */}
+                <Skeleton className="h-4 w-24 rounded" /> {/* Rating */}
+                <Skeleton className="h-4 w-16 rounded" /> {/* Year */}
+              </div>
+              <div className="w-full flex flex-col gap-1 mb-2">
+                <Skeleton className="h-4 w-1/2 rounded mb-1" /> {/* Progress label */}
+                <Skeleton className="h-4 w-full rounded" /> {/* Progress bar */}
+              </div>
+              <div className="flex flex-col gap-1 mb-2">
+                <Skeleton className="h-4 w-1/3 rounded" /> {/* Course code */}
+                <Skeleton className="h-4 w-1/2 rounded" /> {/* Course name */}
+              </div>
+              <div className="flex gap-2 mb-2">
+                <Skeleton className="h-8 w-20 rounded" /> {/* Share button */}
+              </div>
+              <div className="flex flex-col gap-2 mb-2">
+                <Skeleton className="h-4 w-5/6 rounded" /> {/* Description line 1 */}
+                <Skeleton className="h-4 w-2/3 rounded" /> {/* Description line 2 */}
+              </div>
+              <div className="flex gap-2 mt-2">
+                <Skeleton className="h-6 w-20 rounded" /> {/* Tag 1 */}
+                <Skeleton className="h-6 w-16 rounded" /> {/* Tag 2 */}
+                <Skeleton className="h-6 w-12 rounded" /> {/* Tag 3 */}
+              </div>
+            </div>
+            {/* Tabbed Content Skeleton */}
+            <div className="bg-white rounded-lg shadow-lg border-0 w-full p-8 flex flex-col gap-4">
+              <Tabs value="members">
+                <TabsList className="grid w-full grid-cols-5 mb-6">
+                  <TabsTrigger value="chat" disabled className="flex items-center gap-2">
+                    <MessageCircle className="h-4 w-4" /> Chat
+                  </TabsTrigger>
+                  <TabsTrigger value="files" disabled className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" /> Files
+                  </TabsTrigger>
+                  <TabsTrigger value="flashcards" disabled className="flex items-center gap-2">
+                    <Brain className="h-4 w-4" /> Flashcards
+                  </TabsTrigger>
+                  <TabsTrigger value="meetups" disabled className="flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4" /> Meetups
+                  </TabsTrigger>
+                  <TabsTrigger value="members" disabled className="flex items-center gap-2">
+                    <Users className="h-4 w-4" /> Members
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <Skeleton className="h-64 w-full rounded" />
+            </div>
+          </div>
+          {/* Sidebar (3 containers) */}
+          <div className="flex flex-col gap-6">
+            {/* Group Stats */}
+            <div className="bg-white rounded-lg shadow-lg border-0 w-full flex flex-col">
+              <div className="px-6 pt-6 pb-2">
+                <CardTitle className="font-serif font-medium text-deep-blue">Group Stats</CardTitle>
+              </div>
+              <div className="px-6 pb-4 flex flex-col gap-0 mt-2">
+                <Skeleton className="h-4 w-3/4 rounded mb-2" />
+                <Skeleton className="h-4 w-2/3 rounded mb-2" />
+                <Skeleton className="h-4 w-1/2 rounded mb-2" />
+                <Skeleton className="h-4 w-2/3 rounded mb-2" />
+                <Skeleton className="h-4 w-1/3 rounded" />
+              </div>
+            </div>
+            {/* Notifications */}
+            <div className="bg-white rounded-lg shadow-lg border-0 w-full flex flex-col">
+              <div className="px-6 pt-6 pb-2 flex items-center gap-2">
+                <Bell className="h-5 w-5 text-gold" />
+                <CardTitle className="font-serif font-medium text-deep-blue">Notifications</CardTitle>
+              </div>
+              <div className="px-6 pb-4 flex flex-col gap-2 mt-2">
+                <Skeleton className="h-8 w-full rounded mb-2" />
+                <Skeleton className="h-8 w-5/6 rounded" />
+              </div>
+            </div>
+            {/* Similar Groups */}
+            <div className="bg-white rounded-lg shadow-lg border-0 w-full flex flex-col">
+              <div className="px-6 pt-6 pb-2">
+                <CardTitle className="font-serif font-medium text-deep-blue">Similar Groups</CardTitle>
+              </div>
+              <div className="px-6 pb-4 flex flex-col gap-2 mt-2">
+                <Skeleton className="h-10 w-full rounded mb-2" />
+                <Skeleton className="h-10 w-5/6 rounded" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
   if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
   if (!group) return null
 

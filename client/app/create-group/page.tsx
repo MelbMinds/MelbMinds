@@ -246,9 +246,9 @@ export default function CreateGroupPage() {
                         {subjects.filter(s =>
                           s.code.toLowerCase().includes(subjectSearch.toLowerCase()) ||
                           s.name.toLowerCase().includes(subjectSearch.toLowerCase())
-                        ).slice(0, 10).map(s => (
+                        ).slice(0, 10).map((s, idx) => (
                           <div
-                            key={s.code}
+                            key={s.code ? `${s.code}-${s.name}` : idx}
                             className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
                             onMouseDown={() => {
                               setSubject(s.code)

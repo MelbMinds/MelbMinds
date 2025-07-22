@@ -10,7 +10,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Users, MapPin, Video, Clock, Filter, Search, Globe, Star } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
-import { Label } from "@/components/ui/label"
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import Skeleton from "@/components/ui/Skeleton";
+import CardSkeleton from "@/components/ui/CardSkeleton";
+import { Label } from "@/components/ui/label";
 
 export default function DiscoverPage() {
   const { user, tokens } = useUser()
@@ -26,7 +29,8 @@ export default function DiscoverPage() {
   const [error, setError] = useState<string | null>(null)
   const [sort, setSort] = useState("newest")
   const [subjects, setSubjects] = useState<{ code: string; name: string; type: string }[]>([])
-  const [subjectSearch, setSubjectSearch] = useState("")
+  const [subjectSearch, setSubjectSearch] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
     fetch("/unimelb_subjects.json")
@@ -35,8 +39,9 @@ export default function DiscoverPage() {
   }, [])
 
   const fetchGroups = async () => {
-    setSearching(true)
-    setError(null)
+    setLoading(true);
+    setSearching(true);
+    setError(null);
     try {
       // Build query parameters
       const params = new URLSearchParams()
@@ -123,29 +128,36 @@ export default function DiscoverPage() {
   }
 
   const clearAllFilters = () => {
-    setSearchTerm("")
-    setSelectedSubject("")
-    setSelectedYear("")
-    setSelectedFormat("")
-    setSelectedLanguage("")
-    setPersonalityFilters([])
-  }
+    setSearchTerm("");
+    setSelectedSubject("");
+    setSelectedYear("");
+    setSelectedFormat("");
+    setSelectedLanguage("");
+    setPersonalityFilters([]);
+  };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-soft-gray flex items-center justify-center">
-        <h2 className="text-2xl font-serif font-bold text-deep-blue">Loading study groups...</h2>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-soft-gray flex items-center justify-center">
-        <h2 className="text-2xl font-serif font-bold text-deep-blue">{error}</h2>
-      </div>
-    )
-  }
+  // Update all filter/search/sort change handlers to setLoading(true) immediately
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+  const handleSubjectChange = (value: string) => {
+    setSelectedSubject(value);
+  };
+  const handleYearChange = (value: string) => {
+    setSelectedYear(value);
+  };
+  const handleFormatChange = (value: string) => {
+    setSelectedFormat(value);
+  };
+  const handleLanguageChange = (value: string) => {
+    setSelectedLanguage(value);
+  };
+  const handlePersonalityChange = (personality: string) => {
+    togglePersonalityFilter(personality);
+  };
+  const handleSortChange = (value: string) => {
+    setSort(value);
+  };
 
   return (
     <div className="min-h-screen bg-soft-gray">
@@ -158,62 +170,61 @@ export default function DiscoverPage() {
         </div>
 
         <div className="grid lg:grid-cols-4 gap-8">
-          {/* Filters Sidebar */}
+          {/* Filters Sidebar in Card Box */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-4 shadow-lg border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center font-serif text-deep-blue">
-                  <Filter className="mr-2 h-5 w-5" />
-                  Filters
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Search */}
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Search</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Search groups or subjects..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                    {searching && (
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-deep-blue"></div>
-                      </div>
-                    )}
-                  </div>
+            <div className="bg-white rounded-lg shadow-lg border-0 p-6 space-y-6">
+              {/* Search */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search groups or subjects..."
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    className="pl-10"
+                  />
+                  {searching && (
+                    null
+                  )}
                 </div>
+              </div>
 
-                {/* Subject Filter */}
+              {/* Subject Filter */}
+              <div>
                 <div className="space-y-2">
                   <Label htmlFor="subject">Subject</Label>
                   <Input
                     id="subject"
                     placeholder="Type code or name..."
                     value={subjectSearch}
-                    onChange={e => setSubjectSearch(e.target.value)}
+                    onChange={e => {
+                      setSubjectSearch(e.target.value);
+                      setDropdownOpen(true);
+                    }}
                     autoComplete="off"
                     onBlur={() => {
-                      // If the user types a code that matches, set it
-                      const match = subjects.find(s => s.code.toLowerCase() === subjectSearch.toLowerCase())
-                      if (match) setSelectedSubject(match.code)
+                      setTimeout(() => setDropdownOpen(false), 100);
+                      const match = subjects.find(s => s.code.toLowerCase() === subjectSearch.toLowerCase());
+                      if (match) {
+                        setSelectedSubject(match.code);
+                        setSubjectSearch(`${match.code} – ${match.name}`);
+                      }
                     }}
                   />
-                  {subjectSearch && (
+                  {subjectSearch && dropdownOpen && (
                     <div className="max-h-48 overflow-y-auto border rounded bg-white shadow z-10">
                       {subjects.filter(s =>
                         s.code.toLowerCase().includes(subjectSearch.toLowerCase()) ||
                         s.name.toLowerCase().includes(subjectSearch.toLowerCase())
-                      ).slice(0, 10).map(s => (
+                      ).slice(0, 10).map((s, idx) => (
                         <div
-                          key={s.code}
+                          key={s.code ? `${s.code}-${s.name}` : idx}
                           className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
                           onMouseDown={() => {
-                            setSelectedSubject(s.code)
-                            setSubjectSearch(`${s.code} – ${s.name}`)
+                            setSelectedSubject(s.code);
+                            setSubjectSearch(`${s.code} – ${s.name}`);
+                            setDropdownOpen(false);
                           }}
                         >
                           <span className="font-mono font-semibold">{s.code}</span> – {s.name}
@@ -228,98 +239,97 @@ export default function DiscoverPage() {
                     </div>
                   )}
                 </div>
+              </div>
 
-                {/* Year Level Filter */}
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Year Level</label>
-                  <Select value={selectedYear} onValueChange={setSelectedYear}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All years" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All years</SelectItem>
-                      {yearLevels.map((year) => (
-                        <SelectItem key={year} value={year}>
-                          {year}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Format Filter */}
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Meeting Format</label>
-                  <Select value={selectedFormat} onValueChange={setSelectedFormat}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All formats" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All formats</SelectItem>
-                      {formats.map((format) => (
-                        <SelectItem key={format} value={format}>
-                          {format}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Language Filter */}
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Language</label>
-                  <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All languages" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All languages</SelectItem>
-                      {languages.map((language) => (
-                        <SelectItem key={language} value={language}>
-                          {language}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Personality Tags */}
-                <div>
-                  <label className="text-sm font-medium mb-3 block">Personality Match</label>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {personalityOptions.map((personality) => (
-                      <div key={personality} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={personality}
-                          checked={personalityFilters.includes(personality)}
-                          onCheckedChange={() => togglePersonalityFilter(personality)}
-                        />
-                        <label htmlFor={personality} className="text-sm">
-                          {personality}
-                        </label>
-                      </div>
+              {/* Year Level Filter */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Year Level</label>
+                <Select value={selectedYear} onValueChange={handleYearChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All years" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All years</SelectItem>
+                    {yearLevels.map((year) => (
+                      <SelectItem key={year} value={year}>
+                        {year}
+                      </SelectItem>
                     ))}
-                  </div>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Format Filter */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Meeting Format</label>
+                <Select value={selectedFormat} onValueChange={handleFormatChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All formats" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All formats</SelectItem>
+                    {formats.map((format) => (
+                      <SelectItem key={format} value={format}>
+                        {format}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Language Filter */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Language</label>
+                <Select value={selectedLanguage} onValueChange={handleLanguageChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All languages" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All languages</SelectItem>
+                    {languages.map((language) => (
+                      <SelectItem key={language} value={language}>
+                        {language}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Personality Tags */}
+              <div>
+                <label className="text-sm font-medium mb-3 block">Personality Match</label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {personalityOptions.map((personality) => (
+                    <div key={personality} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={personality}
+                        checked={personalityFilters.includes(personality)}
+                        onCheckedChange={() => handlePersonalityChange(personality)}
+                      />
+                      <label htmlFor={personality} className="text-sm">
+                        {personality}
+                      </label>
+                    </div>
+                  ))}
                 </div>
+              </div>
 
-                <Button
-                  variant="outline"
-                  className="w-full bg-transparent"
-                  onClick={clearAllFilters}
-                >
-                  Clear All Filters
-                </Button>
-              </CardContent>
-            </Card>
+              <Button
+                variant="outline"
+                className="w-full bg-transparent"
+                onClick={clearAllFilters}
+              >
+                Clear All Filters
+              </Button>
+            </div>
           </div>
-
-          {/* Study Groups Grid */}
+          {/* Main Content */}
           <div className="lg:col-span-3">
             <div className="flex justify-between items-center mb-6">
               <p className="text-gray-600">
                 Showing {groups.length} study groups
               </p>
-              <Select value={sort} onValueChange={setSort}>
+              <Select value={sort} onValueChange={handleSortChange}>
                 <SelectTrigger className="w-48">
                   <SelectValue />
                 </SelectTrigger>
@@ -333,105 +343,107 @@ export default function DiscoverPage() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
-              {groups.map((group) => (
-                <Card
-                  key={group.id}
-                  className="hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-0 shadow-lg"
-                >
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <Badge variant="outline" className="mb-2 text-deep-blue border-deep-blue">
-                          {group.subject_code}
-                        </Badge>
-                        <CardTitle className="text-lg font-serif text-deep-blue">{group.group_name}</CardTitle>
-                        <div className="flex items-center mt-2 space-x-4">
-                          <div className="flex items-center">
-                            <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
-                            <span className="text-sm font-medium">
-                              {group.average_rating ? `${group.average_rating.toFixed(1)} (${group.rating_count || 0})` : "No ratings"}
-                            </span>
+              {loading
+                ? [...Array(4)].map((_, i) => <CardSkeleton key={i} />)
+                : groups.map((group) => (
+                    <Card
+                      key={group.id}
+                      className="hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-0 shadow-lg"
+                    >
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <Badge variant="outline" className="mb-2 text-deep-blue border-deep-blue">
+                              {group.subject_code}
+                            </Badge>
+                            <CardTitle className="text-lg font-serif text-deep-blue">{group.group_name}</CardTitle>
+                            <div className="flex items-center mt-2 space-x-4">
+                              <div className="flex items-center">
+                                <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
+                                <span className="text-sm font-medium">
+                                  {group.average_rating ? `${group.average_rating.toFixed(1)} (${group.rating_count || 0})` : "No ratings"}
+                                </span>
+                              </div>
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Clock className="h-4 w-4 mr-1" />
+                                {group.study_hours || 0}h studied
+                              </div>
+                            </div>
+                          </div>
+                          <Badge className={`${getFormatColor(group.meeting_format)} flex items-center gap-1 border`}>
+                            {getFormatIcon(group.meeting_format)}
+                            {group.meeting_format}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-gray-600 mb-4 text-sm line-clamp-2">{group.description}</p>
+
+                        <div className="space-y-3 mb-4">
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Users className="mr-2 h-4 w-4" />
+                            {group.member_count || 0} members
                           </div>
                           <div className="flex items-center text-sm text-gray-600">
-                            <Clock className="h-4 w-4 mr-1" />
-                            {group.study_hours || 0}h studied
+                            <Clock className="mr-2 h-4 w-4" />
+                            {group.meeting_schedule}
+                          </div>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <MapPin className="mr-2 h-4 w-4" />
+                            {group.location}
+                          </div>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Globe className="mr-2 h-4 w-4" />
+                            {group.primary_language}
+                          </div>
+                          {group.creator_name && (
+                            <div className="flex items-center text-sm text-gray-600">
+                              <Users className="mr-2 h-4 w-4" />
+                              Created by: {group.creator_name}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2 mb-4">
+                          <div className="flex flex-wrap gap-1">
+                            {(group.tags ? group.tags.split(',').map((t: string) => t.trim()) : []).slice(0, 2).map((tag: string, index: number) => (
+                              <Badge key={index} variant="secondary" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                            {group.tags && group.tags.split(',').map((t: string) => t.trim()).length > 2 && (
+                              <Badge variant="secondary" className="text-xs">
+                                +{group.tags.split(',').map((t: string) => t.trim()).length - 2}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {(Array.isArray(group.personality_tags) ? group.personality_tags : []).slice(0, 3).map((tag: string, index: number) => (
+                              <Badge key={index} className="text-xs bg-gold/10 text-amber-700 border-gold/20">
+                                {tag}
+                              </Badge>
+                            ))}
                           </div>
                         </div>
-                      </div>
-                      <Badge className={`${getFormatColor(group.meeting_format)} flex items-center gap-1 border`}>
-                        {getFormatIcon(group.meeting_format)}
-                        {group.meeting_format}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600 mb-4 text-sm line-clamp-2">{group.description}</p>
 
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Users className="mr-2 h-4 w-4" />
-                        {group.member_count || 0} members
-                      </div>
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Clock className="mr-2 h-4 w-4" />
-                        {group.meeting_schedule}
-                      </div>
-                      <div className="flex items-center text-sm text-gray-600">
-                        <MapPin className="mr-2 h-4 w-4" />
-                        {group.location}
-                      </div>
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Globe className="mr-2 h-4 w-4" />
-                        {group.primary_language}
-                      </div>
-                      {group.creator_name && (
-                        <div className="flex items-center text-sm text-gray-600">
-                          <Users className="mr-2 h-4 w-4" />
-                          Created by: {group.creator_name}
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600 font-medium">{group.year_level}</span>
+                          {isGroupCreator(group) ? (
+                            <Link href={`/group/${group.id}`}>
+                              <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">View Your Group</Button>
+                            </Link>
+                          ) : (
+                            <Link href={`/group/${group.id}`}>
+                              <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">View Group</Button>
+                            </Link>
+                          )}
                         </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2 mb-4">
-                      <div className="flex flex-wrap gap-1">
-                        {(group.tags ? group.tags.split(',').map((t: string) => t.trim()) : []).slice(0, 2).map((tag: string, index: number) => (
-                          <Badge key={index} variant="secondary" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                        {group.tags && group.tags.split(',').map((t: string) => t.trim()).length > 2 && (
-                          <Badge variant="secondary" className="text-xs">
-                            +{group.tags.split(',').map((t: string) => t.trim()).length - 2}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {(Array.isArray(group.personality_tags) ? group.personality_tags : []).slice(0, 3).map((tag: string, index: number) => (
-                          <Badge key={index} className="text-xs bg-gold/10 text-amber-700 border-gold/20">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600 font-medium">{group.year_level}</span>
-                      {isGroupCreator(group) ? (
-                        <Link href={`/group/${group.id}`}>
-                          <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">View Your Group</Button>
-                        </Link>
-                      ) : (
-                        <Link href={`/group/${group.id}`}>
-                          <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">View Group</Button>
-                        </Link>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      </CardContent>
+                    </Card>
+                  ))}
             </div>
-
-            {groups.length === 0 && (
+            {/* Show empty state only when not loading and no groups */}
+            {!loading && groups.length === 0 && (
               <div className="text-center py-12">
                 <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-serif font-medium text-gray-900 mb-2">No study groups found</h3>
