@@ -19,7 +19,7 @@ import {
 import { useUser } from "@/components/UserContext"
 import { format } from "date-fns"
 import { toastSuccess, toastFail } from "@/components/ui/use-toast"
-import Skeleton from "@/components/ui/Skeleton";
+import Skeleton from "@/components/ui/skeleton";
 
 export default function DashboardPage() {
   const [notifications, setNotifications] = useState<any[]>([]);

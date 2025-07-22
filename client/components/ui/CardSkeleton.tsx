@@ -1,4 +1,4 @@
-import Skeleton from "@/components/ui/Skeleton";
+import Skeleton from "@/components/ui/skeleton";
 
 const CardSkeleton = () => (
   <div className="p-4 bg-white rounded-lg shadow border flex flex-col gap-3">
