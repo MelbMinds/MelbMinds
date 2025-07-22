@@ -47,6 +47,16 @@ logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
+from django.http import JsonResponse
+from django.db import connection, OperationalError
+
+def health_check(request):
+    try:
+        connection.ensure_connection()
+        return JsonResponse({'status': 'ok'})
+    except OperationalError as e:
+        return JsonResponse({'status': 'error', 'details': str(e)}, status=500)
+
 def cleanup_past_sessions():
     """
     Utility function to clean up past sessions, create notifications, and update counter.
