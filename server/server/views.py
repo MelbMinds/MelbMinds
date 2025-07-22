@@ -47,16 +47,6 @@ logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
-from django.http import JsonResponse
-from django.db import connection, OperationalError
-
-def health_check(request):
-    try:
-        connection.ensure_connection()
-        return JsonResponse({'status': 'ok'})
-    except OperationalError as e:
-        return JsonResponse({'status': 'error', 'details': str(e)}, status=500)
-
 def cleanup_past_sessions():
     """
     Utility function to clean up past sessions, create notifications, and update counter.
@@ -233,7 +223,8 @@ def register(request):
             token=token
         )
         # Send verification email
-        verification_url = f"http://localhost:3000/verify-email?token={token}"
+        from django.conf import settings
+        verification_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
         email_subject = "🎓 Welcome to MelbMinds - Verify Your Account"
         email_message = f"""
         <!DOCTYPE html>
@@ -376,7 +367,8 @@ def resend_verification_email(request):
         verification_token = EmailVerificationToken.objects.create(user=user)
         
         # Send verification email
-        verification_url = f"http://localhost:3000/verify-email?token={verification_token.token}"
+        from django.conf import settings
+        verification_url = f"{settings.FRONTEND_URL}/verify-email?token={verification_token.token}"
         
         email_subject = "🎓 Welcome to MelbMinds - Verify Your Account"
         email_message = f"""
@@ -2134,7 +2126,8 @@ def request_password_reset(request):
         # Create new reset token
         reset_token = PasswordResetToken.objects.create(user=user)
         # Send reset email
-        reset_url = f"http://localhost:3000/reset-password?token={reset_token.token}"
+        from django.conf import settings
+        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token.token}"
         email_subject = "MelbMinds Password Reset Request"
         email_message = f"""
         <html>

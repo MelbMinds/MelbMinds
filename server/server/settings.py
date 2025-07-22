@@ -49,6 +49,7 @@ AUTH_USER_MODEL = 'server.User'
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'server.middleware.CORSMiddleware',  # Custom CORS middleware to handle OPTIONS requests
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -56,6 +57,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'server.middleware.SessionCleanupMiddleware',  # Session cleanup middleware
 ]
 
 ROOT_URLCONF = 'server.urls'
@@ -148,8 +150,32 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    os.environ.get('FRONTEND_URL', ''),
+    "https://melb-minds-one.vercel.app",
 ]
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Frontend URL for email verification and other client-side routes
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
 # Django REST Framework JWT settings
 REST_FRAMEWORK = {
