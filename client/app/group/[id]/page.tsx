@@ -313,7 +313,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`http://localhost:8000/api/groups/${id}/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${id}/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
         })
         if (!res.ok) throw new Error("Failed to fetch group")
@@ -332,7 +332,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   // Fetch members
   useEffect(() => {
     if (group?.id) {
-      fetch(`http://localhost:8000/api/groups/${group.id}/members/`)
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/members/`)
         .then(res => res.json())
         .then(setMembers)
     }
@@ -340,7 +340,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   // Fetch chat messages if joined, creator, or staff
   useEffect(() => {
     if (group?.id && (joined || isGroupCreator() || isStaff)) {
-      fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/messages/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
         .then(res => res.json())

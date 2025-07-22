@@ -39,7 +39,7 @@ export default function DashboardPage() {
     if (tokens?.access && user?.email) {
       setLoadingGroups(true)
       // Fetch all groups and filter them properly
-      fetch("http://localhost:8000/api/groups/", {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/`, {
         headers: { "Authorization": `Bearer ${tokens.access}` },
       })
         .then(res => res.json())
@@ -54,7 +54,7 @@ export default function DashboardPage() {
         })
         .catch(() => {
           // Fallback to profile endpoint for joined groups
-          fetch("http://localhost:8000/api/profile/", {
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/profile/`, {
             headers: { "Authorization": `Bearer ${tokens.access}` },
           })
             .then(res => res.json())
@@ -78,7 +78,7 @@ export default function DashboardPage() {
       if (!allGroups.length) return setSessions([])
       let allSessions: any[] = []
       for (const group of allGroups) {
-        const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/sessions/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
         })
         if (res.ok) {
@@ -99,7 +99,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (tokens?.access && !loadingGroups) {
       setLoadingRecommendations(true);
-      fetch("http://localhost:8000/api/recommendations/", {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/recommendations/`, {
         headers: { "Authorization": `Bearer ${tokens.access}` },
       })
         .then(res => res.json())
@@ -136,7 +136,7 @@ export default function DashboardPage() {
     // Fetch group notifications and chat messages for all groups in parallel
     const notificationPromises = allGroups.map(async (group) => {
       // Group notifications
-      const notifRes = await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/`, {
+      const notifRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/notifications/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       });
       if (notifRes.ok) {
@@ -153,7 +153,7 @@ export default function DashboardPage() {
         });
       }
       // Chat messages
-      const msgRes = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
+      const msgRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/messages/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       });
       if (msgRes.ok) {
@@ -206,7 +206,7 @@ export default function DashboardPage() {
     await Promise.all(
       allGroups.map(async (group) => {
         // Clear group notifications
-        await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/clear/`, {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/notifications/clear/`, {
           method: 'DELETE',
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
         });
@@ -227,7 +227,7 @@ export default function DashboardPage() {
     
     setLoadingActions(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${groupId}/leave/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -255,7 +255,7 @@ export default function DashboardPage() {
     
     setLoadingActions(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${groupId}/delete/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${tokens?.access}`,
