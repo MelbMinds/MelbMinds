@@ -69,7 +69,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     if (!tokens?.refresh) return false
     
     try {
-      const response = await fetch("https://melbminds-production.up.railway.app/api/token/refresh/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/token/refresh/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

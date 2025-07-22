@@ -76,7 +76,7 @@ export default function DiscoverPage() {
       if (personalityFilters.length > 0) params.append('personality_tags', personalityFilters.join(','));
       if (sort) params.append('sort', sort);
 
-      const res = await fetch(`https://melbminds-production.up.railway.app/api/groups/?${params.toString()}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch groups");
       const data = await res.json();
       setGroups(data);

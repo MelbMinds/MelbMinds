@@ -21,7 +21,7 @@ export default function ForgotPasswordPage() {
     setError(null);
     setSuccess(false);
     try {
-      const res = await fetch("https://melbminds-production.up.railway.app/api/auth/request-password-reset/", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/request-password-reset/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
