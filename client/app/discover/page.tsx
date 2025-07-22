@@ -14,6 +14,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import Skeleton from "@/components/ui/Skeleton";
 import CardSkeleton from "@/components/ui/CardSkeleton";
 import { Label } from "@/components/ui/label";
+import { getCachedApiData, setCachedApiData } from "@/lib/api";
 
 export default function DiscoverPage() {
   const { user, tokens } = useUser()
@@ -31,53 +32,75 @@ export default function DiscoverPage() {
   const [subjects, setSubjects] = useState<{ code: string; name: string; type: string }[]>([])
   const [subjectSearch, setSubjectSearch] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const GROUPS_CACHE_KEY = "groups_cache_v1";
+  const GROUPS_CACHE_AGE = 60000; // 1 minute
 
   useEffect(() => {
+    // Try to load subjects from localStorage first
+    const cached = localStorage.getItem('unimelb_subjects_cache');
+    if (cached) {
+      setSubjects(JSON.parse(cached));
+    }
     fetch("/unimelb_subjects.json")
       .then(res => res.json())
-      .then(setSubjects)
+      .then(data => {
+        setSubjects(data);
+        localStorage.setItem('unimelb_subjects_cache', JSON.stringify(data));
+      });
   }, [])
 
-  const fetchGroups = async () => {
-    setLoading(true);
+  useEffect(() => {
+    // Try to load cached groups first
+    const cachedGroups = getCachedApiData<any[]>(GROUPS_CACHE_KEY, GROUPS_CACHE_AGE);
+    if (cachedGroups) {
+      setGroups(cachedGroups);
+      setLoading(false);
+    }
+    // Always fetch fresh data in background
+    fetchGroups(true);
+    // eslint-disable-next-line
+  }, []);
+
+  const fetchGroups = async (background = false) => {
+    if (!background) setLoading(true);
     setSearching(true);
     setError(null);
     try {
       // Build query parameters
-      const params = new URLSearchParams()
-      if (searchTerm) params.append('search', searchTerm)
-      if (selectedSubject && selectedSubject !== 'all') params.append('subject', selectedSubject)
-      if (selectedYear && selectedYear !== 'all') params.append('year_level', selectedYear)
-      if (selectedFormat && selectedFormat !== 'all') params.append('meeting_format', selectedFormat)
-      if (selectedLanguage && selectedLanguage !== 'all') params.append('primary_language', selectedLanguage)
-      if (personalityFilters.length > 0) params.append('personality_tags', personalityFilters.join(','))
-      if (sort) params.append('sort', sort)
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (selectedSubject && selectedSubject !== 'all') params.append('subject', selectedSubject);
+      if (selectedYear && selectedYear !== 'all') params.append('year_level', selectedYear);
+      if (selectedFormat && selectedFormat !== 'all') params.append('meeting_format', selectedFormat);
+      if (selectedLanguage && selectedLanguage !== 'all') params.append('primary_language', selectedLanguage);
+      if (personalityFilters.length > 0) params.append('personality_tags', personalityFilters.join(','));
+      if (sort) params.append('sort', sort);
 
-      const res = await fetch(`http://localhost:8000/api/groups/?${params.toString()}`)
-      if (!res.ok) throw new Error("Failed to fetch groups")
-      const data = await res.json()
-      setGroups(data)
+      const res = await fetch(`http://localhost:8000/api/groups/?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch groups");
+      const data = await res.json();
+      setGroups(data);
+      setCachedApiData(GROUPS_CACHE_KEY, data);
     } catch (err) {
-      setError("Could not load groups.")
+      setError("Could not load groups.");
     } finally {
-      setLoading(false)
-      setSearching(false)
+      setLoading(false);
+      setSearching(false);
     }
-  }
+  };
 
   // Debounced search effect
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      fetchGroups()
-    }, 300) // 300ms delay
-
-    return () => clearTimeout(timeoutId)
+      fetchGroups();
+    }, 300); // 300ms delay
+    return () => clearTimeout(timeoutId);
   }, [searchTerm, selectedSubject, selectedYear, selectedFormat, selectedLanguage, personalityFilters, sort])
 
-  const yearLevels = ["1st Year", "2nd Year", "3rd Year", "Masters", "PhD"]
-  const formats = ["Virtual", "In-person", "Hybrid"]
-  const languages = ["English", "Mandarin", "Spanish", "Hindi", "Arabic"]
-  const personalityOptions = [
+  const yearLevels: string[] = ["1st Year", "2nd Year", "3rd Year", "Masters", "PhD"];
+  const formats: string[] = ["Virtual", "In-person", "Hybrid"];
+  const languages: string[] = ["English", "Mandarin", "Spanish", "Hindi", "Arabic"];
+  const personalityOptions: string[] = [
     "Quiet",
     "Talkative",
     "Fast-paced",
@@ -250,7 +273,7 @@ export default function DiscoverPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All years</SelectItem>
-                    {yearLevels.map((year) => (
+                    {yearLevels.map((year: string) => (
                       <SelectItem key={year} value={year}>
                         {year}
                       </SelectItem>
@@ -268,7 +291,7 @@ export default function DiscoverPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All formats</SelectItem>
-                    {formats.map((format) => (
+                    {formats.map((format: string) => (
                       <SelectItem key={format} value={format}>
                         {format}
                       </SelectItem>
@@ -286,7 +309,7 @@ export default function DiscoverPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All languages</SelectItem>
-                    {languages.map((language) => (
+                    {languages.map((language: string) => (
                       <SelectItem key={language} value={language}>
                         {language}
                       </SelectItem>
@@ -299,7 +322,7 @@ export default function DiscoverPage() {
               <div>
                 <label className="text-sm font-medium mb-3 block">Personality Match</label>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {personalityOptions.map((personality) => (
+                  {personalityOptions.map((personality: string) => (
                     <div key={personality} className="flex items-center space-x-2">
                       <Checkbox
                         id={personality}

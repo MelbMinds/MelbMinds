@@ -267,5 +267,26 @@ export async function apiRequest(
   return response
 }
 
+// Simple client-side cache for API responses
+export function getCachedApiData<T>(key: string, maxAgeMs: number = 60000): T | null {
+  try {
+    const cached = localStorage.getItem(key);
+    if (!cached) return null;
+    const { data, timestamp } = JSON.parse(cached);
+    if (Date.now() - timestamp < maxAgeMs) {
+      return data;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedApiData<T>(key: string, data: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch {}
+}
+
 // Export the interface for use in other files
 export type { AuthTokens, ApiResponse };

@@ -13,11 +13,18 @@ export default function HomePage() {
   const [loadingStats, setLoadingStats] = useState(true);
 
   useEffect(() => {
+    // Try to load stats from localStorage first
+    const cached = localStorage.getItem('stats_summary_cache');
+    if (cached) {
+      setStats(JSON.parse(cached));
+      setLoadingStats(false);
+    }
     fetch("http://localhost:8000/api/stats/summary/")
       .then((res) => res.json())
       .then((data) => {
         setStats(data);
         setLoadingStats(false);
+        localStorage.setItem('stats_summary_cache', JSON.stringify(data));
       })
       .catch(() => setLoadingStats(false));
   }, []);

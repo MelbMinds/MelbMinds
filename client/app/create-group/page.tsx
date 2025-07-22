@@ -64,9 +64,21 @@ export default function CreateGroupPage() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
   useEffect(() => {
+    // Try to load subjects from localStorage first
+    const cached = localStorage.getItem('unimelb_subjects_cache');
+    if (cached) {
+      setSubjects(JSON.parse(cached));
+    }
+    // Always fetch in the background, but only update cache if changed
     fetch("/unimelb_subjects.json")
       .then(res => res.json())
-      .then(setSubjects)
+      .then(data => {
+        if (!cached || cached !== JSON.stringify(data)) {
+          setSubjects(data);
+          localStorage.setItem('unimelb_subjects_cache', JSON.stringify(data));
+          localStorage.setItem('unimelb_subjects_cache_time', Date.now().toString());
+        }
+      });
   }, [])
 
   const yearLevels = ["1st Year", "2nd Year", "3rd Year", "Masters", "PhD", "Mixed"]

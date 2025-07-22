@@ -41,6 +41,12 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Try to load profile from localStorage first
+    const cached = localStorage.getItem('profile_cache');
+    if (cached) {
+      setProfileData(JSON.parse(cached));
+      setLoading(false);
+    }
     async function fetchProfile() {
       setLoading(true)
       setError(null)
@@ -50,6 +56,7 @@ export default function ProfilePage() {
           setError(response.error)
         } else {
           setProfileData(response.data)
+          localStorage.setItem('profile_cache', JSON.stringify(response.data));
         }
       } catch (err: any) {
         setError(err.message)
