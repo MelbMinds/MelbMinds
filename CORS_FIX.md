@@ -12,7 +12,7 @@ This update fixes the 400 error issue when your frontend on Vercel sends request
 ## How to Deploy
 
 1. Make sure you have the following environment variables set in Railway:
-   - `FRONTEND_URL`: Set to your Vercel deployment URL (`https://melb-minds-one.vercel.app`)
+   - `FRONTEND_URL`: Set to your Vercel deployment URL (`https://melb-minds-one.vercel.app`) **WITHOUT a trailing slash**
    - `DJANGO_ALLOWED_HOSTS`: Include your Railway app URL (`melbminds-production.up.railway.app`)
 
 2. On your Vercel deployment, make sure you have:
@@ -42,3 +42,15 @@ Your specific Vercel URL `https://melb-minds-one.vercel.app` has been explicitly
    - The `FRONTEND_URL` environment variable in Railway
 
 3. For local development, `http://localhost:3000` remains in the allowed origins list.
+
+## ⚠️ Warning About Trailing Slashes
+
+The error `corsheaders.E014` occurs when an origin in `CORS_ALLOWED_ORIGINS` has a trailing slash. Make sure that:
+
+1. The `FRONTEND_URL` environment variable in Railway does NOT have a trailing slash
+   - Correct: `https://melb-minds-one.vercel.app`
+   - Incorrect: `https://melb-minds-one.vercel.app/`
+
+2. Any hardcoded URLs in the settings file also don't have trailing slashes
+
+The code has been updated to automatically remove any trailing slashes from the origins to prevent this error.

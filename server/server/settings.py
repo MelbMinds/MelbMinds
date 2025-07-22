@@ -153,6 +153,9 @@ CORS_ALLOWED_ORIGINS = [
     os.environ.get('FRONTEND_URL', ''),
     "https://melb-minds-one.vercel.app",
 ]
+
+# Clean up any URLs with trailing slashes (to prevent corsheaders.E014 error)
+CORS_ALLOWED_ORIGINS = [origin.rstrip('/') if origin else origin for origin in CORS_ALLOWED_ORIGINS]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -175,7 +178,8 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # Frontend URL for email verification and other client-side routes
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+# Remove trailing slashes to avoid corsheaders.E014 error
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
 
 # Django REST Framework JWT settings
 REST_FRAMEWORK = {
