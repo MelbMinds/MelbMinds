@@ -1,0 +1,4 @@
+# Ignore environment files
+.env
+client/.env.local
+server/.env
