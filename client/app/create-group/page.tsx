@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -59,30 +59,15 @@ export default function CreateGroupPage() {
     )
   }
 
-  const subjects = [
-    "COMP10001",
-    "COMP10002",
-    "COMP20003",
-    "COMP30024",
-    "BIOL10004",
-    "BIOL20001",
-    "BIOL30001",
-    "LAWS10001",
-    "LAWS20001",
-    "LAWS30001",
-    "MAST20004",
-    "MAST30001",
-    "MAST30025",
-    "ECON10004",
-    "ECON20001",
-    "ECON30020",
-    "PSYC10003",
-    "PSYC20006",
-    "PSYC30013",
-    "CHEM10003",
-    "CHEM20011",
-    "CHEM30002",
-  ]
+  const [subjects, setSubjects] = useState<{ code: string; name: string; type: string }[]>([])
+  const [subjectSearch, setSubjectSearch] = useState("")
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+
+  useEffect(() => {
+    fetch("/unimelb_subjects.json")
+      .then(res => res.json())
+      .then(setSubjects)
+  }, [])
 
   const yearLevels = ["1st Year", "2nd Year", "3rd Year", "Masters", "PhD", "Mixed"]
   const languages = ["English", "Mandarin", "Spanish", "Hindi", "Arabic", "Mixed"]
@@ -234,28 +219,64 @@ export default function CreateGroupPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="subject">Subject Code *</Label>
-                    <Select value={subject} onValueChange={setSubject} required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select subject" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subjects.map((subj) => (
-                          <SelectItem key={subj} value={subj}>
-                            {subj}
-                          </SelectItem>
+                    <Label htmlFor="subject">Subject *</Label>
+                    <Input
+                      id="subject"
+                      placeholder="Type code or name..."
+                      value={subjectSearch}
+                      onChange={e => {
+                        setSubjectSearch(e.target.value)
+                        setDropdownOpen(true)
+                      }}
+                      autoComplete="off"
+                      required
+                      onBlur={() => {
+                        setTimeout(() => setDropdownOpen(false), 100) // Delay to allow click
+                        // If the user types a code that matches, set it
+                        const match = subjects.find(s => s.code.toLowerCase() === subjectSearch.toLowerCase())
+                        if (match) {
+                          setSubject(match.code)
+                          setSubjectSearch(`${match.code} – ${match.name}`)
+                          setCourseName(match.name)
+                        }
+                      }}
+                    />
+                    {subjectSearch && dropdownOpen && (
+                      <div className="max-h-48 overflow-y-auto border rounded bg-white shadow z-10">
+                        {subjects.filter(s =>
+                          s.code.toLowerCase().includes(subjectSearch.toLowerCase()) ||
+                          s.name.toLowerCase().includes(subjectSearch.toLowerCase())
+                        ).slice(0, 10).map(s => (
+                          <div
+                            key={s.code}
+                            className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
+                            onMouseDown={() => {
+                              setSubject(s.code)
+                              setSubjectSearch(`${s.code} – ${s.name}`)
+                              setCourseName(s.name)
+                              setDropdownOpen(false)
+                            }}
+                          >
+                            <span className="font-mono font-semibold">{s.code}</span> – {s.name}
+                          </div>
                         ))}
-                      </SelectContent>
-                    </Select>
+                        {subjects.filter(s =>
+                          s.code.toLowerCase().includes(subjectSearch.toLowerCase()) ||
+                          s.name.toLowerCase().includes(subjectSearch.toLowerCase())
+                        ).length === 0 && (
+                          <div className="px-3 py-2 text-gray-400">No results</div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="courseName">Course Name *</Label>
                     <Input
                       id="courseName"
-                      placeholder="e.g., Introduction to Programming"
+                      placeholder="e.g., Foundations of Computing"
                       value={courseName}
-                      onChange={(e) => setCourseName(e.target.value)}
+                      onChange={e => setCourseName(e.target.value)}
                       required
                     />
                   </div>

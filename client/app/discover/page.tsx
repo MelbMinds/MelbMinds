@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Users, MapPin, Video, Clock, Filter, Search, Globe, Star } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
+import { Label } from "@/components/ui/label"
 
 export default function DiscoverPage() {
   const { user, tokens } = useUser()
@@ -24,6 +25,14 @@ export default function DiscoverPage() {
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sort, setSort] = useState("newest")
+  const [subjects, setSubjects] = useState<{ code: string; name: string; type: string }[]>([])
+  const [subjectSearch, setSubjectSearch] = useState("")
+
+  useEffect(() => {
+    fetch("/unimelb_subjects.json")
+      .then(res => res.json())
+      .then(setSubjects)
+  }, [])
 
   const fetchGroups = async () => {
     setSearching(true)
@@ -60,7 +69,6 @@ export default function DiscoverPage() {
     return () => clearTimeout(timeoutId)
   }, [searchTerm, selectedSubject, selectedYear, selectedFormat, selectedLanguage, personalityFilters, sort])
 
-  const subjects = ["COMP10001", "BIOL10004", "LAWS10001", "MAST20004", "PSYC10004"]
   const yearLevels = ["1st Year", "2nd Year", "3rd Year", "Masters", "PhD"]
   const formats = ["Virtual", "In-person", "Hybrid"]
   const languages = ["English", "Mandarin", "Spanish", "Hindi", "Arabic"]
@@ -180,21 +188,45 @@ export default function DiscoverPage() {
                 </div>
 
                 {/* Subject Filter */}
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Subject</label>
-                  <Select value={selectedSubject} onValueChange={setSelectedSubject}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All subjects" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All subjects</SelectItem>
-                      {subjects.map((subject) => (
-                        <SelectItem key={subject} value={subject}>
-                          {subject}
-                        </SelectItem>
+                <div className="space-y-2">
+                  <Label htmlFor="subject">Subject</Label>
+                  <Input
+                    id="subject"
+                    placeholder="Type code or name..."
+                    value={subjectSearch}
+                    onChange={e => setSubjectSearch(e.target.value)}
+                    autoComplete="off"
+                    onBlur={() => {
+                      // If the user types a code that matches, set it
+                      const match = subjects.find(s => s.code.toLowerCase() === subjectSearch.toLowerCase())
+                      if (match) setSelectedSubject(match.code)
+                    }}
+                  />
+                  {subjectSearch && (
+                    <div className="max-h-48 overflow-y-auto border rounded bg-white shadow z-10">
+                      {subjects.filter(s =>
+                        s.code.toLowerCase().includes(subjectSearch.toLowerCase()) ||
+                        s.name.toLowerCase().includes(subjectSearch.toLowerCase())
+                      ).slice(0, 10).map(s => (
+                        <div
+                          key={s.code}
+                          className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
+                          onMouseDown={() => {
+                            setSelectedSubject(s.code)
+                            setSubjectSearch(`${s.code} – ${s.name}`)
+                          }}
+                        >
+                          <span className="font-mono font-semibold">{s.code}</span> – {s.name}
+                        </div>
                       ))}
-                    </SelectContent>
-                  </Select>
+                      {subjects.filter(s =>
+                        s.code.toLowerCase().includes(subjectSearch.toLowerCase()) ||
+                        s.name.toLowerCase().includes(subjectSearch.toLowerCase())
+                      ).length === 0 && (
+                        <div className="px-3 py-2 text-gray-400">No results</div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Year Level Filter */}
