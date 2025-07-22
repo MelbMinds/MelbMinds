@@ -78,7 +78,7 @@ export default function AuthPage() {
     setError(null)
     try {
       // 1. Get JWT tokens
-      const tokenRes = await fetch("http://localhost:8000/api/token/", {
+      const tokenRes = await fetch("https://melbminds-production.up.railway.app/api/token/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -105,7 +105,7 @@ export default function AuthPage() {
       }
       const tokens = await tokenRes.json() // { access, refresh }
       // 2. Get user info using access token
-      const userRes = await fetch("http://localhost:8000/api/profile/", {
+      const userRes = await fetch("https://melbminds-production.up.railway.app/api/profile/", {
         headers: {
           "Authorization": `Bearer ${tokens.access}`,
         },
