@@ -1,4 +1,4 @@
-import Skeleton from "@/components/ui/skeleton";
+import Skeleton from "@/components/ui/Skeleton";
 
 const CardSkeleton = () => (
   <div className="p-4 bg-white rounded-lg shadow border flex flex-col gap-3">
@@ -30,4 +30,4 @@ const CardSkeleton = () => (
   </div>
 );
 
-export default CardSkeleton; 
+export default CardSkeleton;
