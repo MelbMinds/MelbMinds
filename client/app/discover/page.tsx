@@ -11,7 +11,7 @@ import { Users, MapPin, Video, Clock, Filter, Search, Globe, Star } from "lucide
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import Skeleton from "@/components/ui/Skeleton";
+import Skeleton from "@/components/ui/skeleton";
 import CardSkeleton from "@/components/ui/CardSkeleton";
 import { Label } from "@/components/ui/label";
 import { getCachedApiData, setCachedApiData } from "@/lib/api";
