@@ -235,27 +235,70 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL')
 # Email verification settings
 EMAIL_VERIFICATION_EXPIRY_HOURS = 24
 
+# AWS S3 Configuration
 AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
 AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME')
 AWS_S3_FILE_OVERWRITE = False
-# Set the default ACL to 'public-read' to make files publicly accessible
+
+# For bucket owner enforced configuration, public ACLs are ignored
+# Setting the bucket owner enforced flag to indicate our bucket configuration
+AWS_BUCKET_OWNER_ENFORCED = True
+
+# This ACL setting won't work with bucket owner enforced, but keeping it for non-enforced buckets
 AWS_DEFAULT_ACL = 'public-read'
+
+# S3 connection configuration
 AWS_S3_VERIFY = True
 AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com'
+
 # Configure S3 to serve objects with appropriate headers
 AWS_S3_OBJECT_PARAMETERS = {
     'CacheControl': 'max-age=86400',  # 1 day cache
 }
+
 # Add CORS configuration (will still need to be set in AWS console as well)
 AWS_S3_CORS_SETTINGS = {
     'CORSRules': [{
         'AllowedHeaders': ['*'],
         'AllowedMethods': ['GET', 'POST', 'PUT', 'DELETE', 'HEAD'],
-        'AllowedOrigins': ['*'],  # Should be restricted to your domains in production
+        'AllowedOrigins': [FRONTEND_URL, 'http://localhost:3000'],
         'ExposeHeaders': ['ETag', 'Content-Length', 'Content-Type'],
         'MaxAgeSeconds': 3000
     }]
 }
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+# Use our custom storage backend that supports presigned URLs
+DEFAULT_FILE_STORAGE = 'server.storage.CustomS3Storage'
+
+# Configure logging for debugging S3 issues
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'server.storage': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}
