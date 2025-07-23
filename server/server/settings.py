@@ -240,7 +240,22 @@ AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
 AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME')
 AWS_S3_FILE_OVERWRITE = False
-AWS_DEFAULT_ACL = None
+# Set the default ACL to 'public-read' to make files publicly accessible
+AWS_DEFAULT_ACL = 'public-read'
 AWS_S3_VERIFY = True
 AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com'
+# Configure S3 to serve objects with appropriate headers
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',  # 1 day cache
+}
+# Add CORS configuration (will still need to be set in AWS console as well)
+AWS_S3_CORS_SETTINGS = {
+    'CORSRules': [{
+        'AllowedHeaders': ['*'],
+        'AllowedMethods': ['GET', 'POST', 'PUT', 'DELETE', 'HEAD'],
+        'AllowedOrigins': ['*'],  # Should be restricted to your domains in production
+        'ExposeHeaders': ['ETag', 'Content-Length', 'Content-Type'],
+        'MaxAgeSeconds': 3000
+    }]
+}
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
