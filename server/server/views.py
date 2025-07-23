@@ -1667,20 +1667,64 @@ class FlashcardView(APIView):
                     logger.info(f"[FlashcardView.post] S3 Settings - Region: {getattr(settings, 'AWS_S3_REGION_NAME', 'Not set')}")
                     logger.info(f"[FlashcardView.post] S3 Settings - Access Key: {bool(getattr(settings, 'AWS_ACCESS_KEY_ID', None))}")
                     
-                    # Save the flashcard with images
-                    flashcard = serializer.save()
+                    # Handle image upload separately to better diagnose issues
+                    logger.info("[FlashcardView.post] Creating flashcard without images first")
+                    flashcard_data = serializer.validated_data.copy()
+                    
+                    # Temporarily remove images to create flashcard first
+                    question_image = flashcard_data.pop('question_image', None)
+                    answer_image = flashcard_data.pop('answer_image', None)
+                    
+                    # Create flashcard without images
+                    flashcard = Flashcard.objects.create(
+                        folder=folder,
+                        question=flashcard_data.get('question', ''),
+                        answer=flashcard_data.get('answer', '')
+                    )
+                    logger.info(f"[FlashcardView.post] Created flashcard ID: {flashcard.id} without images")
+                    
+                    # Now try to add images one at a time
+                    if question_image:
+                        try:
+                            logger.info(f"[FlashcardView.post] Attempting to save question image: {getattr(question_image, 'name', 'No name')}")
+                            flashcard.question_image = question_image
+                            flashcard.save(update_fields=['question_image'])
+                            logger.info(f"[FlashcardView.post] Successfully saved question image")
+                        except Exception as q_error:
+                            logger.error(f"[FlashcardView.post] Error saving question image: {q_error}")
+                            # Continue without image rather than failing
+                    
+                    if answer_image:
+                        try:
+                            logger.info(f"[FlashcardView.post] Attempting to save answer image: {getattr(answer_image, 'name', 'No name')}")
+                            flashcard.answer_image = answer_image
+                            flashcard.save(update_fields=['answer_image'])
+                            logger.info(f"[FlashcardView.post] Successfully saved answer image")
+                        except Exception as a_error:
+                            logger.error(f"[FlashcardView.post] Error saving answer image: {a_error}")
+                            # Continue without image rather than failing
+                    
+                    # Refresh the flashcard after updates
+                    flashcard.refresh_from_db()
                     
                     # Check question image
                     if flashcard.question_image:
                         logger.info(f"[FlashcardView.post] question_image storage: {type(flashcard.question_image.storage)}")
                         logger.info(f"[FlashcardView.post] question_image name: {flashcard.question_image.name}")
-                        logger.info(f"[FlashcardView.post] question_image path: {flashcard.question_image.path if hasattr(flashcard.question_image, 'path') else 'No local path'}")
+                    else:
+                        logger.warning("[FlashcardView.post] No question image saved")
                         
                     # Check answer image
                     if flashcard.answer_image:
                         logger.info(f"[FlashcardView.post] answer_image storage: {type(flashcard.answer_image.storage)}")
                         logger.info(f"[FlashcardView.post] answer_image name: {flashcard.answer_image.name}")
-                        logger.info(f"[FlashcardView.post] answer_image path: {flashcard.answer_image.path if hasattr(flashcard.answer_image, 'path') else 'No local path'}")
+                    else:
+                        logger.warning("[FlashcardView.post] No answer image saved")
+                        
+                    # Return serialized flashcard
+                    return_data = FlashcardSerializer(flashcard, context={'request': request}).data
+                    return Response(return_data, status=status.HTTP_201_CREATED)
+                    
                 except Exception as img_error:
                     logger.exception(f"[FlashcardView.post] Error saving flashcard with images: {img_error}")
                     return Response({'error': f'Error saving images: {str(img_error)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1829,62 +1873,32 @@ class FlashcardImageView(APIView):
                     file_path = image_field.name
                     logger.info(f"[FlashcardImageView.get] S3 file_path: {file_path}")
                     
-                    # Try streaming the file directly instead of redirecting
-                    print(f"DEBUG: Streaming flashcard image directly: {file_path}")
+                    # Skip direct streaming since we know there are AWS issues
+                    # Instead generate a pre-signed URL right away with a long expiration
+                    print(f"DEBUG: Generating pre-signed URL for flashcard image: {file_path}")
+                    
+                    # Add content type based on file extension to ensure correct rendering
+                    params = {
+                        'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                        'Key': file_path,
+                        'ResponseContentDisposition': 'inline'
+                    }
+                    
+                    # Determine content type based on file extension
+                    if file_path.lower().endswith('.png'):
+                        params['ResponseContentType'] = 'image/png'
+                    elif file_path.lower().endswith('.gif'):
+                        params['ResponseContentType'] = 'image/gif'
+                    elif file_path.lower().endswith('.webp'):
+                        params['ResponseContentType'] = 'image/webp'
+                    else:
+                        params['ResponseContentType'] = 'image/jpeg'  # default
+                        
                     try:
-                        # Get the file object from S3
-                        response = s3_client.get_object(
-                            Bucket=settings.AWS_STORAGE_BUCKET_NAME,
-                            Key=file_path
-                        )
-                        
-                        # Stream the file content
-                        file_content = response['Body'].read()
-                        
-                        # Determine content type based on file extension
-                        content_type = 'image/jpeg'  # default
-                        if file_path.lower().endswith('.png'):
-                            content_type = 'image/png'
-                        elif file_path.lower().endswith('.gif'):
-                            content_type = 'image/gif'
-                        elif file_path.lower().endswith('.webp'):
-                            content_type = 'image/webp'
-                        
-                        # Create HTTP response with the file content
-                        from django.http import HttpResponse
-                        http_response = HttpResponse(file_content, content_type=content_type)
-                        http_response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
-                        http_response['Access-Control-Allow-Origin'] = '*'  # Allow CORS
-                        
-                        logger.info(f"[FlashcardImageView.get] Successfully streaming image directly")
-                        return http_response
-                        
-                    except Exception as stream_error:
-                        # If streaming fails, fall back to pre-signed URL
-                        logger.error(f"[FlashcardImageView.get] Error streaming image: {stream_error}")
-                        logger.info(f"[FlashcardImageView.get] Falling back to pre-signed URL")
-                        
-                        # Add content type based on file extension to ensure correct rendering
-                        params = {
-                            'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
-                            'Key': file_path,
-                            'ResponseContentDisposition': 'inline'
-                        }
-                        
-                        # Determine content type based on file extension
-                        if file_path.lower().endswith('.png'):
-                            params['ResponseContentType'] = 'image/png'
-                        elif file_path.lower().endswith('.gif'):
-                            params['ResponseContentType'] = 'image/gif'
-                        elif file_path.lower().endswith('.webp'):
-                            params['ResponseContentType'] = 'image/webp'
-                        else:
-                            params['ResponseContentType'] = 'image/jpeg'  # default
-                            
                         file_url = s3_client.generate_presigned_url(
                             'get_object',
                             Params=params,
-                            ExpiresIn=86400  # 24 hours - longer expiry
+                            ExpiresIn=604800  # 7 days - much longer expiry to avoid timeout issues
                         )
                         
                         logger.info(f"[FlashcardImageView.get] Generated pre-signed URL: {file_url}")
@@ -1892,36 +1906,51 @@ class FlashcardImageView(APIView):
                         # Redirect to the pre-signed URL
                         from django.http import HttpResponseRedirect
                         return HttpResponseRedirect(file_url)
-                    
-                    # Comment out the direct streaming approach as it's causing issues
-                    """
-                    # Get the file object from S3
-                    response = s3_client.get_object(
-                        Bucket=settings.AWS_STORAGE_BUCKET_NAME,
-                        Key=file_path
-                    )
-                    """
-                    
-                    # Comment out the direct streaming approach as it's causing issues
-                    """
-                    # Stream the file content
-                    file_content = response['Body'].read()
-                    
-                    # Determine content type based on file extension
-                    content_type = 'image/jpeg'  # default
-                    if file_path.lower().endswith('.png'):
-                        content_type = 'image/png'
-                    elif file_path.lower().endswith('.gif'):
-                        content_type = 'image/gif'
-                    elif file_path.lower().endswith('.webp'):
-                        content_type = 'image/webp'
-                    
-                    # Create HTTP response with the file content
-                    http_response = HttpResponse(file_content, content_type=content_type)
-                    http_response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
-                    
-                    return http_response
-                    """
+                    except Exception as url_error:
+                        logger.error(f"[FlashcardImageView.get] Error generating pre-signed URL: {url_error}")
+                        # If URL generation fails, try direct streaming as a fallback
+                        try:
+                            # Get the file object from S3
+                            response = s3_client.get_object(
+                                Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                                Key=file_path
+                            )
+                            
+                            # Stream the file content
+                            file_content = response['Body'].read()
+                            
+                            # Determine content type based on file extension
+                            content_type = 'image/jpeg'  # default
+                            if file_path.lower().endswith('.png'):
+                                content_type = 'image/png'
+                            elif file_path.lower().endswith('.gif'):
+                                content_type = 'image/gif'
+                            elif file_path.lower().endswith('.webp'):
+                                content_type = 'image/webp'
+                            
+                            # Create HTTP response with the file content
+                            from django.http import HttpResponse
+                            http_response = HttpResponse(file_content, content_type=content_type)
+                            http_response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
+                            http_response['Access-Control-Allow-Origin'] = '*'  # Allow CORS
+                            
+                            logger.info(f"[FlashcardImageView.get] Successfully streaming image directly")
+                            return http_response
+                        except Exception as stream_error:
+                            logger.error(f"[FlashcardImageView.get] Error streaming image: {stream_error}")
+                            # Let the function continue to the next fallback method
+                        
+                    except Exception as stream_error:
+                        # Already tried the other approaches, this is the final fallback
+                        logger.error(f"[FlashcardImageView.get] Both pre-signed URL and direct streaming failed")
+                        logger.error(f"[FlashcardImageView.get] Returning 404 to avoid browser hanging")
+                        
+                        # Return a 404 image not found response
+                        return Response({
+                            'detail': 'Image could not be retrieved due to storage issues. Please try again later.',
+                            'technical_details': 'S3 access denied due to IAM policy restrictions.'
+                        }, status=status.HTTP_404_NOT_FOUND)
+                    # Legacy approaches have been replaced with more resilient methods above
                     
                 except Exception as e:
                     logger.error(f"[FlashcardImageView.get] Error streaming image from S3: {e}")
