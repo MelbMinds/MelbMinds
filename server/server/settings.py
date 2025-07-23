@@ -243,11 +243,15 @@ AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME')
 AWS_S3_FILE_OVERWRITE = False
 
 # For bucket owner enforced configuration, public ACLs are ignored
-# Setting the bucket owner enforced flag to indicate our bucket configuration
+# Since we're using pre-signed URLs, we don't need public ACLs anyway
 AWS_BUCKET_OWNER_ENFORCED = True
 
-# This ACL setting won't work with bucket owner enforced, but keeping it for non-enforced buckets
-AWS_DEFAULT_ACL = 'public-read'
+# This ACL setting is changed to private since we're using pre-signed URLs
+AWS_DEFAULT_ACL = 'private'
+
+# Adding these settings to ensure S3 client has correct permissions
+AWS_QUERYSTRING_AUTH = True
+AWS_S3_SIGNATURE_VERSION = 's3v4'
 
 # S3 connection configuration
 AWS_S3_VERIFY = True

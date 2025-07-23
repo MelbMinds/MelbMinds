@@ -13,7 +13,14 @@ class CustomS3Storage(S3Boto3Storage):
     Custom S3 storage class that can generate presigned URLs
     """
     def __init__(self, *args, **kwargs):
+        # Override default ACL settings to ensure proper access
+        kwargs.setdefault('querystring_auth', True)  # Always use authentication
+        kwargs.setdefault('default_acl', 'private')  # Use private ACL since we use pre-signed URLs
+        kwargs.setdefault('file_overwrite', False)   # Never overwrite files with same name
+        kwargs.setdefault('signature_version', 's3v4')  # Use latest signature version
+        
         super().__init__(*args, **kwargs)
+        
         # Initialize S3 client for generating presigned URLs
         self.client = boto3.client(
             's3',
@@ -21,22 +28,32 @@ class CustomS3Storage(S3Boto3Storage):
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
             region_name=settings.AWS_S3_REGION_NAME
         )
+        
+        # Log initialization for debugging
+        logger.info(f"CustomS3Storage initialized with bucket: {self.bucket_name}")
+        
         # Check if bucket owner enforced setting is enabled
         self.bucket_owner_enforced = getattr(settings, 'AWS_BUCKET_OWNER_ENFORCED', True)
     
-    def generate_presigned_url(self, name, expiration=3600, content_disposition=None):
+    def generate_presigned_url(self, name, expiration=3600, content_disposition=None, content_type=None):
         """
         Generate a presigned URL for a file
         
         Args:
             name: The name (key) of the file in S3
             expiration: URL expiration time in seconds (default: 1 hour)
-            content_disposition: Optional content disposition header
+            content_disposition: Optional content disposition header (inline or attachment)
+            content_type: Optional content type for the response
             
         Returns:
             The presigned URL string or None if an error occurs
         """
         try:
+            # Handle empty name
+            if not name:
+                logger.warning("Empty name provided to generate_presigned_url")
+                return None
+                
             # Ensure the name is properly formatted with the correct prefix
             if not name.startswith(self.location):
                 name = os.path.join(self.location, name)
@@ -47,35 +64,63 @@ class CustomS3Storage(S3Boto3Storage):
                 
             logger.info(f"Generating presigned URL for {name} in bucket {settings.AWS_STORAGE_BUCKET_NAME}")
             
+            # Build parameters with required authentication
             params = {
                 'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
                 'Key': name
             }
             
+            # Add content disposition if provided
             if content_disposition:
                 params['ResponseContentDisposition'] = content_disposition
                 
+            # Add content type if provided, otherwise guess from extension
+            if content_type:
+                params['ResponseContentType'] = content_type
+            else:
+                # Try to guess content type from extension
+                if name.lower().endswith('.pdf'):
+                    params['ResponseContentType'] = 'application/pdf'
+                elif name.lower().endswith('.png'):
+                    params['ResponseContentType'] = 'image/png'
+                elif name.lower().endswith(('.jpg', '.jpeg')):
+                    params['ResponseContentType'] = 'image/jpeg'
+                elif name.lower().endswith('.gif'):
+                    params['ResponseContentType'] = 'image/gif'
+            
+            # Generate the URL with signature v4 for better security
             url = self.client.generate_presigned_url(
                 'get_object',
                 Params=params,
                 ExpiresIn=expiration
             )
-            logger.info(f"Generated presigned URL for {name}")
+            
+            logger.info(f"Successfully generated presigned URL for {name}")
             return url
+            
         except ClientError as e:
-            logger.error(f"Error generating presigned URL for {name}: {e}")
+            logger.error(f"AWS ClientError generating presigned URL for {name}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error generating presigned URL for {name}: {e}")
             return None
     
     def url(self, name):
         """
-        Override the default URL method to use presigned URLs when needed
+        Override the default URL method to use presigned URLs for all objects
+        Since we're using bucket owner enforced policy, we need pre-signed URLs
         """
-        if self.bucket_owner_enforced:
-            logger.info(f"Using presigned URL for {name} due to bucket owner enforced setting")
-            # Use a longer expiration for general access URLs
-            return self.generate_presigned_url(name, expiration=24*3600)
+        logger.info(f"Generating pre-signed URL for file access: {name}")
         
-        # Fall back to the standard URL method if bucket owner enforced is not enabled
+        # Always use pre-signed URLs with a 24 hour expiration for better user experience
+        presigned_url = self.generate_presigned_url(name, expiration=24*3600)
+        
+        if presigned_url:
+            return presigned_url
+        
+        # If pre-signed URL generation fails, fall back to standard URL
+        # This will likely fail to access the file due to permissions but provides a fallback
+        logger.warning(f"Pre-signed URL generation failed for {name}, falling back to standard URL")
         return super().url(name)
     
     def apply_public_acl(self, name):
