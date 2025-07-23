@@ -13,6 +13,8 @@ from django.db.models import Count
 from rest_framework.permissions import AllowAny
 from django.http import HttpResponse
 import os
+import boto3
+import logging
 from .perspective_moderation import perspective_moderator
 from django.db import models
 from django.shortcuts import render
@@ -760,72 +762,83 @@ class GroupSessionListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, group_id):
-        group = Group.objects.get(id=group_id)
-        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
-            return Response({'detail': 'Not a group member'}, status=403)
-        
-        # Always clean up past sessions on every request
-        deleted_count = cleanup_past_sessions()
-        
-        # Return only upcoming sessions for this group
-        now = timezone.now()
-        sessions = GroupSession.objects.filter(
-            Q(date__gt=now.date()) |
-            Q(date=now.date(), end_time__gte=now.time()),
-            group=group
-        ).order_by('date', 'start_time')
-        serializer = GroupSessionSerializer(sessions, many=True)
-        return Response(serializer.data)
+        try:
+            group = Group.objects.get(id=group_id)
+            if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
+                return Response({'detail': 'Not a group member'}, status=403)
+            
+            # Always clean up past sessions on every request
+            deleted_count = cleanup_past_sessions()
+            
+            # Return only upcoming sessions for this group
+            now = timezone.now()
+            sessions = GroupSession.objects.filter(
+                Q(date__gt=now.date()) |
+                Q(date=now.date(), end_time__gte=now.time()),
+                group=group
+            ).order_by('date', 'start_time')
+            serializer = GroupSessionSerializer(sessions, many=True)
+            return Response(serializer.data)
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=404)
+        except Exception as e:
+            logger.error(f"Error fetching group sessions: {str(e)}")
+            return Response({'detail': 'An error occurred while fetching sessions'}, status=500)
 
     def post(self, request, group_id):
-        import logging
-        logger = logging.getLogger(__name__)
-        group = Group.objects.get(id=group_id)
-        if group.creator != request.user:
-            logger.warning(f"User {request.user} is not the creator of group {group_id}.")
-            return Response({'detail': 'Only the group creator can create sessions'}, status=403)
-        
-        # Content moderation for session description
-        description = request.data.get('description', '')
-        description_validation = perspective_moderator.validate_user_input('session description', description)
-        
-        if not description_validation['valid']:
-            logger.warning(f"Session description moderation failed: {description_validation['message']}")
-            return Response({
-                'error': description_validation['message']
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Restrict sessions to not go past midnight and not allow midnight as a time
-        start_time = request.data.get('start_time')
-        end_time = request.data.get('end_time')
-        if start_time and end_time:
-            from datetime import datetime, time as dtime
-            try:
-                start_dt = datetime.strptime(start_time, '%H:%M:%S').time()
-                end_dt = datetime.strptime(end_time, '%H:%M:%S').time()
-                # Disallow midnight (00:00:00) for either start or end
-                if start_dt == dtime(0, 0, 0) or end_dt == dtime(0, 0, 0):
-                    logger.warning(f"Session creation failed: Start or end time is midnight (00:00:00). Start: {start_time}, End: {end_time}")
-                    return Response({'error': 'Sessions cannot start or end at midnight (00:00). Please choose a time between 00:01 and 23:59.'}, status=status.HTTP_400_BAD_REQUEST)
-                if end_dt <= start_dt:
-                    logger.warning(f"Session creation failed: End time {end_time} is not after start time {start_time}.")
-                    return Response({'error': 'End time must be after start time and sessions cannot go past midnight.'}, status=status.HTTP_400_BAD_REQUEST)
-            except Exception as e:
-                logger.error(f"Time parsing error: {e}")
-                return Response({'error': 'Invalid time format.'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        serializer = GroupSessionSerializer(data=request.data)
-        if serializer.is_valid():
-            session = serializer.save(group=group, creator=request.user)
-            GroupNotification.objects.create(
-                group=group,
-                message=f"New session created at {session.location} on {session.date} from {session.start_time} to {session.end_time}."
-            )
-            logger.info(f"Session created successfully for group {group_id} by user {request.user}.")
-            return Response(serializer.data, status=201)
-        else:
-            logger.error(f"Session creation failed. Data: {request.data}. Errors: {serializer.errors}")
-        return Response(serializer.errors, status=400)
+        try:
+            group = Group.objects.get(id=group_id)
+            if group.creator != request.user:
+                logger.warning(f"User {request.user} is not the creator of group {group_id}.")
+                return Response({'detail': 'Only the group creator can create sessions'}, status=403)
+            
+            # Content moderation for session description
+            description = request.data.get('description', '')
+            description_validation = perspective_moderator.validate_user_input('session description', description)
+            
+            if not description_validation['valid']:
+                logger.warning(f"Session description moderation failed: {description_validation['message']}")
+                return Response({
+                    'error': description_validation['message']
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Restrict sessions to not go past midnight and not allow midnight as a time
+            start_time = request.data.get('start_time')
+            end_time = request.data.get('end_time')
+            if start_time and end_time:
+                from datetime import datetime, time as dtime
+                try:
+                    start_dt = datetime.strptime(start_time, '%H:%M:%S').time()
+                    end_dt = datetime.strptime(end_time, '%H:%M:%S').time()
+                    # Disallow midnight (00:00:00) for either start or end
+                    if start_dt == dtime(0, 0, 0) or end_dt == dtime(0, 0, 0):
+                        logger.warning(f"Session creation failed: Start or end time is midnight (00:00:00). Start: {start_time}, End: {end_time}")
+                        return Response({'error': 'Sessions cannot start or end at midnight (00:00). Please choose a time between 00:01 and 23:59.'}, status=status.HTTP_400_BAD_REQUEST)
+                    if end_dt <= start_dt:
+                        logger.warning(f"Session creation failed: End time {end_time} is not after start time {start_time}.")
+                        return Response({'error': 'End time must be after start time and sessions cannot go past midnight.'}, status=status.HTTP_400_BAD_REQUEST)
+                except Exception as e:
+                    logger.error(f"Time parsing error: {e}")
+                    return Response({'error': 'Invalid time format.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            serializer = GroupSessionSerializer(data=request.data)
+            if serializer.is_valid():
+                session = serializer.save(group=group, creator=request.user)
+                GroupNotification.objects.create(
+                    group=group,
+                    message=f"New session created at {session.location} on {session.date} from {session.start_time} to {session.end_time}."
+                )
+                logger.info(f"Session created successfully for group {group_id} by user {request.user}.")
+                return Response(serializer.data, status=201)
+            else:
+                logger.error(f"Session creation failed. Data: {request.data}. Errors: {serializer.errors}")
+                return Response(serializer.errors, status=400)
+                
+        except Group.DoesNotExist:
+            return Response({'detail': 'Group not found'}, status=404)
+        except Exception as e:
+            logger.error(f"Error creating session: {str(e)}")
+            return Response({'detail': 'An error occurred while creating the session'}, status=500)
 
 class GroupSessionRetrieveUpdateDeleteView(APIView):
     permission_classes = [IsAuthenticated, IsGroupCreatorOrReadOnly]
@@ -871,31 +884,43 @@ class GroupSessionRetrieveUpdateDeleteView(APIView):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def group_notifications(request, group_id):
-    group = Group.objects.get(id=group_id)
-    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
-        return Response({'detail': 'Not a group member'}, status=403)
-    
-    # Clean up past sessions before fetching notifications
-    cleanup_past_sessions()
-    
-    notifications = GroupNotification.objects.filter(group=group).order_by('-created_at')[:50]
-    data = [
-        {
-            'id': n.id,
-            'message': n.message,
-            'created_at': n.created_at
-        } for n in notifications
-    ]
-    return Response(data)
+    try:
+        group = Group.objects.get(id=group_id)
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
+            return Response({'detail': 'Not a group member'}, status=403)
+        
+        # Clean up past sessions before fetching notifications
+        cleanup_past_sessions()
+        
+        notifications = GroupNotification.objects.filter(group=group).order_by('-created_at')[:50]
+        data = [
+            {
+                'id': n.id,
+                'message': n.message,
+                'created_at': n.created_at
+            } for n in notifications
+        ]
+        return Response(data)
+    except Group.DoesNotExist:
+        return Response({'detail': 'Group not found'}, status=404)
+    except Exception as e:
+        logger.error(f"Error fetching group notifications: {str(e)}")
+        return Response({'detail': 'An error occurred while fetching notifications'}, status=500)
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def clear_group_notifications(request, group_id):
-    group = Group.objects.get(id=group_id)
-    if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
-        return Response({'detail': 'Not a group member'}, status=403)
-    GroupNotification.objects.filter(group=group).delete()
-    return Response({'detail': 'All notifications cleared.'}, status=204)
+    try:
+        group = Group.objects.get(id=group_id)
+        if not (group.members.filter(id=request.user.id).exists() or group.creator == request.user or request.user.is_staff):
+            return Response({'detail': 'Not a group member'}, status=403)
+        GroupNotification.objects.filter(group=group).delete()
+        return Response({'detail': 'All notifications cleared.'}, status=204)
+    except Group.DoesNotExist:
+        return Response({'detail': 'Group not found'}, status=404)
+    except Exception as e:
+        logger.error(f"Error clearing group notifications: {str(e)}")
+        return Response({'detail': 'An error occurred while clearing notifications'}, status=500)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -1226,13 +1251,20 @@ class GroupFileDownloadView(APIView):
             if not file_obj.file:
                 return Response({'detail': 'File not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            # For S3 files, stream the file directly
+            # For S3 files, ONLY use pre-signed URLs to avoid permissions issues
             if hasattr(file_obj.file, 'url'):
+                import boto3
+                from django.conf import settings
+                print(f"DEBUG: Using pre-signed URL only approach - no direct streaming")
+                
+                # Get the file path from the storage
+                file_path = file_obj.file.name
+                print(f"DEBUG: File path: {file_path}")
                 try:
-                    import boto3
-                    from django.conf import settings
+                    bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'melbmindsbucket')
+                    file_path = file_obj.file.name
                     
-                    # Create S3 client
+                    # Create S3 client with specific credentials to ensure access
                     s3_client = boto3.client(
                         's3',
                         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
@@ -1240,40 +1272,27 @@ class GroupFileDownloadView(APIView):
                         region_name=settings.AWS_S3_REGION_NAME
                     )
                     
-                    # Get the file path from the storage
-                    file_path = file_obj.file.name
-                    print(f"DEBUG: File path: {file_path}")
+                    # Log the file path and access attempt
+                    print(f"DEBUG: Generating pre-signed URL for {file_path}")
                     
-                    # Get the file object from S3
-                    response = s3_client.get_object(
-                        Bucket=settings.AWS_STORAGE_BUCKET_NAME,
-                        Key=file_path
+                    # Generate a pre-signed URL that's valid for 60 minutes with explicit permissions
+                    file_url = s3_client.generate_presigned_url(
+                        'get_object',
+                        Params={
+                            'Bucket': bucket_name,
+                            'Key': file_path,
+                            'ResponseContentDisposition': f'attachment; filename="{file_obj.original_filename}"'
+                        },
+                        ExpiresIn=3600  # 60 minutes to give users more time
                     )
-                    
-                    # Stream the file content
-                    file_content = response['Body'].read()
-                    
-                    # Create HTTP response with the file content
-                    http_response = HttpResponse(file_content, content_type='application/octet-stream')
-                    http_response['Content-Disposition'] = f'attachment; filename="{file_obj.original_filename}"'
-                    
-                    print(f"DEBUG: Streaming file directly from S3")
-                    return http_response
-                    
-                except Exception as e:
-                    print(f"DEBUG: Error streaming from S3: {e}")
-                    # Fallback to URL method
-                    file_url = file_obj.file.url
-                    if file_url.startswith('/'):
-                        bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'melbmindsbucket')
-                        region = getattr(settings, 'AWS_S3_REGION_NAME', 'ap-southeast-2')
-                        file_path = file_url.lstrip('/')
-                        file_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{file_path}"
                     
                     return Response({
                         'download_url': file_url,
                         'filename': file_obj.original_filename
                     })
+                except Exception as s3_error:
+                    print(f"DEBUG: Error generating pre-signed URL: {s3_error}")
+                    return Response({'detail': f'Error accessing file: {str(s3_error)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             else:
                 # For local files, try to serve directly
                 try:
@@ -1642,20 +1661,29 @@ class FlashcardView(APIView):
 
             serializer = FlashcardSerializer(data=data, context={'request': request})
             if serializer.is_valid():
-                flashcard = serializer.save()
-                # Confirm storage backend
-                if flashcard.question_image:
-                    logger.info(f"[FlashcardView.post] question_image storage: {type(flashcard.question_image.storage)}")
-                    logger.info(f"[FlashcardView.post] question_image url: {getattr(flashcard.question_image, 'url', None)}")
-                    if not getattr(flashcard.question_image, 'url', None):
-                        logger.error("[FlashcardView.post] ERROR: Question image was not saved or has no URL!")
-                        return Response({'error': 'Question image was not saved or has no URL.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                if flashcard.answer_image:
-                    logger.info(f"[FlashcardView.post] answer_image storage: {type(flashcard.answer_image.storage)}")
-                    logger.info(f"[FlashcardView.post] answer_image url: {getattr(flashcard.answer_image, 'url', None)}")
-                    if not getattr(flashcard.answer_image, 'url', None):
-                        logger.error("[FlashcardView.post] ERROR: Answer image was not saved or has no URL!")
-                        return Response({'error': 'Answer image was not saved or has no URL.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                try:
+                    # Log S3 settings before saving to help debug issues
+                    logger.info(f"[FlashcardView.post] S3 Settings - Bucket: {getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'Not set')}")
+                    logger.info(f"[FlashcardView.post] S3 Settings - Region: {getattr(settings, 'AWS_S3_REGION_NAME', 'Not set')}")
+                    logger.info(f"[FlashcardView.post] S3 Settings - Access Key: {bool(getattr(settings, 'AWS_ACCESS_KEY_ID', None))}")
+                    
+                    # Save the flashcard with images
+                    flashcard = serializer.save()
+                    
+                    # Check question image
+                    if flashcard.question_image:
+                        logger.info(f"[FlashcardView.post] question_image storage: {type(flashcard.question_image.storage)}")
+                        logger.info(f"[FlashcardView.post] question_image name: {flashcard.question_image.name}")
+                        logger.info(f"[FlashcardView.post] question_image path: {flashcard.question_image.path if hasattr(flashcard.question_image, 'path') else 'No local path'}")
+                        
+                    # Check answer image
+                    if flashcard.answer_image:
+                        logger.info(f"[FlashcardView.post] answer_image storage: {type(flashcard.answer_image.storage)}")
+                        logger.info(f"[FlashcardView.post] answer_image name: {flashcard.answer_image.name}")
+                        logger.info(f"[FlashcardView.post] answer_image path: {flashcard.answer_image.path if hasattr(flashcard.answer_image, 'path') else 'No local path'}")
+                except Exception as img_error:
+                    logger.exception(f"[FlashcardView.post] Error saving flashcard with images: {img_error}")
+                    return Response({'error': f'Error saving images: {str(img_error)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             # Add debugging to see what validation errors occur
             logger.error(f"[FlashcardView.post] Flashcard validation errors: {serializer.errors}")
@@ -1801,12 +1829,81 @@ class FlashcardImageView(APIView):
                     file_path = image_field.name
                     logger.info(f"[FlashcardImageView.get] S3 file_path: {file_path}")
                     
+                    # Try streaming the file directly instead of redirecting
+                    print(f"DEBUG: Streaming flashcard image directly: {file_path}")
+                    try:
+                        # Get the file object from S3
+                        response = s3_client.get_object(
+                            Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                            Key=file_path
+                        )
+                        
+                        # Stream the file content
+                        file_content = response['Body'].read()
+                        
+                        # Determine content type based on file extension
+                        content_type = 'image/jpeg'  # default
+                        if file_path.lower().endswith('.png'):
+                            content_type = 'image/png'
+                        elif file_path.lower().endswith('.gif'):
+                            content_type = 'image/gif'
+                        elif file_path.lower().endswith('.webp'):
+                            content_type = 'image/webp'
+                        
+                        # Create HTTP response with the file content
+                        from django.http import HttpResponse
+                        http_response = HttpResponse(file_content, content_type=content_type)
+                        http_response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
+                        http_response['Access-Control-Allow-Origin'] = '*'  # Allow CORS
+                        
+                        logger.info(f"[FlashcardImageView.get] Successfully streaming image directly")
+                        return http_response
+                        
+                    except Exception as stream_error:
+                        # If streaming fails, fall back to pre-signed URL
+                        logger.error(f"[FlashcardImageView.get] Error streaming image: {stream_error}")
+                        logger.info(f"[FlashcardImageView.get] Falling back to pre-signed URL")
+                        
+                        # Add content type based on file extension to ensure correct rendering
+                        params = {
+                            'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                            'Key': file_path,
+                            'ResponseContentDisposition': 'inline'
+                        }
+                        
+                        # Determine content type based on file extension
+                        if file_path.lower().endswith('.png'):
+                            params['ResponseContentType'] = 'image/png'
+                        elif file_path.lower().endswith('.gif'):
+                            params['ResponseContentType'] = 'image/gif'
+                        elif file_path.lower().endswith('.webp'):
+                            params['ResponseContentType'] = 'image/webp'
+                        else:
+                            params['ResponseContentType'] = 'image/jpeg'  # default
+                            
+                        file_url = s3_client.generate_presigned_url(
+                            'get_object',
+                            Params=params,
+                            ExpiresIn=86400  # 24 hours - longer expiry
+                        )
+                        
+                        logger.info(f"[FlashcardImageView.get] Generated pre-signed URL: {file_url}")
+                        
+                        # Redirect to the pre-signed URL
+                        from django.http import HttpResponseRedirect
+                        return HttpResponseRedirect(file_url)
+                    
+                    # Comment out the direct streaming approach as it's causing issues
+                    """
                     # Get the file object from S3
                     response = s3_client.get_object(
                         Bucket=settings.AWS_STORAGE_BUCKET_NAME,
                         Key=file_path
                     )
+                    """
                     
+                    # Comment out the direct streaming approach as it's causing issues
+                    """
                     # Stream the file content
                     file_content = response['Body'].read()
                     
@@ -1824,10 +1921,33 @@ class FlashcardImageView(APIView):
                     http_response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
                     
                     return http_response
+                    """
                     
                 except Exception as e:
                     logger.error(f"[FlashcardImageView.get] Error streaming image from S3: {e}")
-                    return Response({'detail': 'Image not accessible'}, status=status.HTTP_404_NOT_FOUND)
+                    # Fallback to pre-signed URL
+                    try:
+                        bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'melbmindsbucket')
+                        file_path = image_field.name
+                        
+                        # Generate a pre-signed URL that's valid for 15 minutes
+                        file_url = s3_client.generate_presigned_url(
+                            'get_object',
+                            Params={
+                                'Bucket': bucket_name,
+                                'Key': file_path,
+                                'ResponseContentType': 'image/jpeg',
+                                'ResponseContentDisposition': 'inline'
+                            },
+                            ExpiresIn=900  # 15 minutes
+                        )
+                        
+                        # Redirect to the pre-signed URL
+                        from django.http import HttpResponseRedirect
+                        return HttpResponseRedirect(file_url)
+                    except Exception as s3_error:
+                        logger.error(f"[FlashcardImageView.get] Error generating pre-signed URL: {s3_error}")
+                        return Response({'detail': f'Error accessing image: {str(s3_error)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             else:
                 # For local files, try to serve directly
                 try:
