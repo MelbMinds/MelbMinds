@@ -1901,11 +1901,20 @@ class FlashcardImageView(APIView):
                             ExpiresIn=604800  # 7 days - much longer expiry to avoid timeout issues
                         )
                         
+                        # Force HTTPS for S3 presigned URLs - always convert to HTTPS regardless of original scheme
+                        if file_url.startswith('http:'):
+                            file_url = file_url.replace('http:', 'https:', 1)
+                            
                         logger.info(f"[FlashcardImageView.get] Generated pre-signed URL: {file_url}")
                         
-                        # Redirect to the pre-signed URL
+                        # Make sure our application URL also uses HTTPS in the redirect
                         from django.http import HttpResponseRedirect
-                        return HttpResponseRedirect(file_url)
+                        from django.conf import settings
+                        
+                        # Ensure the response uses an absolute HTTPS URL
+                        response = HttpResponseRedirect(file_url)
+                        response['Access-Control-Allow-Origin'] = '*'  # Allow CORS
+                        return response
                     except Exception as url_error:
                         logger.error(f"[FlashcardImageView.get] Error generating pre-signed URL: {url_error}")
                         # If URL generation fails, try direct streaming as a fallback
@@ -1928,11 +1937,12 @@ class FlashcardImageView(APIView):
                             elif file_path.lower().endswith('.webp'):
                                 content_type = 'image/webp'
                             
-                            # Create HTTP response with the file content
+                            # Create HTTPS response with the file content
                             from django.http import HttpResponse
                             http_response = HttpResponse(file_content, content_type=content_type)
                             http_response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
                             http_response['Access-Control-Allow-Origin'] = '*'  # Allow CORS
+                            http_response['Content-Security-Policy'] = "upgrade-insecure-requests"  # Force HTTPS
                             
                             logger.info(f"[FlashcardImageView.get] Successfully streaming image directly")
                             return http_response
@@ -1959,21 +1969,36 @@ class FlashcardImageView(APIView):
                         bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'melbmindsbucket')
                         file_path = image_field.name
                         
+                        # Determine content type based on file extension
+                        content_type = 'image/jpeg'  # default
+                        if file_path.lower().endswith('.png'):
+                            content_type = 'image/png'
+                        elif file_path.lower().endswith('.gif'):
+                            content_type = 'image/gif'
+                        elif file_path.lower().endswith('.webp'):
+                            content_type = 'image/webp'
+                        
                         # Generate a pre-signed URL that's valid for 15 minutes
                         file_url = s3_client.generate_presigned_url(
                             'get_object',
                             Params={
                                 'Bucket': bucket_name,
                                 'Key': file_path,
-                                'ResponseContentType': 'image/jpeg',
+                                'ResponseContentType': content_type,
                                 'ResponseContentDisposition': 'inline'
                             },
                             ExpiresIn=900  # 15 minutes
                         )
                         
+                        # Always force HTTPS for the URL
+                        if file_url.startswith('http:'):
+                            file_url = file_url.replace('http:', 'https:', 1)
+                        
                         # Redirect to the pre-signed URL
                         from django.http import HttpResponseRedirect
-                        return HttpResponseRedirect(file_url)
+                        response = HttpResponseRedirect(file_url)
+                        response['Access-Control-Allow-Origin'] = '*'  # Allow CORS
+                        return response
                     except Exception as s3_error:
                         logger.error(f"[FlashcardImageView.get] Error generating pre-signed URL: {s3_error}")
                         return Response({'detail': f'Error accessing image: {str(s3_error)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1994,6 +2019,8 @@ class FlashcardImageView(APIView):
                     
                     response = HttpResponse(file_content, content_type=content_type)
                     response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
+                    response['Access-Control-Allow-Origin'] = '*'  # Allow CORS
+                    response['Content-Security-Policy'] = "upgrade-insecure-requests"  # Force HTTPS
                     logger.warning(f"[FlashcardImageView.get] WARNING: Serving image from local storage!")
                     return response
                 except Exception as e:

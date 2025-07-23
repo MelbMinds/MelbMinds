@@ -19,10 +19,12 @@ export default function AuthenticatedImage({ src, alt, className, tokens, refres
     const loadImage = async () => {
       if (!src || !tokens) return
       
-      console.log('AuthenticatedImage loading:', src)
+      // Convert HTTP URLs to HTTPS
+      const secureUrl = src.replace(/^http:\/\//i, 'https://')
+      console.log('AuthenticatedImage loading:', secureUrl)
 
       try {
-        const response = await apiRequest(src, {}, tokens, refreshToken)
+        const response = await apiRequest(secureUrl, {}, tokens, refreshToken)
         
         console.log('Image response status:', response.status)
         

@@ -35,13 +35,13 @@ class CustomS3Storage(S3Boto3Storage):
         # Check if bucket owner enforced setting is enabled
         self.bucket_owner_enforced = getattr(settings, 'AWS_BUCKET_OWNER_ENFORCED', True)
     
-    def generate_presigned_url(self, name, expiration=3600, content_disposition=None, content_type=None):
+    def generate_presigned_url(self, name, expiration=604800, content_disposition=None, content_type=None):
         """
         Generate a presigned URL for a file
         
         Args:
             name: The name (key) of the file in S3
-            expiration: URL expiration time in seconds (default: 1 hour)
+            expiration: URL expiration time in seconds (default: 7 days)
             content_disposition: Optional content disposition header (inline or attachment)
             content_type: Optional content type for the response
             

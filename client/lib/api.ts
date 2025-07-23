@@ -9,9 +9,18 @@ interface ApiResponse<T = any> {
 }
 
 class ApiClient {
-  private baseUrl = `${process.env.NEXT_PUBLIC_API_URL}/api`;
+  private baseUrl: string;
   private tokens: AuthTokens | null = null;
   private refreshPromise: Promise<AuthTokens> | null = null;
+
+  constructor() {
+    // Ensure the baseUrl always uses HTTPS
+    let apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    if (apiUrl.startsWith('http:')) {
+      apiUrl = apiUrl.replace('http:', 'https:');
+    }
+    this.baseUrl = `${apiUrl}/api`;
+  }
 
   setTokens(tokens: AuthTokens | null) {
     this.tokens = tokens;

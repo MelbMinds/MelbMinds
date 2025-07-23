@@ -28,6 +28,15 @@ DEBUG = os.environ.get('DJANGO_DEBUG') == 'True'
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
 
+# Security settings
+SECURE_SSL_REDIRECT = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Application definition
@@ -50,6 +59,7 @@ AUTH_USER_MODEL = 'server.User'
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'server.middleware.CORSMiddleware',  # Custom CORS middleware to handle OPTIONS requests
+    'server.https_middleware.ForceHTTPSMiddleware',  # Force HTTPS for all requests
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -256,6 +266,9 @@ AWS_S3_SIGNATURE_VERSION = 's3v4'
 # S3 connection configuration
 AWS_S3_VERIFY = True
 AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com'
+
+# Force HTTPS for S3 URLs
+AWS_S3_URL_PROTOCOL = 'https:'
 
 # Configure S3 to serve objects with appropriate headers
 AWS_S3_OBJECT_PARAMETERS = {

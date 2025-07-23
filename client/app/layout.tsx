@@ -27,7 +27,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${inter.variable} ${dmSerifDisplay.variable}`}>
+      <head>
+        <meta httpEquiv="Content-Security-Policy" content="upgrade-insecure-requests" />
+      </head>
       <body className={`${inter.variable} ${dmSerifDisplay.variable} font-sans`}>
         <UserProvider>
           <Header />
