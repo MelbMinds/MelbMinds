@@ -2143,8 +2143,18 @@ def message_list(request, group_id):
             msg = Message.objects.get(id=msg_id, group=group)
         except Message.DoesNotExist:
             return Response({'error': 'Message not found'}, status=404)
-        if msg.user != user and group.creator != user:
-            return Response({'error': 'Not allowed'}, status=403)
+            
+        # Only message creator or group creator can delete messages
+        if msg.user.id != user.id and group.creator.id != user.id:
+            return Response({
+                'error': 'Permission denied. You can only delete your own messages.',
+                'message_owner': msg.user.id,
+                'requesting_user': user.id
+            }, status=status.HTTP_403_FORBIDDEN)
+            
+        logger = logging.getLogger(__name__)
+        logger.info(f"[message_list.DELETE] User {user.id} ({user.email}) deleted message {msg_id} from user {msg.user.id}")
+        
         msg.delete()
         return Response({'success': True})
 
