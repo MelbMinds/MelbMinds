@@ -71,7 +71,7 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
     setLoading(true)
     setError(null)
     try {
-      const res = await apiRequest(`http://localhost:8000/api/flashcards/folders/${id}/`, {}, tokens, refreshToken)
+      const res = await apiRequest(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/folders/${id}/`, {}, tokens, refreshToken)
       
       if (!res.ok) throw new Error("Failed to fetch flashcards")
       

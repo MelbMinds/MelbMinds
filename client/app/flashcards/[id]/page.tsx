@@ -73,7 +73,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
     setLoading(true)
     setError(null)
     try {
-      const res = await apiRequest(`http://localhost:8000/api/flashcards/folders/${id}/`, {}, tokens, refreshToken)
+      const res = await apiRequest(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/folders/${id}/`, {}, tokens, refreshToken)
       
       if (!res.ok) throw new Error("Failed to fetch folder")
       
@@ -109,7 +109,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
         formData.append('answer_image', newFlashcard.answerImage)
       }
       
-      const res = await apiRequest("http://localhost:8000/api/flashcards/", {
+      const res = await apiRequest(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/`, {
         method: 'POST',
         body: formData
       }, tokens, refreshToken)
@@ -177,7 +177,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
         formData.append('answer_image', '') // Empty string to remove image
       }
       
-      const res = await apiRequest(`http://localhost:8000/api/flashcards/${editingFlashcard.id}/`, {
+      const res = await apiRequest(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/${editingFlashcard.id}/`, {
         method: 'PUT',
         body: formData
       }, tokens, refreshToken)
@@ -230,7 +230,7 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
   const handleDeleteFlashcard = async (flashcardId: number) => {
     setIsDeleting(true)
     try {
-      const res = await apiRequest(`http://localhost:8000/api/flashcards/${flashcardId}/`, {
+      const res = await apiRequest(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/${flashcardId}/`, {
         method: 'DELETE'
       }, tokens, refreshToken)
       

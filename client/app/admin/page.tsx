@@ -131,7 +131,7 @@ export default function AdminPage() {
     if (!resolvingReport || !resolveActionText.trim()) return
     setReports(prev => prev.map(r => r.id === resolvingReport.id ? { ...r, status: 'resolved', action_taken: resolveActionText } : r))
     try {
-      await fetch(`http://localhost:8000/api/reports/`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/reports/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...resolvingReport, status: 'resolved', action_taken: resolveActionText })
@@ -144,7 +144,7 @@ export default function AdminPage() {
   const handleMarkUnresolved = async (report: any) => {
     setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'open' } : r))
     try {
-      await fetch(`http://localhost:8000/api/reports/`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/reports/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...report, status: 'open' })
@@ -156,7 +156,7 @@ export default function AdminPage() {
     try {
       if (report.type === 'file') {
         // Fetch file info to get group_id
-        const res = await fetch(`http://localhost:8000/api/groups/files/${report.target_id}/`)
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/files/${report.target_id}/`)
         if (res.ok) {
           const data = await res.json()
           const groupId = data.group_id
@@ -167,7 +167,7 @@ export default function AdminPage() {
         }
       } else if (report.type === 'message') {
         // Fetch message info to get group_id
-        const res = await fetch(`http://localhost:8000/api/groups/messages/${report.target_id}/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/messages/${report.target_id}/`, {
           headers: {
             'Content-Type': 'application/json',
             ...(tokens?.access && { 'Authorization': `Bearer ${tokens.access}` })

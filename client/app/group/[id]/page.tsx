@@ -353,7 +353,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     if (activeTab === 'meetups' && group?.id && (joined || isGroupCreator() || isStaff)) {
       const fetchSessions = () => {
         setSessionsLoading(true);
-        fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/sessions/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
         })
           .then(res => res.json())
@@ -377,7 +377,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
     let allNotifications: any[] = [];
     // Group notifications
-    const notifRes = await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/`, {
+    const notifRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/notifications/`, {
       headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
     });
     if (notifRes.ok) {
@@ -394,7 +394,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       });
     }
     // Chat messages
-    const msgRes = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
+    const msgRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/messages/`, {
       headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
     });
     if (msgRes.ok) {
@@ -430,7 +430,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleClearGroupNotifications = async () => {
     setClearLoading(true);
     if (!group?.id) return;
-    await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/clear/`, {
+    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/notifications/clear/`, {
       method: 'DELETE',
       headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
     });
@@ -446,7 +446,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     if (group?.id && (joined || isGroupCreator() || isStaff)) {
       const fetchFiles = () => {
         setLoadingFiles(true)
-        fetch(`http://localhost:8000/api/groups/${group.id}/files/`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/files/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
         })
           .then(res => res.json())
@@ -460,7 +460,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   // Fetch user's rating
   useEffect(() => {
     if (group?.id && tokens?.access) {
-      fetch(`http://localhost:8000/api/groups/${group.id}/rating/`, {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/rating/`, {
         headers: { 'Authorization': `Bearer ${tokens.access}` },
       })
         .then(res => {
@@ -491,7 +491,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     
     setLoadingActions(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/leave/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/leave/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -520,7 +520,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     
     setLoadingActions(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/delete/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/delete/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${tokens?.access}`,
@@ -566,7 +566,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     
     setLoadingActions(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/update/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/update/`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -656,7 +656,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
     
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${id}/join/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${id}/join/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -705,7 +705,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     setOptimisticMessages((prev) => [...prev, optimisticMsg])
     setChatMessage("")
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/messages/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -761,7 +761,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     
     setLoadingFlashcards(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/flashcards/folders/?group=${group.id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/folders/?group=${group.id}`, {
         headers: {
           'Authorization': `Bearer ${tokens.access}`
         }
@@ -783,7 +783,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     
     setIsCreatingFolder(true)
     try {
-      const res = await fetch("http://localhost:8000/api/flashcards/folders/", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/folders/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -828,7 +828,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     if (!window.confirm(`Are you sure you want to delete "${folder.name}"? This action cannot be undone.`)) return
 
     try {
-      const res = await fetch(`http://localhost:8000/api/flashcards/folders/${folder.id}/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/folders/${folder.id}/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${tokens?.access}`,
@@ -852,7 +852,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
     setIsCreatingFolder(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/flashcards/folders/${editingFolder.id}/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/folders/${editingFolder.id}/`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -910,7 +910,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     // Compose description with topic and extraDetails if present
     let fullDescription = description || '';
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/sessions/`, {
         method: 'POST',
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic, date, start_time, end_time, location, meeting_format: type, description: fullDescription, extra_details: extraDetails }),
@@ -920,7 +920,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         setShowSessionModal(false);
         toastSuccess({ title: 'Session created!' });
         // Refresh sessions after creation
-        fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/sessions/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
         })
           .then(res => res.json())
@@ -974,7 +974,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       return;
     }
     console.log('About to send PUT request', { topic, date, start_time, end_time, location, meeting_format: type, description: sessionForm.description, extra_details: sessionForm.extraDetails });
-    const res = await fetch(`http://localhost:8000/api/sessions/${editingSession.id}/`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/sessions/${editingSession.id}/`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -986,7 +986,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     if (res.ok) {
       setEditingSession(null);
       setSessionForm({ topic: '', date: '', startTime: '', endTime: '', type: '', location: '', extraDetails: '', description: '', startHour: '', startMinute: '', endHour: '', endMinute: '' });
-      fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       })
         .then(res => res.json())
@@ -1014,7 +1014,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleDeleteSession = async (sessionId: number) => {
     if (!window.confirm('Delete this session?')) return
     setSessionLoading(true)
-    const res = await fetch(`http://localhost:8000/api/sessions/${sessionId}/`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/sessions/${sessionId}/`, {
       method: 'DELETE',
       headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
     })
@@ -1030,7 +1030,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleClearNotifications = async () => {
     if (!window.confirm('Clear all notifications?')) return
     setLoadingNotifications(true)
-    const res = await fetch(`http://localhost:8000/api/groups/${group.id}/notifications/clear/`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/notifications/clear/`, {
       method: 'DELETE',
       headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
     })
@@ -1073,7 +1073,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     formData.append('file', renamedFile)
 
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/files/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/files/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${tokens?.access}`,
@@ -1120,7 +1120,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   const handleFileDownload = async (file: any) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/files/${file.id}/download/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/download/`, {
         headers: {
           'Authorization': `Bearer ${tokens?.access}`,
         },
@@ -1173,7 +1173,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     if (!window.confirm(`Delete "${file.original_filename}"?`)) return
 
     try {
-      const res = await fetch(`http://localhost:8000/api/files/${file.id}/delete/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/delete/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${tokens?.access}`,
@@ -1272,7 +1272,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     if (!group?.id || !tokens?.access) return
     setRatingLoading(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/rating/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/rating/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1289,7 +1289,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           toastSuccess({ title: 'Thank you for rating!' })
         }
         // Optionally, refetch group data to update average rating
-        const groupRes = await fetch(`http://localhost:8000/api/groups/${group.id}/`, {
+        const groupRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/`, {
           headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
         })
         if (groupRes.ok) {
@@ -1309,7 +1309,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const handleDeleteMessage = async (msgId: number) => {
     setDeleteLoading(msgId)
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/messages/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/messages/`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -1331,7 +1331,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     if (reportingMessage && reportReason.trim()) {
       setReportSubmitting(true)
       try {
-        const res = await fetch('http://localhost:8000/api/reports/', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/reports/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1356,7 +1356,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     } else if (reportingFile && reportReason.trim()) {
       setReportSubmitting(true)
       try {
-        const res = await fetch('http://localhost:8000/api/reports/', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/reports/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1400,7 +1400,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     if (!tokens?.access) return;
     setJoiningSessionId(sessionId);
     try {
-      const res = await fetch(`http://localhost:8000/api/sessions/${sessionId}/join/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/sessions/${sessionId}/join/`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${tokens.access}` },
       });
@@ -1422,7 +1422,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     if (!group?.id) return;
     setSessionsLoading?.(true); // Only call if setSessionsLoading exists in scope
     try {
-      const res = await fetch(`http://localhost:8000/api/groups/${group.id}/sessions/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/sessions/`, {
         headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
       });
       const data = await res.json();
