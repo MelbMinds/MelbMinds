@@ -1895,26 +1895,27 @@ class FlashcardImageView(APIView):
                         params['ResponseContentType'] = 'image/jpeg'  # default
                         
                     try:
-                        file_url = s3_client.generate_presigned_url(
-                            'get_object',
-                            Params=params,
-                            ExpiresIn=604800  # 7 days - much longer expiry to avoid timeout issues
+                        # Instead of redirecting, let's proxy the S3 response through our server
+                        # This avoids CORS issues completely
+                        
+                        # Get the file object from S3 directly
+                        response = s3_client.get_object(
+                            Bucket=params['Bucket'],
+                            Key=params['Key']
                         )
                         
-                        # Force HTTPS for S3 presigned URLs - always convert to HTTPS regardless of original scheme
-                        if file_url.startswith('http:'):
-                            file_url = file_url.replace('http:', 'https:', 1)
-                            
-                        logger.info(f"[FlashcardImageView.get] Generated pre-signed URL: {file_url}")
+                        # Stream the file content
+                        file_content = response['Body'].read()
                         
-                        # Make sure our application URL also uses HTTPS in the redirect
-                        from django.http import HttpResponseRedirect
-                        from django.conf import settings
+                        # Create HTTP response with the file content
+                        from django.http import HttpResponse
+                        http_response = HttpResponse(file_content, content_type=params['ResponseContentType'])
+                        http_response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
+                        http_response['Access-Control-Allow-Origin'] = '*'  # Allow CORS
+                        http_response['Content-Security-Policy'] = "upgrade-insecure-requests"  # Force HTTPS
                         
-                        # Ensure the response uses an absolute HTTPS URL
-                        response = HttpResponseRedirect(file_url)
-                        response['Access-Control-Allow-Origin'] = '*'  # Allow CORS
-                        return response
+                        logger.info(f"[FlashcardImageView.get] Successfully streaming image directly")
+                        return http_response
                     except Exception as url_error:
                         logger.error(f"[FlashcardImageView.get] Error generating pre-signed URL: {url_error}")
                         # If URL generation fails, try direct streaming as a fallback
@@ -1952,14 +1953,21 @@ class FlashcardImageView(APIView):
                         
                     except Exception as stream_error:
                         # Already tried the other approaches, this is the final fallback
-                        logger.error(f"[FlashcardImageView.get] Both pre-signed URL and direct streaming failed")
-                        logger.error(f"[FlashcardImageView.get] Returning 404 to avoid browser hanging")
+                        logger.error(f"[FlashcardImageView.get] Direct streaming failed: {stream_error}")
+                        logger.error(f"[FlashcardImageView.get] Returning 404 with proper CORS headers")
                         
-                        # Return a 404 image not found response
-                        return Response({
+                        # Return a 404 image not found response with CORS headers
+                        response = Response({
                             'detail': 'Image could not be retrieved due to storage issues. Please try again later.',
                             'technical_details': 'S3 access denied due to IAM policy restrictions.'
                         }, status=status.HTTP_404_NOT_FOUND)
+                        
+                        # Add CORS headers even to error responses
+                        response['Access-Control-Allow-Origin'] = '*'
+                        response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+                        response['Access-Control-Allow-Headers'] = 'Origin, Content-Type, Accept, Authorization'
+                        
+                        return response
                     # Legacy approaches have been replaced with more resilient methods above
                     
                 except Exception as e:
@@ -1978,27 +1986,24 @@ class FlashcardImageView(APIView):
                         elif file_path.lower().endswith('.webp'):
                             content_type = 'image/webp'
                         
-                        # Generate a pre-signed URL that's valid for 15 minutes
-                        file_url = s3_client.generate_presigned_url(
-                            'get_object',
-                            Params={
-                                'Bucket': bucket_name,
-                                'Key': file_path,
-                                'ResponseContentType': content_type,
-                                'ResponseContentDisposition': 'inline'
-                            },
-                            ExpiresIn=900  # 15 minutes
+                        # Get the file object from S3 directly
+                        response = s3_client.get_object(
+                            Bucket=bucket_name,
+                            Key=file_path
                         )
                         
-                        # Always force HTTPS for the URL
-                        if file_url.startswith('http:'):
-                            file_url = file_url.replace('http:', 'https:', 1)
+                        # Stream the file content
+                        file_content = response['Body'].read()
                         
-                        # Redirect to the pre-signed URL
-                        from django.http import HttpResponseRedirect
-                        response = HttpResponseRedirect(file_url)
-                        response['Access-Control-Allow-Origin'] = '*'  # Allow CORS
-                        return response
+                        # Create HTTP response with the file content
+                        from django.http import HttpResponse
+                        http_response = HttpResponse(file_content, content_type=content_type)
+                        http_response['Cache-Control'] = 'public, max-age=31536000'  # Cache for 1 year
+                        http_response['Access-Control-Allow-Origin'] = '*'  # Allow CORS
+                        http_response['Content-Security-Policy'] = "upgrade-insecure-requests"  # Force HTTPS
+                        
+                        logger.info(f"[FlashcardImageView.get] Successfully streaming image directly (fallback method)")
+                        return http_response
                     except Exception as s3_error:
                         logger.error(f"[FlashcardImageView.get] Error generating pre-signed URL: {s3_error}")
                         return Response({'detail': f'Error accessing image: {str(s3_error)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
