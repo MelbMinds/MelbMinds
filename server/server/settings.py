@@ -162,6 +162,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     os.environ.get('FRONTEND_URL', ''),
     "https://melb-minds-one.vercel.app",
+    "https://melbminds.me",
+    "https://www.melbminds.me",
 ]
 
 # Clean up any URLs with trailing slashes (to prevent corsheaders.E014 error)
@@ -280,7 +282,7 @@ AWS_S3_CORS_SETTINGS = {
     'CORSRules': [{
         'AllowedHeaders': ['*'],
         'AllowedMethods': ['GET', 'POST', 'PUT', 'DELETE', 'HEAD'],
-        'AllowedOrigins': [FRONTEND_URL, 'http://localhost:3000'],
+        'AllowedOrigins': [FRONTEND_URL, 'http://localhost:3000', 'https://melbminds.me', 'https://www.melbminds.me'],
         'ExposeHeaders': ['ETag', 'Content-Length', 'Content-Type'],
         'MaxAgeSeconds': 3000
     }]
