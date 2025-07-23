@@ -444,15 +444,37 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   // Fetch files
   useEffect(() => {
     if (group?.id && (joined || isGroupCreator() || isStaff)) {
-      const fetchFiles = () => {
+      const fetchFiles = async () => {
         setLoadingFiles(true)
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/files/`, {
-          headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
-        })
-          .then(res => res.json())
-          .then(setFiles)
-          .finally(() => setLoadingFiles(false))
+        console.log('Fetching files for group:', group.id)
+        
+        try {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/files/`, {
+            headers: tokens?.access ? { 'Authorization': `Bearer ${tokens.access}` } : {},
+          })
+          
+          console.log('Files fetch response status:', res.status)
+          
+          if (res.ok) {
+            const files = await res.json()
+            console.log('Files fetched successfully:', files.length)
+            setFiles(files)
+          } else {
+            console.error('Error fetching files:', res.status)
+            try {
+              const errorText = await res.text()
+              console.error('Error response:', errorText)
+            } catch (e) {
+              console.error('Could not read error response')
+            }
+          }
+        } catch (err) {
+          console.error('Exception during files fetch:', err)
+        } finally {
+          setLoadingFiles(false)
+        }
       }
+      
       fetchFiles()
     }
   }, [group?.id, joined, tokens, isStaff])
@@ -1069,10 +1091,18 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     // Create a new File object with the renamed filename
     const renamedFile = new File([selectedFile], finalFileName, { type: selectedFile.type })
     
+    console.log('Uploading file:', {
+      name: renamedFile.name,
+      type: renamedFile.type,
+      size: renamedFile.size
+    })
+    
     const formData = new FormData()
     formData.append('file', renamedFile)
 
     try {
+      console.log('Sending file to:', `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/files/`)
+      
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/files/`, {
         method: 'POST',
         headers: {
@@ -1081,27 +1111,47 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         body: formData,
       })
 
+      console.log('Upload response status:', res.status)
+      
       if (res.ok) {
         const newFile = await res.json()
+        console.log('File uploaded successfully, response:', newFile)
+        
         setFiles(prev => [newFile, ...prev])
         toastSuccess({ title: 'File uploaded successfully!' })
       } else {
-        const error = await res.json()
-        // Find the first string error in the response
-        let errorMsg = error?.error || error?.detail || null;
-        if (!errorMsg && typeof error === 'object') {
-          for (const key in error) {
-            if (typeof error[key] === 'string') {
-              errorMsg = error[key];
-              break;
-            }
-            if (Array.isArray(error[key]) && typeof error[key][0] === 'string') {
-              errorMsg = error[key][0];
-              break;
+        let errorText;
+        try {
+          errorText = await res.text();
+          console.error('Upload error response:', errorText);
+          
+          // Try to parse as JSON if possible
+          let error;
+          try {
+            error = JSON.parse(errorText);
+          } catch (e) {
+            error = { error: errorText };
+          }
+          
+          // Find the first string error in the response
+          let errorMsg = error?.error || error?.detail || null;
+          if (!errorMsg && typeof error === 'object') {
+            for (const key in error) {
+              if (typeof error[key] === 'string') {
+                errorMsg = error[key];
+                break;
+              }
+              if (Array.isArray(error[key]) && typeof error[key][0] === 'string') {
+                errorMsg = error[key][0];
+                break;
+              }
             }
           }
+          setFileError(errorMsg || error.detail || error.error);
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+          setFileError('Unknown error occurred');
         }
-        setFileError(errorMsg || error.detail || error.error)
       }
     } catch (error) {
       toastFail({ title: 'Error uploading file' })
@@ -1120,27 +1170,44 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   const handleFileDownload = async (file: any) => {
     try {
+      // Log for debugging
+      console.log('Downloading file:', file.id)
+      
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/download/`, {
         headers: {
           'Authorization': `Bearer ${tokens?.access}`,
         },
       })
 
+      console.log('Download response status:', res.status)
+      
       if (res.ok) {
         const contentType = res.headers.get('content-type')
+        console.log('Response content type:', contentType)
         
         // Check if it's a JSON response (S3 URL redirect)
         if (contentType && contentType.includes('application/json')) {
           const data = await res.json()
+          console.log('Got JSON download data:', data)
+          
           if (data.download_url) {
-            // For S3 files, open the URL in a new tab (download attribute doesn't work cross-origin)
-            window.open(data.download_url, '_blank')
+            // Instead of window.open which can be blocked, create an anchor and click it
+            const a = document.createElement('a')
+            a.href = data.download_url
+            a.target = '_blank'
+            a.rel = 'noopener noreferrer'
+            a.download = file.original_filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
           } else {
-            toastFail({ title: 'Error downloading file' })
+            toastFail({ title: 'Error downloading file', description: 'No download URL provided' })
           }
         } else if (contentType && contentType.includes('application/octet-stream')) {
           // For direct file downloads (streamed from S3)
           const blob = await res.blob()
+          console.log('Got blob data, size:', blob.size)
+          
           const url = window.URL.createObjectURL(blob)
           const a = document.createElement('a')
           a.href = url
@@ -1150,8 +1217,11 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           window.URL.revokeObjectURL(url)
           document.body.removeChild(a)
         } else {
+          console.log('Using fallback download method')
           // Fallback for other content types
           const blob = await res.blob()
+          console.log('Got blob data, size:', blob.size)
+          
           const url = window.URL.createObjectURL(blob)
           const a = document.createElement('a')
           a.href = url
@@ -1162,7 +1232,15 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
           document.body.removeChild(a)
         }
       } else {
-        toastFail({ title: 'Error downloading file' })
+        // Try to get error details
+        try {
+          const errorText = await res.text()
+          console.error('File download error:', errorText)
+          toastFail({ title: 'Error downloading file', description: 'Status: ' + res.status })
+        } catch (e) {
+          console.error('Could not parse error response:', e)
+          toastFail({ title: 'Error downloading file' })
+        }
       }
     } catch (error) {
       toastFail({ title: 'Error downloading file' })
@@ -1173,6 +1251,8 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     if (!window.confirm(`Delete "${file.original_filename}"?`)) return
 
     try {
+      console.log('Deleting file:', file.id)
+      
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/delete/`, {
         method: 'DELETE',
         headers: {
@@ -1180,14 +1260,41 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         },
       })
 
+      console.log('Delete response status:', res.status)
+      
       if (res.ok) {
         setFiles(prev => prev.filter(f => f.id !== file.id))
         toastSuccess({ title: 'File deleted successfully!' })
       } else {
-        toastFail({ title: 'Error deleting file' })
+        let errorMessage = 'Error deleting file';
+        
+        try {
+          const errorText = await res.text();
+          console.error('Delete error response:', errorText);
+          
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.error || errorJson.detail) {
+              errorMessage = errorJson.error || errorJson.detail;
+            }
+          } catch (e) {
+            // Not JSON, use as is
+            if (errorText) {
+              errorMessage = `Error: ${errorText.substring(0, 100)}${errorText.length > 100 ? '...' : ''}`;
+            }
+          }
+        } catch (e) {
+          console.error('Could not read error response');
+        }
+        
+        toastFail({ 
+          title: 'Error deleting file',
+          description: errorMessage
+        });
       }
     } catch (error) {
-      toastFail({ title: 'Error deleting file' })
+      console.error('Exception during file delete:', error);
+      toastFail({ title: 'Error deleting file', description: 'Network or server error' })
     }
   }
 

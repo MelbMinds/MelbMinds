@@ -237,30 +237,67 @@ export async function apiRequest(
     ...(tokens?.access && { Authorization: `Bearer ${tokens.access}` }),
   }
 
+  console.log(`API Request to: ${url}`, {
+    method: options.method || 'GET',
+    hasToken: !!tokens?.access,
+    hasBody: !!options.body,
+  });
+  
   // Make the initial request
-  let response = await fetch(url, {
-    ...options,
-    headers,
-  })
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+    });
+    
+    console.log(`Response from ${url}:`, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+    });
+  } catch (error) {
+    console.error(`Network error for ${url}:`, error);
+    throw error;
+  }
 
   // If we get a 401 and have a refresh token, try to refresh
   if (response.status === 401 && tokens?.refresh) {
-    const refreshSuccess = await refreshToken()
+    console.log('Token expired, attempting refresh');
+    const refreshSuccess = await refreshToken();
+    
     if (refreshSuccess) {
+      console.log('Token refresh successful, retrying request');
       // Get the updated tokens from localStorage since the context has been updated
-      const updatedTokensStr = localStorage.getItem('tokens')
-      const updatedTokens = updatedTokensStr ? JSON.parse(updatedTokensStr) : null
+      const updatedTokensStr = localStorage.getItem('tokens');
+      const updatedTokens = updatedTokensStr ? JSON.parse(updatedTokensStr) : null;
+      
       if (updatedTokens?.access) {
         // Retry the request with the new token
         const newHeaders = {
           ...options.headers,
           Authorization: `Bearer ${updatedTokens.access}`,
+        };
+        
+        try {
+          response = await fetch(url, {
+            ...options,
+            headers: newHeaders,
+          });
+          
+          console.log(`Retry response from ${url}:`, {
+            status: response.status,
+            statusText: response.statusText,
+          });
+        } catch (error) {
+          console.error(`Network error on retry for ${url}:`, error);
+          throw error;
         }
-        response = await fetch(url, {
-          ...options,
-          headers: newHeaders,
-        })
+      } else {
+        console.error('Token refresh succeeded but no updated token found');
       }
+    } else {
+      console.error('Token refresh failed');
     }
   }
 

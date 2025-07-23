@@ -18,15 +18,29 @@ export default function AuthenticatedImage({ src, alt, className, tokens, refres
   useEffect(() => {
     const loadImage = async () => {
       if (!src || !tokens) return
+      
+      console.log('AuthenticatedImage loading:', src)
 
       try {
         const response = await apiRequest(src, {}, tokens, refreshToken)
         
+        console.log('Image response status:', response.status)
+        
         if (!response.ok) {
-          throw new Error('Failed to load image')
+          // Try to get error details
+          try {
+            const errorText = await response.text()
+            console.error('Image loading error response:', errorText)
+          } catch (e) {
+            console.error('Could not read error response')
+          }
+          
+          throw new Error(`Failed to load image: ${response.status} ${response.statusText}`)
         }
 
         const blob = await response.blob()
+        console.log('Image loaded, size:', blob.size)
+        
         const dataUrl = URL.createObjectURL(blob)
         setImageSrc(dataUrl)
       } catch (err) {
@@ -36,6 +50,13 @@ export default function AuthenticatedImage({ src, alt, className, tokens, refres
     }
 
     loadImage()
+    
+    // Clean up object URL on unmount or when src changes
+    return () => {
+      if (imageSrc) {
+        URL.revokeObjectURL(imageSrc)
+      }
+    }
   }, [src, tokens, refreshToken])
 
   if (error) {
