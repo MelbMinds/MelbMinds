@@ -32,7 +32,7 @@ export default function DashboardPage() {
   const [loadingGroups, setLoadingGroups] = useState(true)
   const [recommendations, setRecommendations] = useState<any[]>([])
   const [loadingRecommendations, setLoadingRecommendations] = useState(true)
-  const [loadingActions, setLoadingActions] = useState(false)
+  const [actionInProgress, setActionInProgress] = useState<number | null>(null)
   const { user, tokens } = useUser()
   
   useEffect(() => {
@@ -223,49 +223,41 @@ export default function DashboardPage() {
   };
 
   const handleLeaveGroup = async (groupId: number, groupName: string) => {
-    console.log("[Dashboard] Attempting to leave group:", groupId, groupName, "Token:", tokens?.access)
-    if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
-    setLoadingActions(true)
+    if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return;
+    setActionInProgress(groupId);
     try {
-      // Use POST to a dedicated /leave/ endpoint, matching group/[id]/page.tsx
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
           'Authorization': `Bearer ${tokens?.access}`,
         },
-      })
-      console.log("[Dashboard] Leave response:", res)
+      });
       if (res.ok) {
-        setJoinedGroups(prev => prev.filter(g => g.id !== groupId))
-        toastSuccess({ title: 'Successfully left the group!' })
+        setJoinedGroups(prev => prev.filter(g => g.id !== groupId));
+        toastSuccess({ title: 'Successfully left the group!' });
       } else {
-        const data = await res.json().catch(() => ({})) // Handle non-json error response
-        console.log("[Dashboard] Leave error data:", data)
-        toastFail({ title: 'Error leaving group', description: data.detail || 'Unable to leave group' })
+        const data = await res.json().catch(() => ({}));
+        toastFail({ title: 'Error leaving group', description: data.detail || 'Unable to leave group' });
       }
     } catch (error) {
-      console.error("[Dashboard] Error leaving group:", error)
-      toastFail({ title: 'Error leaving group', description: 'Network error occurred' })
+      toastFail({ title: 'Error leaving group', description: 'A network error occurred.' });
     } finally {
-      setLoadingActions(false)
+      setActionInProgress(null);
     }
-  }
+  };
 
   const handleDeleteGroup = async (groupId: number, groupName: string) => {
-    console.log(`[Dashboard] Attempting to delete group: ID=${groupId}, Name="${groupName}"`);
-    if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action cannot be undone.`)) {
-      return;
-    }
-    setLoadingActions(true);
-
-    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`;
-    console.log(`[Dashboard] Sending DELETE request to: ${url}`);
+    if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action is permanent.`)) return;
+    setActionInProgress(groupId);
+    
+    // Final attempt: POST to a /destroy/ endpoint. This is another common pattern in some frameworks.
+    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/destroy/`;
+    console.log(`[Dashboard] Sending POST request to: ${url}`);
 
     try {
       const res = await fetch(url, {
-        method: 'DELETE',
+        method: 'POST', // Using POST as DELETE on this and other endpoints has failed.
         headers: {
           'Authorization': `Bearer ${tokens?.access}`,
           'Content-Type': 'application/json',
@@ -275,25 +267,29 @@ export default function DashboardPage() {
 
       console.log(`[Dashboard] Delete response received: Status=${res.status}, OK=${res.ok}`);
 
-      if (res.ok) { // Handles 200-299 status codes, including 204 No Content
+      if (res.ok) {
         setCreatedGroups(prev => prev.filter(g => g.id !== groupId));
         toastSuccess({ title: 'Group deleted successfully!' });
       } else {
-        let errorDetail = `Request failed with status: ${res.status} ${res.statusText}`;
+        let errorBody = await res.text();
+        let errorDetail = `Request failed: ${res.status} ${res.statusText}`;
         try {
-          const errorJson = await res.json();
-          console.log("[Dashboard] Delete error JSON:", errorJson);
+          const errorJson = JSON.parse(errorBody);
           errorDetail = errorJson.detail || JSON.stringify(errorJson);
         } catch (e) {
-          console.log("[Dashboard] Could not parse error response as JSON.");
+          // If parsing fails, the body is not JSON. Use the raw text.
+          if (errorBody) {
+            errorDetail = errorBody;
+          }
         }
+        console.error(`[Dashboard] Delete failed. Status: ${res.status}. Body:`, errorBody);
         toastFail({ title: 'Error Deleting Group', description: errorDetail });
       }
     } catch (error: any) {
       console.error("[Dashboard] Network or other error during group deletion:", error);
       toastFail({ title: 'Network Error', description: error.message || 'Could not connect to the server.' });
     } finally {
-      setLoadingActions(false);
+      setActionInProgress(null);
     }
   };
 
@@ -532,9 +528,9 @@ export default function DashboardPage() {
                                     size="sm"
                                     className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-600"
                                     onClick={() => handleDeleteGroup(group.id, group.group_name)}
-                                    disabled={loadingActions}
+                                    disabled={actionInProgress !== null}
                                   >
-                                    {loadingActions ? "Deleting..." : "Delete Group"}
+                                    {actionInProgress === group.id ? "Deleting..." : "Delete Group"}
                                   </Button>
                                 </div>
                               </CardContent>
@@ -606,9 +602,9 @@ export default function DashboardPage() {
                                     size="sm"
                                     className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-600"
                                     onClick={() => handleLeaveGroup(group.id, group.group_name)}
-                                    disabled={loadingActions}
+                                    disabled={actionInProgress !== null}
                                   >
-                                    {loadingActions ? "Leaving..." : "Leave Group"}
+                                    {actionInProgress === group.id ? "Leaving..." : "Leave Group"}
                                   </Button>
                                 </div>
                               </CardContent>
