@@ -33,7 +33,11 @@ const DashboardPage: React.FC = () => {
         const data = await response.json();
         setGroups(data);
       } catch (error) {
-        setError(error.message);
+        if (error instanceof Error) {
+          setError(error.message);
+        } else {
+          setError('An unknown error occurred');
+        }
       }
     };
 
@@ -63,7 +67,11 @@ const DashboardPage: React.FC = () => {
 
       setGroups(groups.filter(group => group.id !== groupId));
     } catch (error) {
-      setError(error.message);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('An unknown error occurred');
+      }
     }
   };
 
