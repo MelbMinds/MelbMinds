@@ -225,23 +225,28 @@ export default function DashboardPage() {
   const handleLeaveGroup = async (groupId: number, groupName: string) => {
     if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
     setLoadingActions(true)
+    console.log("Dashboard: Attempting to leave group", groupId, groupName, "Endpoint:", `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`)
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${tokens?.access}`,
-        }
+        },
+        body: JSON.stringify({ action: "leave" }),
       })
+      console.log("Dashboard: Leave response", res)
       if (res.ok) {
         setJoinedGroups(prev => prev.filter(g => g.id !== groupId))
+        console.log("Dashboard: Successfully left group", groupId)
         toastSuccess({ title: 'Successfully left the group!' })
       } else {
         const data = await res.json()
+        console.error("Dashboard: Error leaving group", data)
         toastFail({ title: 'Error leaving group', description: data.detail || 'Unable to leave group' })
       }
     } catch (error) {
-      console.error('Error leaving group:', error)
+      console.error("Dashboard: Exception leaving group", error)
       toastFail({ title: 'Error leaving group', description: 'Network error occurred' })
     } finally {
       setLoadingActions(false)
@@ -250,9 +255,8 @@ export default function DashboardPage() {
 
   const handleDeleteGroup = async (groupId: number, groupName: string) => {
     if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action cannot be undone and will remove all group data, sessions, and files.`)) return
-    
     setLoadingActions(true)
-    
+    console.log("Dashboard: Attempting to delete group", groupId, groupName, "Endpoint:", `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`)
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`, {
         method: 'DELETE',
@@ -260,16 +264,18 @@ export default function DashboardPage() {
           'Authorization': `Bearer ${tokens?.access}`,
         },
       })
-      
+      console.log("Dashboard: Delete response", res)
       if (res.ok) {
         setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
+        console.log("Dashboard: Successfully deleted group", groupId)
         toastSuccess({ title: 'Group deleted successfully!' })
       } else {
         const data = await res.json()
+        console.error("Dashboard: Error deleting group", data)
         toastFail({ title: 'Error deleting group', description: data.detail || 'Unable to delete group' })
       }
     } catch (error) {
-      console.error('Error deleting group:', error)
+      console.error("Dashboard: Exception deleting group", error)
       toastFail({ title: 'Error deleting group', description: 'Network error occurred' })
     } finally {
       setLoadingActions(false)
