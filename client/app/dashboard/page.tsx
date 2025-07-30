@@ -276,15 +276,18 @@ export default function DashboardPage() {
       } else {
         // Handle cases where the response might not be JSON
         const contentType = res.headers.get("content-type");
-        let errorData = { detail: 'Unable to delete group' };
+        let errorDetail = 'Unable to delete group';
         if (contentType && contentType.indexOf("application/json") !== -1) {
-          errorData = await res.json();
+          const errorJson = await res.json();
+          if (errorJson && typeof errorJson.detail === 'string') {
+            errorDetail = errorJson.detail;
+          }
         } else {
           // If not JSON, use the status text as the error.
-          errorData.detail = res.statusText || 'An unknown error occurred';
+          errorDetail = res.statusText || 'An unknown error occurred';
         }
-        console.log("[Dashboard] Delete error data:", errorData)
-        toastFail({ title: 'Error deleting group', description: errorData.detail })
+        console.log("[Dashboard] Delete error data:", { detail: errorDetail })
+        toastFail({ title: 'Error deleting group', description: errorDetail })
       }
     } catch (error) {
       console.error("[Dashboard] Error deleting group:", error)
