@@ -224,18 +224,16 @@ export default function DashboardPage() {
 
   const handleLeaveGroup = async (groupId: number, groupName: string) => {
     if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
-    
     setLoadingActions(true)
-    
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/join/`, {
-        method: 'DELETE',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${tokens?.access}`,
         },
+        body: JSON.stringify({ action: "leave" }),
       })
-      
       if (res.ok) {
         setJoinedGroups(prev => prev.filter(g => g.id !== groupId))
         toastSuccess({ title: 'Successfully left the group!' })
@@ -257,7 +255,7 @@ export default function DashboardPage() {
     setLoadingActions(true)
     
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/destroy/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${tokens?.access}`,
