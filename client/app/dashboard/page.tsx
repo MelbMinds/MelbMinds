@@ -227,9 +227,9 @@ export default function DashboardPage() {
     if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
     setLoadingActions(true)
     try {
-      // Use DELETE on the /join/ endpoint to leave the group
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/join/`, {
-        method: 'DELETE',
+      // Use POST to a dedicated /leave/ endpoint, matching group/[id]/page.tsx
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -241,7 +241,7 @@ export default function DashboardPage() {
         setJoinedGroups(prev => prev.filter(g => g.id !== groupId))
         toastSuccess({ title: 'Successfully left the group!' })
       } else {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({})) // Handle non-json error response
         console.log("[Dashboard] Leave error data:", data)
         toastFail({ title: 'Error leaving group', description: data.detail || 'Unable to leave group' })
       }
@@ -259,8 +259,8 @@ export default function DashboardPage() {
       return
     setLoadingActions(true)
     try {
-      // Use DELETE to the group's main endpoint
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`, {
+      // Use DELETE to a dedicated /delete/ endpoint, matching group/[id]/page.tsx
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -269,7 +269,7 @@ export default function DashboardPage() {
         },
       })
       console.log("[Dashboard] Delete response:", res)
-      if (res.status === 204 || res.ok) { // Handle 204 No Content for successful deletion
+      if (res.ok) { // DELETE often returns 204 No Content, which is ok.
         setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
         toastSuccess({ title: 'Group deleted successfully!' })
       } else {
@@ -285,7 +285,7 @@ export default function DashboardPage() {
           // If not JSON, use the status text as the error.
           errorDetail = res.statusText || 'An unknown error occurred';
         }
-        console.log("[Dashboard] Delete error data:", { detail: errorDetail })
+        console.log("[Dashboard] Delete error data:", { detail: errorDetail, status: res.status })
         toastFail({ title: 'Error deleting group', description: errorDetail })
       }
     } catch (error) {
