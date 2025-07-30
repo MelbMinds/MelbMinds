@@ -227,15 +227,14 @@ export default function DashboardPage() {
     if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
     setLoadingActions(true)
     try {
-      // Use the /join/ endpoint (with Accept header) and action "leave"
+      // Use DELETE on the /join/ endpoint to leave the group
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/join/`, {
-        method: 'POST',
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Authorization': `Bearer ${tokens?.access}`,
         },
-        body: JSON.stringify({ action: "leave" }),
       })
       console.log("[Dashboard] Leave response:", res)
       if (res.ok) {
@@ -260,8 +259,8 @@ export default function DashboardPage() {
       return
     setLoadingActions(true)
     try {
-      // Use DELETE to a dedicated /destroy/ endpoint
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/destroy/`, {
+      // Use DELETE to the group's main endpoint
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -270,7 +269,7 @@ export default function DashboardPage() {
         },
       })
       console.log("[Dashboard] Delete response:", res)
-      if (res.ok) {
+      if (res.status === 204 || res.ok) { // Handle 204 No Content for successful deletion
         setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
         toastSuccess({ title: 'Group deleted successfully!' })
       } else {
