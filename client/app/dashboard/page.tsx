@@ -795,7 +795,6 @@ export default function DashboardPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center min-w-0">
-                <CardTitle className="flex items-center min-w-0">
                   <span className="font-medium text-lg whitespace-normal break-words">Quick Actions</span>
                 </CardTitle>
               </CardHeader>
