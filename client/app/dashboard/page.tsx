@@ -234,30 +234,54 @@ export default function DashboardPage() {
     console.log('Token preview:', tokens?.access?.substring(0, 20) + '...')
     
     try {
-      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`
-      console.log('Request URL:', url)
+      // Try multiple possible endpoints
+      const possibleUrls = [
+        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/members/`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/join/`
+      ];
       
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${tokens?.access}`,
-        },
-      })
+      let success = false;
       
-      console.log('Response status:', res.status)
-      console.log('Response headers:', Object.fromEntries(res.headers.entries()))
+      for (const url of possibleUrls) {
+        console.log('Trying URL:', url)
+        
+        try {
+          const res = await fetch(url, {
+            method: url.includes('/members/') ? 'DELETE' : 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${tokens?.access}`,
+            },
+            body: url.includes('/join/') ? JSON.stringify({ action: 'leave' }) : undefined,
+          })
+          
+          console.log('Response status:', res.status)
+          
+          if (res.ok) {
+            setJoinedGroups(prev => prev.filter(g => g.id !== groupId))
+            toastSuccess({ title: 'Successfully left the group!' })
+            success = true;
+            break;
+          } else if (res.status === 404) {
+            continue; // Try next URL
+          } else {
+            const data = await res.json()
+            console.log('Error response:', data)
+            toastFail({ title: 'Error leaving group', description: data.detail || 'Unknown error' })
+            break;
+          }
+        } catch (error) {
+          console.error('Fetch error for URL', url, ':', error)
+          continue; // Try next URL
+        }
+      }
       
-      if (res.ok) {
-        setJoinedGroups(prev => prev.filter(g => g.id !== groupId))
-        toastSuccess({ title: 'Successfully left the group!' })
-      } else {
-        const data = await res.json()
-        console.log('Error response:', data)
-        toastFail({ title: 'Error leaving group', description: data.detail || 'Unknown error' })
+      if (!success) {
+        toastFail({ title: 'Error leaving group', description: 'Could not find valid endpoint' })
       }
     } catch (error) {
-      console.error('Fetch error:', error)
+      console.error('General fetch error:', error)
       toastFail({ title: 'Error leaving group' })
     } finally {
       setLoadingActions(false)
@@ -276,29 +300,52 @@ export default function DashboardPage() {
     console.log('Token preview:', tokens?.access?.substring(0, 20) + '...')
     
     try {
-      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`
-      console.log('Request URL:', url)
+      // Try multiple possible endpoints
+      const possibleUrls = [
+        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/destroy/`
+      ];
       
-      const res = await fetch(url, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${tokens?.access}`,
-        },
-      })
+      let success = false;
       
-      console.log('Response status:', res.status)
-      console.log('Response headers:', Object.fromEntries(res.headers.entries()))
+      for (const url of possibleUrls) {
+        console.log('Trying URL:', url)
+        
+        try {
+          const res = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${tokens?.access}`,
+            },
+          })
+          
+          console.log('Response status:', res.status)
+          
+          if (res.ok) {
+            setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
+            toastSuccess({ title: 'Group deleted successfully!' })
+            success = true;
+            break;
+          } else if (res.status === 404) {
+            continue; // Try next URL
+          } else {
+            const data = await res.json()
+            console.log('Error response:', data)
+            toastFail({ title: 'Error deleting group', description: data.detail || 'Unknown error' })
+            break;
+          }
+        } catch (error) {
+          console.error('Fetch error for URL', url, ':', error)
+          continue; // Try next URL
+        }
+      }
       
-      if (res.ok) {
-        setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
-        toastSuccess({ title: 'Group deleted successfully!' })
-      } else {
-        const data = await res.json()
-        console.log('Error response:', data)
-        toastFail({ title: 'Error deleting group', description: data.detail || 'Unknown error' })
+      if (!success) {
+        toastFail({ title: 'Error deleting group', description: 'Could not find valid endpoint' })
       }
     } catch (error) {
-      console.error('Fetch error:', error)
+      console.error('General fetch error:', error)
       toastFail({ title: 'Error deleting group' })
     } finally {
       setLoadingActions(false)
