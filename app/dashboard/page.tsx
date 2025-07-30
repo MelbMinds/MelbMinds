@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useState } from 'react';
 
 interface Group {
@@ -30,7 +32,7 @@ const DashboardPage: React.FC = () => {
           throw new Error('Network response was not ok');
         }
 
-        const data = await response.json();
+        const data: Group[] = await response.json();
         setGroups(data);
       } catch (error) {
         if (error instanceof Error) {
@@ -62,7 +64,9 @@ const DashboardPage: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        const errorData = await response.json().catch(() => null); // Try to get error detail
+        const errorMessage = errorData?.detail || `Failed to delete group. Status: ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       setGroups(groups.filter(group => group.id !== groupId));
