@@ -20,7 +20,6 @@ from django.contrib import admin
 from django.urls import path
 from . import views
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import request_password_reset, reset_password, GroupListCreateView, UpdateGroupView, GroupSessionRetrieveUpdateDeleteView, GroupRatingView, DeleteGroupView, LeaveGroupView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -35,17 +34,17 @@ urlpatterns = [
     path('api/stats/summary/', views.stats_summary, name='stats_summary'),
     path('api/groups/', views.GroupListCreateView.as_view(), name='group_list'),
     path('api/groups/<int:group_id>/', views.group_detail, name='group_detail'),
-    path('api/groups/<int:group_id>/update/', UpdateGroupView.as_view(), name='group_update'),
+    path('api/groups/<int:group_id>/update/', views.UpdateGroupView.as_view(), name='group_update'),
     path('api/groups/<int:group_id>/messages/', views.message_list, name='message_list'),
     path('api/groups/<int:group_id>/sessions/', views.session_list, name='session_list'),
     path('api/groups/<int:group_id>/files/', views.file_list, name='file_list'),
     path('api/groups/<int:group_id>/notifications/', views.notification_list, name='notification_list'),
     path('api/groups/<int:group_id>/ratings/', views.rating_list, name='rating_list'),
     path('api/groups/<int:group_id>/members/', views.GroupMembersView.as_view(), name='group_members'),
-    path('api/groups/<int:group_id>/rating/', GroupRatingView.as_view(), name='group_rating'),
+    path('api/groups/<int:group_id>/rating/', views.GroupRatingView.as_view(), name='group_rating'),
     path('api/groups/<int:group_id>/join/', views.JoinGroupView.as_view(), name='group_join'),
-    path('api/groups/<int:group_id>/leave/', LeaveGroupView.as_view(), name='group_leave'),
-    path('api/groups/<int:group_id>/delete/', DeleteGroupView.as_view(), name='group_delete'),
+    path('api/groups/<int:group_id>/leave/', views.LeaveGroupView.as_view(), name='group_leave'),
+    path('api/groups/<int:group_id>/delete/', views.DeleteGroupView.as_view(), name='group_delete'),
     path('api/similar-groups/<int:group_id>/', views.similar_groups, name='similar_groups'),
     path('api/recommendations/', views.group_recommendations, name='group_recommendations'),
     path('api/flashcards/folders/', views.FlashcardFolderView.as_view(), name='flashcard_folders'),
@@ -57,7 +56,7 @@ urlpatterns = [
     path('api/reports/', views.reports, name='reports'),
     path('api/popular-subjects/', views.popular_subjects, name='popular_subjects'),
     path('api/groups/<int:group_id>/notifications/clear/', views.clear_group_notifications, name='clear_group_notifications'),
-    path('api/sessions/<int:session_id>/', GroupSessionRetrieveUpdateDeleteView.as_view(), name='session_detail'),
+    path('api/sessions/<int:session_id>/', views.GroupSessionRetrieveUpdateDeleteView.as_view(), name='session_detail'),
     path('api/sessions/<int:session_id>/join/', views.join_session, name='join_session'),
     path('api/groups/messages/<int:message_id>/', views.message_detail, name='message_detail'),
     path('api/files/<int:file_id>/delete/', views.GroupFileDeleteView.as_view(), name='file_delete'),
@@ -65,6 +64,7 @@ urlpatterns = [
 ]
 
 urlpatterns += [
-    path('api/auth/request-password-reset/', request_password_reset, name='request_password_reset'),
-    path('api/auth/reset-password/', reset_password, name='reset_password'),
+    path('api/auth/request-password-reset/', views.request_password_reset, name='request_password_reset'),
+    path('api/auth/reset-password/', views.reset_password, name='reset_password'),
+]
 ]
