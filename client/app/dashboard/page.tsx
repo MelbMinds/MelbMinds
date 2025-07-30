@@ -226,8 +226,18 @@ export default function DashboardPage() {
     if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
     
     setLoadingActions(true)
+    
+    // Add debugging
+    console.log('DEBUG - Leave Group:')
+    console.log('API URL:', process.env.NEXT_PUBLIC_API_URL)
+    console.log('Token exists:', !!tokens?.access)
+    console.log('Token preview:', tokens?.access?.substring(0, 20) + '...')
+    
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`, {
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`
+      console.log('Request URL:', url)
+      
+      const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -235,15 +245,19 @@ export default function DashboardPage() {
         },
       })
       
+      console.log('Response status:', res.status)
+      console.log('Response headers:', Object.fromEntries(res.headers.entries()))
+      
       if (res.ok) {
-        // Remove from joined groups
         setJoinedGroups(prev => prev.filter(g => g.id !== groupId))
         toastSuccess({ title: 'Successfully left the group!' })
       } else {
         const data = await res.json()
-        toastFail({ title: 'Error leaving group', description: data.detail })
+        console.log('Error response:', data)
+        toastFail({ title: 'Error leaving group', description: data.detail || 'Unknown error' })
       }
     } catch (error) {
+      console.error('Fetch error:', error)
       toastFail({ title: 'Error leaving group' })
     } finally {
       setLoadingActions(false)
@@ -254,23 +268,37 @@ export default function DashboardPage() {
     if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action cannot be undone and will remove all group data, sessions, and files.`)) return
     
     setLoadingActions(true)
+    
+    // Add debugging
+    console.log('DEBUG - Delete Group:')
+    console.log('API URL:', process.env.NEXT_PUBLIC_API_URL)
+    console.log('Token exists:', !!tokens?.access)
+    console.log('Token preview:', tokens?.access?.substring(0, 20) + '...')
+    
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`, {
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`
+      console.log('Request URL:', url)
+      
+      const res = await fetch(url, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${tokens?.access}`,
         },
       })
       
+      console.log('Response status:', res.status)
+      console.log('Response headers:', Object.fromEntries(res.headers.entries()))
+      
       if (res.ok) {
-        // Remove from created groups
         setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
         toastSuccess({ title: 'Group deleted successfully!' })
       } else {
         const data = await res.json()
-        toastFail({ title: 'Error deleting group', description: data.detail })
+        console.log('Error response:', data)
+        toastFail({ title: 'Error deleting group', description: data.detail || 'Unknown error' })
       }
     } catch (error) {
+      console.error('Fetch error:', error)
       toastFail({ title: 'Error deleting group' })
     } finally {
       setLoadingActions(false)
