@@ -103,7 +103,7 @@ export default function DashboardPage() {
         headers: { "Authorization": `Bearer ${tokens.access}` },
       })
         .then(res => res.json())
-        .then(data => {
+        .then data => {
           setRecommendations((data.recommendations || []).slice(0, 5));
           setLoadingRecommendations(false);
         })
