@@ -223,15 +223,16 @@ export default function DashboardPage() {
   };
 
   const handleLeaveGroup = async (groupId: number, groupName: string) => {
-    console.log("[Dashboard] Attempting to leave group:", groupId, groupName)
+    console.log("[Dashboard] Attempting to leave group:", groupId, groupName, "Token:", tokens?.access)
     if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
     setLoadingActions(true)
     try {
-      // Use the /join/ endpoint with action "leave" instead of /leave/
+      // Use the /join/ endpoint (with Accept header) and action "leave"
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/join/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'Authorization': `Bearer ${tokens?.access}`,
         },
         body: JSON.stringify({ action: "leave" }),
@@ -254,17 +255,18 @@ export default function DashboardPage() {
   }
 
   const handleDeleteGroup = async (groupId: number, groupName: string) => {
-    console.log("[Dashboard] Attempting to delete group:", groupId, groupName)
-    if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action cannot be undone and will remove all group data, sessions, and files.`)) return
+    console.log("[Dashboard] Attempting to delete group:", groupId, groupName, "Token:", tokens?.access)
+    if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action cannot be undone and will remove all group data, sessions, and files.`))
+      return
     setLoadingActions(true)
     try {
+      // Use DELETE with an Accept header
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`, {
-        method: 'POST',
+        method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'Authorization': `Bearer ${tokens?.access}`,
         },
-        body: JSON.stringify({ action: "delete" }),
       })
       console.log("[Dashboard] Delete response:", res)
       if (res.ok) {
@@ -792,6 +794,7 @@ export default function DashboardPage() {
             {/* Quick Actions */}
             <Card>
               <CardHeader>
+                <CardTitle className="flex items-center min-w-0">
                 <CardTitle className="flex items-center min-w-0">
                   <span className="font-medium text-lg whitespace-normal break-words">Quick Actions</span>
                 </CardTitle>
