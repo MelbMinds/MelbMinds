@@ -260,15 +260,14 @@ export default function DashboardPage() {
       return
     setLoadingActions(true)
     try {
-      // Use POST instead of DELETE with a JSON body { action: "delete" }
+      // Use DELETE method for deleting a group
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`, {
-        method: 'POST',
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Authorization': `Bearer ${tokens?.access}`,
         },
-        body: JSON.stringify({ action: "delete" }),
       })
       console.log("[Dashboard] Delete response:", res)
       if (res.ok) {
