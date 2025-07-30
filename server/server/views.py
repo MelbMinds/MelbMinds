@@ -563,18 +563,82 @@ class GroupListCreateView(generics.ListCreateAPIView):
         context['request'] = self.request
         return context
 
+    def create(self, request, *args, **kwargs):
+        """Override create method to add comprehensive logging for group creation"""
+        # Log the incoming request
+        user_info = f"User: {request.user.email if request.user.is_authenticated else 'Anonymous'}"
+        logger.info(f"GROUP_CREATE_REQUEST - {user_info}")
+        logger.info(f"GROUP_CREATE_DATA - Request data: {request.data}")
+        logger.info(f"GROUP_CREATE_HEADERS - Content-Type: {request.content_type}")
+        
+        try:
+            # Check authentication
+            if not request.user.is_authenticated:
+                logger.warning(f"GROUP_CREATE_UNAUTHENTICATED - User not authenticated")
+                return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Log expected vs received fields
+            expected_fields = ['group_name', 'subject_code', 'course_name', 'description', 'max_members', 
+                             'year_level', 'meeting_format', 'primary_language', 'tags', 'group_guidelines', 
+                             'group_personality', 'target_study_hours']
+            received_fields = list(request.data.keys())
+            logger.info(f"GROUP_CREATE_FIELDS - Expected: {expected_fields}")
+            logger.info(f"GROUP_CREATE_FIELDS - Received: {received_fields}")
+            missing_fields = [field for field in expected_fields if field not in received_fields]
+            extra_fields = [field for field in received_fields if field not in expected_fields]
+            if missing_fields:
+                logger.warning(f"GROUP_CREATE_MISSING_FIELDS - {missing_fields}")
+            if extra_fields:
+                logger.info(f"GROUP_CREATE_EXTRA_FIELDS - {extra_fields}")
+            
+            # Validate serializer
+            serializer = self.get_serializer(data=request.data)
+            logger.info(f"GROUP_CREATE_SERIALIZER - Validating data for user {request.user.email}")
+            
+            if not serializer.is_valid():
+                logger.error(f"GROUP_CREATE_VALIDATION_ERROR - User: {request.user.email}, Errors: {serializer.errors}")
+                # Log individual field errors
+                for field, errors in serializer.errors.items():
+                    logger.error(f"GROUP_CREATE_FIELD_ERROR - Field: {field}, Errors: {errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            logger.info(f"GROUP_CREATE_VALIDATION_SUCCESS - User: {request.user.email}")
+            
+            # Perform additional validations and content moderation
+            self.perform_create(serializer)
+            logger.info(f"GROUP_CREATE_SUCCESS - User: {request.user.email}, Group: {serializer.data.get('group_name', 'Unknown')}")
+            
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+            
+        except serializers.ValidationError as e:
+            logger.error(f"GROUP_CREATE_MODERATION_ERROR - User: {request.user.email}, Error: {e.detail}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"GROUP_CREATE_UNEXPECTED_ERROR - User: {request.user.email}, Error: {str(e)}")
+            return Response({'error': 'An unexpected error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def perform_create(self, serializer):
         # Content moderation for group creation
+        logger.info(f"GROUP_CREATE_MODERATION - Starting content moderation for user {self.request.user.email}")
+        
         group_name_check = is_content_clean('group name', serializer.validated_data.get('group_name', ''))
         description_check = is_content_clean('description', serializer.validated_data.get('description', ''))
         tags_check = is_content_clean('tags', serializer.validated_data.get('tags', ''))
+        
+        logger.info(f"GROUP_CREATE_MODERATION_RESULTS - group_name: {group_name_check['valid']}, description: {description_check['valid']}, tags: {tags_check['valid']}")
+        
         if not group_name_check['valid']:
+            logger.warning(f"GROUP_CREATE_MODERATION_FAILED - group_name failed: {group_name_check['message']}")
             raise serializers.ValidationError({'error': group_name_check['message']})
         if not description_check['valid']:
+            logger.warning(f"GROUP_CREATE_MODERATION_FAILED - description failed: {description_check['message']}")
             raise serializers.ValidationError({'error': description_check['message']})
         if not tags_check['valid']:
+            logger.warning(f"GROUP_CREATE_MODERATION_FAILED - tags failed: {tags_check['message']}")
             raise serializers.ValidationError({'error': tags_check['message']})
         
+        logger.info(f"GROUP_CREATE_MODERATION_PASSED - All content moderation checks passed")
         serializer.save(creator=self.request.user)
 
 class GroupRetrieveView(generics.RetrieveAPIView):

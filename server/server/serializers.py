@@ -26,9 +26,31 @@ class GroupSerializer(serializers.ModelSerializer):
     rating_count = serializers.SerializerMethodField()
     user_rating = serializers.SerializerMethodField()
     
+    # Handle field mappings from client to model
+    target_study_hours = serializers.IntegerField(source='target_hours', required=False)
+    max_members = serializers.IntegerField(required=False)  # This field doesn't exist in model, we'll ignore it
+    
     class Meta:
         model = Group
         fields = '__all__'
+        extra_kwargs = {
+            'meeting_schedule': {'required': False, 'default': 'TBD'},
+            'location': {'required': False, 'default': 'TBD'},
+        }
+    
+    def validate(self, data):
+        """Custom validation to handle field mappings and set defaults"""
+        # Handle max_members field (doesn't exist in model, so we remove it)
+        if 'max_members' in data:
+            data.pop('max_members')
+        
+        # Set defaults for required fields that might be missing
+        if 'meeting_schedule' not in data or not data['meeting_schedule']:
+            data['meeting_schedule'] = 'TBD'
+        if 'location' not in data or not data['location']:
+            data['location'] = 'TBD'
+            
+        return data
     
     def get_member_count(self, obj):
         count = obj.members.count()
