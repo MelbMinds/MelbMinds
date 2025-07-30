@@ -146,6 +146,7 @@ export default function CreateGroupPage() {
           subject_code: subject,
           course_name: courseName,
           description,
+          max_members: parseInt(maxMembers, 10),
           year_level: yearLevel,
           meeting_format: format,
           primary_language: language,
