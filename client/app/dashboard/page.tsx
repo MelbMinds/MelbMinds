@@ -260,9 +260,9 @@ export default function DashboardPage() {
       return
     setLoadingActions(true)
     try {
-      // Use DELETE method for deleting a group
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`, {
-        method: 'DELETE',
+      // Use POST to a dedicated /delete/ endpoint
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
