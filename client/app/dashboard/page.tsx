@@ -260,8 +260,7 @@ export default function DashboardPage() {
     }
     setLoadingActions(true);
 
-    // Use the RESTful endpoint, just like messages
-    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`;
+    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`;
     console.log(`[Dashboard] Sending DELETE request to: ${url}`);
 
     try {
@@ -276,7 +275,7 @@ export default function DashboardPage() {
 
       console.log(`[Dashboard] Delete response received: Status=${res.status}, OK=${res.ok}`);
 
-      if (res.ok) {
+      if (res.ok) { // Handles 200-299 status codes, including 204 No Content
         setCreatedGroups(prev => prev.filter(g => g.id !== groupId));
         toastSuccess({ title: 'Group deleted successfully!' });
       } else {
