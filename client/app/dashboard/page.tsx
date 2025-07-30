@@ -227,7 +227,8 @@ export default function DashboardPage() {
     if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
     setLoadingActions(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`, {
+      // Use the /join/ endpoint with action "leave" instead of /leave/
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/join/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -255,17 +256,16 @@ export default function DashboardPage() {
   const handleDeleteGroup = async (groupId: number, groupName: string) => {
     console.log("[Dashboard] Attempting to delete group:", groupId, groupName)
     if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action cannot be undone and will remove all group data, sessions, and files.`)) return
-    
     setLoadingActions(true)
-    
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`, {
-        method: 'DELETE',
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${tokens?.access}`,
         },
+        body: JSON.stringify({ action: "delete" }),
       })
-      
       console.log("[Dashboard] Delete response:", res)
       if (res.ok) {
         setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
