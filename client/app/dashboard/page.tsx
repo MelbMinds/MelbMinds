@@ -32,7 +32,7 @@ export default function DashboardPage() {
   const [loadingGroups, setLoadingGroups] = useState(true)
   const [recommendations, setRecommendations] = useState<any[]>([])
   const [loadingRecommendations, setLoadingRecommendations] = useState(true)
-  const [loadingActions, setLoadingActions] = useState<Record<string, boolean>>({})
+  const [loadingActions, setLoadingActions] = useState(false)
   const { user, tokens } = useUser()
   
   useEffect(() => {
@@ -225,7 +225,7 @@ export default function DashboardPage() {
   const handleLeaveGroup = async (groupId: number, groupName: string) => {
     console.log("[Dashboard] Attempting to leave group:", groupId, groupName, "Token:", tokens?.access)
     if (!window.confirm(`Are you sure you want to leave "${groupName}"?`)) return
-    setLoadingActions(prev => ({ ...prev, [`leave-${groupId}`]: true }))
+    setLoadingActions(true)
     try {
       // Use POST to a dedicated /leave/ endpoint, matching group/[id]/page.tsx
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`, {
@@ -249,36 +249,53 @@ export default function DashboardPage() {
       console.error("[Dashboard] Error leaving group:", error)
       toastFail({ title: 'Error leaving group', description: 'Network error occurred' })
     } finally {
-      setLoadingActions(prev => ({ ...prev, [`leave-${groupId}`]: false }))
+      setLoadingActions(false)
     }
   }
 
   const handleDeleteGroup = async (groupId: number, groupName: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action cannot be undone and will remove all group data, sessions, and files.`)) return
+    console.log(`[Dashboard] Attempting to delete group: ID=${groupId}, Name="${groupName}"`);
+    if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action cannot be undone.`)) {
+      return;
+    }
+    setLoadingActions(true);
 
-    setLoadingActions(prev => ({ ...prev, [`delete-${groupId}`]: true }))
+    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`;
+    console.log(`[Dashboard] Sending DELETE request to: ${url}`);
+
     try {
-      // Matching the implementation from group/[id]/page.tsx
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`, {
+      const res = await fetch(url, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${tokens?.access}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
-      })
+      });
 
-      if (res.ok) {
-        setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
-        toastSuccess({ title: 'Group deleted successfully!' })
+      console.log(`[Dashboard] Delete response received: Status=${res.status}, OK=${res.ok}`);
+
+      if (res.ok) { // Handles 200-299 status codes, including 204 No Content
+        setCreatedGroups(prev => prev.filter(g => g.id !== groupId));
+        toastSuccess({ title: 'Group deleted successfully!' });
       } else {
-        const data = await res.json().catch(() => ({}))
-        toastFail({ title: 'Error deleting group', description: data.detail || 'An unknown error occurred.' })
+        let errorDetail = `Request failed with status: ${res.status} ${res.statusText}`;
+        try {
+          const errorJson = await res.json();
+          console.log("[Dashboard] Delete error JSON:", errorJson);
+          errorDetail = errorJson.detail || JSON.stringify(errorJson);
+        } catch (e) {
+          console.log("[Dashboard] Could not parse error response as JSON.");
+        }
+        toastFail({ title: 'Error Deleting Group', description: errorDetail });
       }
-    } catch (error) {
-      toastFail({ title: 'Error deleting group', description: 'A network error occurred.' })
+    } catch (error: any) {
+      console.error("[Dashboard] Network or other error during group deletion:", error);
+      toastFail({ title: 'Network Error', description: error.message || 'Could not connect to the server.' });
     } finally {
-      setLoadingActions(prev => ({ ...prev, [`delete-${groupId}`]: false }))
+      setLoadingActions(false);
     }
-  }
+  };
 
   const getFormatIcon = (format: string) => {
     switch (format) {
@@ -515,9 +532,9 @@ export default function DashboardPage() {
                                     size="sm"
                                     className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-600"
                                     onClick={() => handleDeleteGroup(group.id, group.group_name)}
-                                    disabled={loadingActions[`delete-${group.id}`]}
+                                    disabled={loadingActions}
                                   >
-                                    {loadingActions[`delete-${group.id}`] ? "Deleting..." : "Delete Group"}
+                                    {loadingActions ? "Deleting..." : "Delete Group"}
                                   </Button>
                                 </div>
                               </CardContent>
@@ -589,9 +606,9 @@ export default function DashboardPage() {
                                     size="sm"
                                     className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-600"
                                     onClick={() => handleLeaveGroup(group.id, group.group_name)}
-                                    disabled={loadingActions[`leave-${group.id}`]}
+                                    disabled={loadingActions}
                                   >
-                                    {loadingActions[`leave-${group.id}`] ? "Leaving..." : "Leave Group"}
+                                    {loadingActions ? "Leaving..." : "Leave Group"}
                                   </Button>
                                 </div>
                               </CardContent>
