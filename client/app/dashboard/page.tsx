@@ -227,62 +227,25 @@ export default function DashboardPage() {
     
     setLoadingActions(true)
     
-    // Add debugging
-    console.log('DEBUG - Leave Group:')
-    console.log('API URL:', process.env.NEXT_PUBLIC_API_URL)
-    console.log('Token exists:', !!tokens?.access)
-    console.log('Token preview:', tokens?.access?.substring(0, 20) + '...')
-    
     try {
-      // Try multiple possible endpoints
-      const possibleUrls = [
-        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/leave/`,
-        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/members/`,
-        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/join/`
-      ];
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/join/`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+      })
       
-      let success = false;
-      
-      for (const url of possibleUrls) {
-        console.log('Trying URL:', url)
-        
-        try {
-          const res = await fetch(url, {
-            method: url.includes('/members/') ? 'DELETE' : 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${tokens?.access}`,
-            },
-            body: url.includes('/join/') ? JSON.stringify({ action: 'leave' }) : undefined,
-          })
-          
-          console.log('Response status:', res.status)
-          
-          if (res.ok) {
-            setJoinedGroups(prev => prev.filter(g => g.id !== groupId))
-            toastSuccess({ title: 'Successfully left the group!' })
-            success = true;
-            break;
-          } else if (res.status === 404) {
-            continue; // Try next URL
-          } else {
-            const data = await res.json()
-            console.log('Error response:', data)
-            toastFail({ title: 'Error leaving group', description: data.detail || 'Unknown error' })
-            break;
-          }
-        } catch (error) {
-          console.error('Fetch error for URL', url, ':', error)
-          continue; // Try next URL
-        }
-      }
-      
-      if (!success) {
-        toastFail({ title: 'Error leaving group', description: 'Could not find valid endpoint' })
+      if (res.ok) {
+        setJoinedGroups(prev => prev.filter(g => g.id !== groupId))
+        toastSuccess({ title: 'Successfully left the group!' })
+      } else {
+        const data = await res.json()
+        toastFail({ title: 'Error leaving group', description: data.detail || 'Unable to leave group' })
       }
     } catch (error) {
-      console.error('General fetch error:', error)
-      toastFail({ title: 'Error leaving group' })
+      console.error('Error leaving group:', error)
+      toastFail({ title: 'Error leaving group', description: 'Network error occurred' })
     } finally {
       setLoadingActions(false)
     }
@@ -293,60 +256,24 @@ export default function DashboardPage() {
     
     setLoadingActions(true)
     
-    // Add debugging
-    console.log('DEBUG - Delete Group:')
-    console.log('API URL:', process.env.NEXT_PUBLIC_API_URL)
-    console.log('Token exists:', !!tokens?.access)
-    console.log('Token preview:', tokens?.access?.substring(0, 20) + '...')
-    
     try {
-      // Try multiple possible endpoints
-      const possibleUrls = [
-        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`,
-        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`,
-        `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/destroy/`
-      ];
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${tokens?.access}`,
+        },
+      })
       
-      let success = false;
-      
-      for (const url of possibleUrls) {
-        console.log('Trying URL:', url)
-        
-        try {
-          const res = await fetch(url, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${tokens?.access}`,
-            },
-          })
-          
-          console.log('Response status:', res.status)
-          
-          if (res.ok) {
-            setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
-            toastSuccess({ title: 'Group deleted successfully!' })
-            success = true;
-            break;
-          } else if (res.status === 404) {
-            continue; // Try next URL
-          } else {
-            const data = await res.json()
-            console.log('Error response:', data)
-            toastFail({ title: 'Error deleting group', description: data.detail || 'Unknown error' })
-            break;
-          }
-        } catch (error) {
-          console.error('Fetch error for URL', url, ':', error)
-          continue; // Try next URL
-        }
-      }
-      
-      if (!success) {
-        toastFail({ title: 'Error deleting group', description: 'Could not find valid endpoint' })
+      if (res.ok) {
+        setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
+        toastSuccess({ title: 'Group deleted successfully!' })
+      } else {
+        const data = await res.json()
+        toastFail({ title: 'Error deleting group', description: data.detail || 'Unable to delete group' })
       }
     } catch (error) {
-      console.error('General fetch error:', error)
-      toastFail({ title: 'Error deleting group' })
+      console.error('Error deleting group:', error)
+      toastFail({ title: 'Error deleting group', description: 'Network error occurred' })
     } finally {
       setLoadingActions(false)
     }
@@ -819,6 +746,79 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle className="flex items-center justify-between min-w-0">
                   <span className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium text-lg whitespace-normal break-words">Notifications</span>
+                  </span>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <Button variant="outline" size="sm" onClick={fetchNotifications} className="p-1 h-8 w-8 min-w-0" disabled={notifLoading} aria-label="Refresh notifications">
+                      <RotateCcw className={notifLoading ? "animate-spin" : ""} size={16} />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleClearAllNotifications} className="p-1 h-8 w-8 min-w-0" disabled={clearLoading} aria-label="Clear all notifications">
+                      <Trash2 className={clearLoading ? "opacity-50" : ""} size={16} />
+                    </Button>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {notifications.length === 0 ? (
+                    <div className="text-gray-400 text-center py-8">No notifications yet.</div>
+                  ) : notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 min-w-0 overflow-hidden shadow-sm border border-gray-100 hover:bg-gray-100 transition-colors group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium line-clamp-2 break-words max-w-full text-gray-900 group-hover:text-gray-900 transition-colors">{notification.title}</p>
+                        <div className="flex items-center justify-between mt-1 min-w-0">
+                          <Badge variant="secondary" className="text-xs truncate max-w-[60%] bg-gray-200 text-gray-800 group-hover:bg-gray-300">
+                            {notification.group}
+                          </Badge>
+                          <span className="text-xs text-gray-500 ml-2 truncate max-w-[40%]">{notification.time}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button variant="outline" className="w-full mt-4 bg-transparent" onClick={fetchNotifications} disabled={notifLoading} aria-label="View all notifications">
+                  View All Notifications
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Quick Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center min-w-0">
+                  <span className="font-medium text-lg whitespace-normal break-words">Quick Actions</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Link href="/create-group">
+                  <Button className="w-full bg-[#003366] hover:bg-[#002244] text-white">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Study Group
+                  </Button>
+                </Link>
+                <Link href="/discover">
+                  <Button variant="outline" className="w-full bg-transparent">
+                    <Users className="mr-2 h-4 w-4" />
+                    Find Groups
+                  </Button>
+                </Link>
+                <Link href="/profile">
+                  <Button variant="outline" className="w-full bg-transparent">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Edit Profile
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
                     <span className="font-medium text-lg whitespace-normal break-words">Notifications</span>
                   </span>
                   <div className="flex gap-2 flex-shrink-0">
