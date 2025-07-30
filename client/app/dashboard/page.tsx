@@ -260,9 +260,9 @@ export default function DashboardPage() {
       return
     setLoadingActions(true)
     try {
-      // Use POST to a dedicated /delete/ endpoint
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`, {
-        method: 'POST',
+      // Use DELETE to a dedicated /destroy/ endpoint
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/destroy/`, {
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -274,9 +274,17 @@ export default function DashboardPage() {
         setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
         toastSuccess({ title: 'Group deleted successfully!' })
       } else {
-        const data = await res.json()
-        console.log("[Dashboard] Delete error data:", data)
-        toastFail({ title: 'Error deleting group', description: data.detail || 'Unable to delete group' })
+        // Handle cases where the response might not be JSON
+        const contentType = res.headers.get("content-type");
+        let errorData = { detail: 'Unable to delete group' };
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+          errorData = await res.json();
+        } else {
+          // If not JSON, use the status text as the error.
+          errorData.detail = res.statusText || 'An unknown error occurred';
+        }
+        console.log("[Dashboard] Delete error data:", errorData)
+        toastFail({ title: 'Error deleting group', description: errorData.detail })
       }
     } catch (error) {
       console.error("[Dashboard] Error deleting group:", error)
@@ -740,7 +748,7 @@ export default function DashboardPage() {
                         </CardContent>
                       </Card>
                     ))
-                  )}
+                  }
                 </div>
               </TabsContent>
             </Tabs>
