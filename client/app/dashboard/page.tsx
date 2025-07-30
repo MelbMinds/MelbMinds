@@ -254,47 +254,48 @@ export default function DashboardPage() {
   }
 
   const handleDeleteGroup = async (groupId: number, groupName: string) => {
-    console.log("[Dashboard] Attempting to delete group:", groupId, groupName, "Token:", tokens?.access)
-    if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action cannot be undone and will remove all group data, sessions, and files.`))
-      return
-    setLoadingActions(true)
+    console.log(`[Dashboard] Attempting to delete group: ID=${groupId}, Name="${groupName}"`);
+    if (!window.confirm(`Are you sure you want to delete "${groupName}"? This action cannot be undone.`)) {
+      return;
+    }
+    setLoadingActions(true);
+
+    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`;
+    console.log(`[Dashboard] Sending DELETE request to: ${url}`);
+
     try {
-      // Use DELETE to a dedicated /delete/ endpoint, matching group/[id]/page.tsx
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/delete/`, {
+      const res = await fetch(url, {
         method: 'DELETE',
         headers: {
+          'Authorization': `Bearer ${tokens?.access}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Authorization': `Bearer ${tokens?.access}`,
         },
-      })
-      console.log("[Dashboard] Delete response:", res)
-      if (res.ok) { // DELETE often returns 204 No Content, which is ok.
-        setCreatedGroups(prev => prev.filter(g => g.id !== groupId))
-        toastSuccess({ title: 'Group deleted successfully!' })
+      });
+
+      console.log(`[Dashboard] Delete response received: Status=${res.status}, OK=${res.ok}`);
+
+      if (res.ok) { // Handles 200-299 status codes, including 204 No Content
+        setCreatedGroups(prev => prev.filter(g => g.id !== groupId));
+        toastSuccess({ title: 'Group deleted successfully!' });
       } else {
-        // Handle cases where the response might not be JSON
-        const contentType = res.headers.get("content-type");
-        let errorDetail = 'Unable to delete group';
-        if (contentType && contentType.indexOf("application/json") !== -1) {
+        let errorDetail = `Request failed with status: ${res.status} ${res.statusText}`;
+        try {
           const errorJson = await res.json();
-          if (errorJson && typeof errorJson.detail === 'string') {
-            errorDetail = errorJson.detail;
-          }
-        } else {
-          // If not JSON, use the status text as the error.
-          errorDetail = res.statusText || 'An unknown error occurred';
+          console.log("[Dashboard] Delete error JSON:", errorJson);
+          errorDetail = errorJson.detail || JSON.stringify(errorJson);
+        } catch (e) {
+          console.log("[Dashboard] Could not parse error response as JSON.");
         }
-        console.log("[Dashboard] Delete error data:", { detail: errorDetail, status: res.status })
-        toastFail({ title: 'Error deleting group', description: errorDetail })
+        toastFail({ title: 'Error Deleting Group', description: errorDetail });
       }
-    } catch (error) {
-      console.error("[Dashboard] Error deleting group:", error)
-      toastFail({ title: 'Error deleting group', description: 'Network error occurred' })
+    } catch (error: any) {
+      console.error("[Dashboard] Network or other error during group deletion:", error);
+      toastFail({ title: 'Network Error', description: error.message || 'Could not connect to the server.' });
     } finally {
-      setLoadingActions(false)
+      setLoadingActions(false);
     }
-  }
+  };
 
   const getFormatIcon = (format: string) => {
     switch (format) {
