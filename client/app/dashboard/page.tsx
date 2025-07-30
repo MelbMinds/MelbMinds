@@ -260,7 +260,7 @@ export default function DashboardPage() {
     }
     setLoadingActions(true);
 
-    // Use the correct RESTful endpoint (no /delete/)
+    // Use the RESTful endpoint, just like messages
     const url = `${process.env.NEXT_PUBLIC_API_URL}/api/groups/${groupId}/`;
     console.log(`[Dashboard] Sending DELETE request to: ${url}`);
 
