@@ -17,6 +17,8 @@ import { Badge } from "@/components/ui/badge"
 import { Mail, Lock, User, Globe, Video, MapPin, UserCheck } from "lucide-react"
 import Link from "next/link"
 import { toast } from "@/components/ui/use-toast"
+import { TermsModal } from "@/components/TermsModal"
+import { PrivacyModal } from "@/components/PrivacyModal"
 
 export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -494,13 +496,23 @@ export default function AuthPage() {
                       <Checkbox id="terms" required />
                       <Label htmlFor="terms" className="text-sm leading-relaxed">
                         I agree to the{" "}
-                        <Link href="/terms" className="text-deep-blue hover:underline">
-                          Terms of Service
-                        </Link>{" "}
+                        <TermsModal>
+                          <button
+                            type="button"
+                            className="text-deep-blue hover:underline font-medium"
+                          >
+                            Terms of Service
+                          </button>
+                        </TermsModal>{" "}
                         and{" "}
-                        <Link href="/privacy" className="text-deep-blue hover:underline">
-                          Privacy Policy
-                        </Link>
+                        <PrivacyModal>
+                          <button
+                            type="button"
+                            className="text-deep-blue hover:underline font-medium"
+                          >
+                            Privacy Policy
+                          </button>
+                        </PrivacyModal>
                       </Label>
                     </div>
 
