@@ -17,6 +17,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useUser } from "@/components/UserContext"
 import { toastSuccess, toastFail } from "@/components/ui/use-toast"
+import { apiClient } from "@/lib/api"
 
 export default function CreateGroupPage() {
   const { tokens } = useUser()
@@ -135,49 +136,30 @@ export default function CreateGroupPage() {
         setIsSubmitting(false);
         return;
       }
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          ...(tokens?.access && { "Authorization": `Bearer ${tokens.access}` })
-        },
-        body: JSON.stringify({
-          group_name: groupName,
-          subject_code: subject,
-          course_name: courseName,
-          description,
-          max_members: parseInt(maxMembers, 10),
-          year_level: yearLevel,
-          meeting_format: format,
-          primary_language: language,
-          tags: tags.join(", "),
-          group_guidelines: "Respectful, Attendance, Academic Integrity, Moderation", // or collect from checkboxes
-          group_personality: personalities.join(", "),
-          target_study_hours: targetHours,
-        }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        // Find the first string error in the response
-        let errorMsg = data?.error || data?.detail || null;
-        if (!errorMsg && typeof data === 'object') {
-          for (const key in data) {
-            if (typeof data[key] === 'string') {
-              errorMsg = data[key];
-              break;
-            }
-            if (Array.isArray(data[key]) && typeof data[key][0] === 'string') {
-              errorMsg = data[key][0];
-              break;
-            }
-          }
-        }
-        setError(errorMsg || "Failed to create group")
-        if (errorMsg) {
-          toastFail({ title: 'Group Creation Error', description: errorMsg })
-        }
-        setIsSubmitting(false)
-        return
+      
+      // Set tokens for the API client
+      apiClient.setTokens(tokens);
+      
+      const response = await apiClient.post("/groups/", {
+        group_name: groupName,
+        subject_code: subject,
+        course_name: courseName,
+        description,
+        max_members: parseInt(maxMembers, 10),
+        year_level: yearLevel,
+        meeting_format: format,
+        primary_language: language,
+        tags: tags.join(", "),
+        group_guidelines: "Respectful, Attendance, Academic Integrity, Moderation", // or collect from checkboxes
+        group_personality: personalities.join(", "),
+        target_study_hours: targetHours,
+      });
+      
+      if (response.error) {
+        setError(response.error);
+        toastFail({ title: 'Group Creation Error', description: response.error });
+        setIsSubmitting(false);
+        return;
       }
       setIsSubmitting(false)
       toastSuccess({

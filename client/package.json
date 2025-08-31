@@ -6,7 +6,9 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "env:local": "pwsh -ExecutionPolicy Bypass -File switch-env.ps1 local",
+    "env:remote": "pwsh -ExecutionPolicy Bypass -File switch-env.ps1 remote"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

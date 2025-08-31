@@ -19,6 +19,7 @@ import Link from "next/link"
 import { toast } from "@/components/ui/use-toast"
 import { TermsModal } from "@/components/TermsModal"
 import { PrivacyModal } from "@/components/PrivacyModal"
+import { apiClient } from "@/lib/api"
 
 export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -79,46 +80,39 @@ export default function AuthPage() {
     setIsLoading(true)
     setError(null)
     try {
-      // 1. Get JWT tokens
-      const tokenRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/token/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      })
-      if (!tokenRes.ok) {
-        const data = await tokenRes.json()
-        let errorMsg = data?.error || data?.detail || null;
-        if (errorMsg) {
-          if (errorMsg.toLowerCase().includes('invalid credentials')) {
-            setError('Invalid email or password')
-          } else if (errorMsg.toLowerCase().includes('not verified') || errorMsg.toLowerCase().includes('verify')) {
-            setError('Please verify your email before logging in.')
-          } else {
-            setError(errorMsg)
-          }
+      // 1. Get JWT tokens using API client
+      const tokenResponse = await apiClient.post("/token/", {
+        email,
+        password,
+      });
+      
+      if (tokenResponse.error) {
+        let errorMsg = tokenResponse.error;
+        if (errorMsg.toLowerCase().includes('invalid credentials')) {
+          setError('Invalid email or password')
+        } else if (errorMsg.toLowerCase().includes('not verified') || errorMsg.toLowerCase().includes('verify')) {
+          setError('Please verify your email before logging in.')
         } else {
-          setError('Login failed')
+          setError(errorMsg)
         }
         setIsLoading(false)
         return
       }
-      const tokens = await tokenRes.json() // { access, refresh }
-      // 2. Get user info using access token
-      const userRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/profile/`, {
-        headers: {
-          "Authorization": `Bearer ${tokens.access}`,
-        },
-      })
-      if (!userRes.ok) {
+      
+      const tokens = tokenResponse.data; // { access, refresh }
+      
+      // 2. Set tokens for API client and get user info
+      apiClient.setTokens(tokens);
+      const userResponse = await apiClient.get("/profile/");
+      
+      if (userResponse.error) {
         // If profile fetch fails, still treat as successful login and redirect
         setIsLoading(false)
         router.push("/")
         return
       }
-      const userData = await userRes.json()
+      
+      const userData = userResponse.data;
       setUser(userData, tokens)
       setIsLoading(false)
       router.push("/")
@@ -138,45 +132,28 @@ export default function AuthPage() {
       return
     }
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/register/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: fullName,
-          email,
-          password,
-          major,
-          year_level: year,
-          preferred_study_format: studyFormat,
-          languages_spoken: languages.join(", "),
-          bio,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        // Find the first string error in the response
-        let errorMsg = data?.error || data?.detail || null;
-        if (!errorMsg && typeof data === 'object') {
-          for (const key in data) {
-            if (typeof data[key] === 'string') {
-              errorMsg = data[key];
-              break;
-            }
-            if (Array.isArray(data[key]) && typeof data[key][0] === 'string') {
-              errorMsg = data[key][0];
-              break;
-            }
-          }
-        }
+      const response = await apiClient.post("/register/", {
+        name: fullName,
+        email,
+        password,
+        major,
+        year_level: year,
+        preferred_study_format: studyFormat,
+        languages_spoken: languages.join(", "),
+        bio,
+      });
+      
+      if (response.error) {
         toast({
           title: 'Registration Failed',
-          description: errorMsg || "Registration failed",
+          description: response.error,
           variant: 'destructive',
         })
-        setError(errorMsg || "Registration failed")
+        setError(response.error)
         setIsLoading(false)
         return
       }
+      
       // Registration successful, show toast and prompt user to check email
       toast({
         title: 'Almost there! 🎉',

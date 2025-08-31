@@ -12,30 +12,48 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from server/.env (if present)
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'dev-secret-key')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DJANGO_DEBUG') == 'True'
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
+# ALLOWED_HOSTS (comma-separated in .env). Defaults to localhost during development.
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost').split(',') if h.strip()]
 
 # Security settings
-SECURE_SSL_REDIRECT = True
+# Security defaults. When DEBUG=True (local dev), relax strict HTTPS settings so the
+# development server can run without HTTPS. In production, set DJANGO_DEBUG=False and
+# keep the environment variables configured for secure operation.
+SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', 'True') == 'True'
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SECURE_HSTS_SECONDS = 31536000  # 1 year
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+SESSION_COOKIE_SECURE = os.environ.get('DJANGO_SESSION_COOKIE_SECURE', 'True') == 'True'
+CSRF_COOKIE_SECURE = os.environ.get('DJANGO_CSRF_COOKIE_SECURE', 'True') == 'True'
+SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '31536000'))  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True') == 'True'
+SECURE_HSTS_PRELOAD = os.environ.get('DJANGO_SECURE_HSTS_PRELOAD', 'True') == 'True'
+
+if DEBUG:
+    # Relax security for local development
+    SECURE_SSL_REDIRECT = False
+    SECURE_PROXY_SSL_HEADER = None
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_HSTS_SECONDS = 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
@@ -59,7 +77,13 @@ AUTH_USER_MODEL = 'server.User'
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'server.middleware.CORSMiddleware',  # Custom CORS middleware to handle OPTIONS requests
-    'server.https_middleware.ForceHTTPSMiddleware',  # Force HTTPS for all requests
+]
+
+# Only add HTTPS middleware in production (when DEBUG=False)
+if not DEBUG:
+    MIDDLEWARE.append('server.https_middleware.ForceHTTPSMiddleware')  # Force HTTPS for all requests
+
+MIDDLEWARE.extend([
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -68,7 +92,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'server.middleware.SessionCleanupMiddleware',  # Session cleanup middleware
-]
+])
 
 ROOT_URLCONF = 'server.urls'
 
@@ -104,16 +128,25 @@ DATABASES = {
 '''
 
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POSTGRES_DB'),
-        'USER': os.environ.get('POSTGRES_USER'),
-        'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
-        'HOST': os.environ.get('POSTGRES_HOST'),
-        'PORT': os.environ.get('POSTGRES_PORT'),
+if os.environ.get('POSTGRES_DB'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('POSTGRES_DB'),
+            'USER': os.environ.get('POSTGRES_USER'),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
+            'HOST': os.environ.get('POSTGRES_HOST'),
+            'PORT': os.environ.get('POSTGRES_PORT'),
+        }
     }
-}
+else:
+    # Local fallback to sqlite for quick development
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -158,16 +191,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings for development
 CORS_ALLOW_ALL_ORIGINS = False
+_cors_frontend = os.environ.get('FRONTEND_URL')
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    os.environ.get('FRONTEND_URL', ''),
     "https://melb-minds-one.vercel.app",
     "https://melbminds.me",
     "https://www.melbminds.me",
 ]
+if _cors_frontend:
+    CORS_ALLOWED_ORIGINS.append(_cors_frontend)
 
-# Clean up any URLs with trailing slashes (to prevent corsheaders.E014 error)
-CORS_ALLOWED_ORIGINS = [origin.rstrip('/') if origin else origin for origin in CORS_ALLOWED_ORIGINS]
+# Clean up any URLs with trailing slashes and remove empty entries
+CORS_ALLOWED_ORIGINS = [origin.rstrip('/') for origin in CORS_ALLOWED_ORIGINS if origin and origin.strip()]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',

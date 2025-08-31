@@ -8,6 +8,7 @@ const LeoChatbot = dynamic(() => import("@/components/LeoChatbot"), { ssr: false
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
 import { useEffect, useState } from "react"
+import { apiClient } from "@/lib/api"
 
 export default function HomePage() {
   const { user } = useUser();
@@ -21,12 +22,15 @@ export default function HomePage() {
       setStats(JSON.parse(cached));
       setLoadingStats(false);
     }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stats/summary/`)
-      .then((res) => res.json())
-      .then((data) => {
-        setStats(data);
+    
+    // Fetch stats using API client
+    apiClient.get('/stats/summary/')
+      .then((response) => {
+        if (response.data) {
+          setStats(response.data);
+          localStorage.setItem('stats_summary_cache', JSON.stringify(response.data));
+        }
         setLoadingStats(false);
-        localStorage.setItem('stats_summary_cache', JSON.stringify(data));
       })
       .catch(() => setLoadingStats(false));
   }, []);

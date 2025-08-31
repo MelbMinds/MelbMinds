@@ -14,12 +14,27 @@ class ApiClient {
   private refreshPromise: Promise<AuthTokens> | null = null;
 
   constructor() {
-    // Ensure the baseUrl always uses HTTPS
+    // Get the API URL from environment variables
     let apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-    if (apiUrl.startsWith('http:')) {
-      apiUrl = apiUrl.replace('http:', 'https:');
+    
+    // Fallback to local development server if no URL is configured
+    if (!apiUrl) {
+      apiUrl = 'http://localhost:8000';
+      console.warn('NEXT_PUBLIC_API_URL not set, falling back to local Django server at localhost:8000');
     }
+    
+    // Only force HTTPS for production URLs (not localhost)
+    if (apiUrl.startsWith('http:') && !apiUrl.includes('localhost')) {
+      apiUrl = apiUrl.replace('http:', 'https:');
+      console.log('Converted HTTP to HTTPS for production URL');
+    }
+    
     this.baseUrl = `${apiUrl}/api`;
+    
+    // Log the API URL in development for debugging
+    if (process.env.NEXT_PUBLIC_ENVIRONMENT === 'development') {
+      console.log(`API Client initialized with baseUrl: ${this.baseUrl}`);
+    }
   }
 
   setTokens(tokens: AuthTokens | null) {
