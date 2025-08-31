@@ -2430,21 +2430,47 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     <TabsContent value="chat" className="space-y-4">
                       <div className="h-96 overflow-y-auto space-y-4 p-4 bg-soft-gray rounded-lg">
                         {Array.isArray(messages) && messages.length > 0 ? (
-                          [...messages, ...optimisticMessages].map((msg: any) => (
-                            <div key={msg.id} className={`flex space-x-3 group ${msg.optimistic ? 'opacity-60' : ''}`}>
-                              <Avatar className="h-8 w-8">
-                                <AvatarFallback className="bg-deep-blue text-white text-xs">
-                                  {msg.user_name?.split(" ").map((n: string) => n[0]).join("")}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-2 mb-1">
-                                  <span className="font-medium text-deep-blue text-sm">{msg.user_name}</span>
-                                  <span className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleString()}</span>
-                                </div>
-                                <div className="flex items-center">
-                                  <p className="text-sm text-gray-700 bg-white p-3 rounded-lg shadow-sm mb-1 flex-1">{msg.text}</p>
+                          [...messages, ...optimisticMessages].map((msg: any) => {
+                            const isLeonMessage = msg.user_name?.includes('Leon') || msg.user_name?.includes('🤖');
+                            const isIcebreakerMessage = isLeonMessage && (msg.text?.includes('Icebreaker Alert') || msg.text?.includes('🤝'));
+                            return (
+                              <div key={msg.id} className={`flex space-x-3 group ${msg.optimistic ? 'opacity-60' : ''} ${
+                                isIcebreakerMessage 
+                                  ? 'bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border-l-4 border-orange-400 shadow-md' 
+                                  : isLeonMessage 
+                                    ? 'bg-gradient-to-r from-blue-50 to-purple-50 p-3 rounded-lg border-l-4 border-blue-400' 
+                                    : ''
+                              }`}>
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback className={`text-white text-xs ${isLeonMessage ? 'bg-gradient-to-r from-blue-500 to-purple-500' : 'bg-deep-blue'}`}>
+                                    {isLeonMessage ? '🤖' : msg.user_name?.split(" ").map((n: string) => n[0]).join("")}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <span className={`font-medium text-sm ${
+                                      isIcebreakerMessage 
+                                        ? 'text-orange-600 font-bold' 
+                                        : isLeonMessage 
+                                          ? 'text-blue-600 font-semibold' 
+                                          : 'text-deep-blue'
+                                    }`}>
+                                      {msg.user_name}
+                                      {isIcebreakerMessage && <span className="ml-1 text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Icebreaker</span>}
+                                      {isLeonMessage && !isIcebreakerMessage && <span className="ml-1 text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">AI Assistant</span>}
+                                    </span>
+                                    <span className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex items-center">
+                                    <p className={`text-sm p-3 rounded-lg shadow-sm mb-1 flex-1 ${
+                                      isIcebreakerMessage 
+                                        ? 'bg-gradient-to-r from-orange-50 to-white text-orange-900 border border-orange-200 font-medium' 
+                                        : isLeonMessage 
+                                          ? 'bg-gradient-to-r from-blue-50 to-white text-blue-900 border border-blue-200' 
+                                          : 'text-gray-700 bg-white'
+                                    }`}>{msg.text}</p>
                                   <div className="ml-2 flex items-center self-start">
+                                    {!isLeonMessage && (
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
                                         <Button size="icon" variant="ghost" aria-label="Message actions">
@@ -2462,11 +2488,13 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
+                                    )}
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          ))
+                            );
+                          })
                         ) : (
                           <div className="text-gray-500">No messages yet.</div>
                         )}

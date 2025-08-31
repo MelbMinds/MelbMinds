@@ -718,10 +718,148 @@ class JoinGroupView(APIView):
                 return Response({'detail': 'You cannot join a group you created'}, status=status.HTTP_400_BAD_REQUEST)
             if request.user in group.members.all():
                 return Response({'detail': 'You are already a member of this group'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Add user to group
             group.members.add(request.user)
+            
+            # Create automated welcome message from Leon
+            self._create_leon_welcome_message(group, request.user)
+            
             return Response({'detail': 'Successfully joined the group'}, status=status.HTTP_200_OK)
         except Group.DoesNotExist:
             return Response({'detail': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    def _create_leon_welcome_message(self, group, new_user):
+        """Create an automated welcome message from Leon when someone joins a group"""
+        try:
+            # Get or create Leon system user
+            leon_user, created = User.objects.get_or_create(
+                email='leon@melbminds.system',
+                defaults={
+                    'name': 'Leon 🤖',
+                    'major': 'AI Assistant',
+                    'year_level': 'System',
+                    'preferred_study_format': 'Online',
+                    'languages_spoken': 'English',
+                    'bio': 'MelbMinds AI Assistant - Here to help with your study group experience!',
+                    'is_active': True,
+                    'is_email_verified': True,
+                    'is_staff': False,
+                }
+            )
+            
+            # Create welcome message
+            welcome_text = self._generate_welcome_message(group, new_user)
+            
+            # Create the message
+            Message.objects.create(
+                group=group,
+                user=leon_user,
+                text=welcome_text
+            )
+            
+            # Create icebreaker message if common interests found
+            icebreaker_text = self._generate_icebreaker_message(group, new_user)
+            if icebreaker_text:
+                Message.objects.create(
+                    group=group,
+                    user=leon_user,
+                    text=icebreaker_text
+                )
+            
+        except Exception as e:
+            # Log the error but don't fail the join operation
+            print(f"Failed to create Leon welcome message: {e}")
+            pass
+
+    def _generate_welcome_message(self, group, new_user):
+        """Generate a personalized welcome message"""
+        welcome_messages = [
+            f"🎉 Welcome to the group, {new_user.name}! We're excited to have you join our study community.",
+            f"👋 Hey {new_user.name}! Welcome aboard! Feel free to introduce yourself and let us know what you're hoping to achieve in this study group.",
+            f"🌟 Welcome {new_user.name}! You've just joined an awesome study group. Don't hesitate to ask questions or share your insights!",
+            f"📚 Great to have you here, {new_user.name}! This group is all about collaborative learning - jump in whenever you're ready!",
+            f"✨ Welcome to the team, {new_user.name}! Looking forward to studying together and achieving great results!"
+        ]
+        
+        import random
+        return random.choice(welcome_messages)
+
+    def _generate_icebreaker_message(self, group, new_user):
+        """Generate an icebreaker message based on common interests"""
+        try:
+            # Get new user's interests
+            new_user_interests = []
+            if new_user.interests_hobbies:
+                new_user_interests = [interest.strip().lower() for interest in new_user.interests_hobbies.split(',') if interest.strip()]
+            
+            if not new_user_interests:
+                return None
+            
+            # Get all group members (excluding the new user and Leon)
+            group_members = list(group.members.exclude(id=new_user.id).exclude(email='leon@melbminds.system'))
+            
+            # Include creator if not already in members list
+            if group.creator not in group_members and group.creator.id != new_user.id:
+                group_members.append(group.creator)
+            
+            # Find members with common interests
+            interest_matches = {}
+            
+            for member in group_members:
+                if not member.interests_hobbies:
+                    continue
+                    
+                member_interests = [interest.strip().lower() for interest in member.interests_hobbies.split(',') if interest.strip()]
+                common_interests = list(set(new_user_interests) & set(member_interests))
+                
+                if common_interests:
+                    interest_matches[member] = common_interests
+            
+            if not interest_matches:
+                return None
+            
+            # Generate icebreaker message
+            return self._format_icebreaker_message(new_user, interest_matches)
+            
+        except Exception as e:
+            print(f"Error generating icebreaker message: {e}")
+            return None
+
+    def _format_icebreaker_message(self, new_user, interest_matches):
+        """Format the icebreaker message with common interests"""
+        if not interest_matches:
+            return None
+        
+        # Sort by number of common interests (most matches first)
+        sorted_matches = sorted(interest_matches.items(), key=lambda x: len(x[1]), reverse=True)
+        
+        # Take top 3 matches to avoid overwhelming
+        top_matches = sorted_matches[:3]
+        
+        icebreaker_messages = []
+        
+        for member, common_interests in top_matches:
+            if len(common_interests) == 1:
+                interest = common_interests[0].title()
+                icebreaker_messages.append(f"🤝 {new_user.name}, you and {member.name} both share an interest in {interest}!")
+            elif len(common_interests) == 2:
+                interests = " and ".join([interest.title() for interest in common_interests])
+                icebreaker_messages.append(f"🤝 {new_user.name}, you and {member.name} both love {interests}!")
+            else:
+                interests = ", ".join([interest.title() for interest in common_interests[:2]])
+                extra_count = len(common_interests) - 2
+                icebreaker_messages.append(f"🤝 {new_user.name}, you and {member.name} share interests in {interests} and {extra_count} more!")
+        
+        # Create final message
+        if len(icebreaker_messages) == 1:
+            final_message = f"💡 Icebreaker Alert! {icebreaker_messages[0]} This could be a great conversation starter!"
+        elif len(icebreaker_messages) == 2:
+            final_message = f"💡 Icebreaker Alert! {icebreaker_messages[0]} Also, {icebreaker_messages[1].replace(f'{new_user.name}, ', '')} Why not introduce yourselves and share your experiences?"
+        else:
+            final_message = f"💡 Icebreaker Alert! {icebreaker_messages[0]} Plus, you have common interests with {len(icebreaker_messages)-1} other members! This group is perfect for you!"
+        
+        return final_message
 
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
@@ -740,6 +878,8 @@ class UserProfileView(APIView):
         user = request.user
         data = request.data.copy()
         
+        print(f"[Profile Update] Received data: {data}")
+        
         # Content moderation for profile updates
         name_check = is_content_clean('name', data.get('name', ''))
         bio_check = is_content_clean('bio', data.get('bio', ''))
@@ -753,6 +893,13 @@ class UserProfileView(APIView):
             data['languages_spoken'] = ', '.join(data['languages'])
             del data['languages']
         
+        # Convert interests array back to string for storage
+        if 'interests' in data and isinstance(data['interests'], list):
+            print(f"[Profile Update] Converting interests: {data['interests']}")
+            data['interests_hobbies'] = ', '.join(data['interests'])
+            del data['interests']
+            print(f"[Profile Update] Converted to: {data['interests_hobbies']}")
+        
         # Map frontend field names to model field names
         if 'year' in data:
             data['year_level'] = data['year']
@@ -762,10 +909,16 @@ class UserProfileView(APIView):
             data['preferred_study_format'] = data['studyFormat']
             del data['studyFormat']
         
+        print(f"[Profile Update] Final data for serializer: {data}")
+        
         serializer = UserProfileSerializer(user, data=data, partial=True)
         if serializer.is_valid():
+            print("[Profile Update] Serializer is valid, saving...")
             serializer.save()
+            print("[Profile Update] Saved successfully!")
             return Response(serializer.data)
+        else:
+            print(f"[Profile Update] Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class GroupChatView(APIView):

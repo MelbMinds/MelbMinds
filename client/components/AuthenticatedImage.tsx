@@ -19,8 +19,8 @@ export default function AuthenticatedImage({ src, alt, className, tokens, refres
     const loadImage = async () => {
       if (!src || !tokens) return
       
-      // Convert HTTP URLs to HTTPS
-      const secureUrl = src.replace(/^http:\/\//i, 'https://')
+      // Convert HTTP URLs to HTTPS for production, but preserve HTTP for localhost
+      const secureUrl = src.startsWith('http://localhost') ? src : src.replace(/^http:\/\//i, 'https://')
       console.log('AuthenticatedImage loading:', secureUrl)
 
       try {

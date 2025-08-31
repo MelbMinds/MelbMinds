@@ -22,6 +22,7 @@ interface UserContextType {
   tokens: AuthTokens | null
   setTokens: (tokens: AuthTokens | null) => void
   refreshToken: () => Promise<boolean>
+  isLoading: boolean
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
@@ -35,6 +36,7 @@ export const useUser = () => {
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUserState] = useState<User | null>(null)
   const [tokens, setTokensState] = useState<AuthTokens | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       setTokensState(tokens)
       apiClient.setTokens(tokens)
     }
+    setIsLoading(false)
   }, [])
 
   const setUser = (user: User | null, tokensArg?: AuthTokens | null) => {
@@ -102,7 +105,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <UserContext.Provider value={{ user, setUser, logout, tokens, setTokens, refreshToken }}>
+    <UserContext.Provider value={{ user, setUser, logout, tokens, setTokens, refreshToken, isLoading }}>
       {children}
     </UserContext.Provider>
   )
