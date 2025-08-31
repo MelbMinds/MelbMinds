@@ -1558,48 +1558,48 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     // Mock AI summaries based on file type and content hints
     const summaries = {
       pdf: [
-        "This appears to be a comprehensive study guide covering key concepts in the subject. The document is well-structured with clear headings and bullet points, making it ideal for revision. I've identified several important topics that align with typical exam questions.",
-        "This document contains detailed lecture notes with diagrams and examples. The content appears to be from a recent semester and includes practical applications of theoretical concepts. Perfect for group study sessions.",
-        "This is a research paper or academic article with citations and references. The document provides in-depth analysis and could be valuable for understanding advanced concepts in your course."
+        "This appears to be a comprehensive study guide covering key concepts in the subject. The document is well-structured with clear headings and bullet points, making it ideal for revision. I've identified several important topics that would be perfect for creating focused flashcards to help with memorization.",
+        "This document contains detailed lecture notes with diagrams and examples. The content appears to be from a recent semester and includes practical applications of theoretical concepts. Perfect for group study sessions and would generate excellent study flashcards covering both theory and application.",
+        "This is a research paper or academic article with citations and references. The document provides in-depth analysis and could be valuable for understanding advanced concepts. I can extract key findings and methodology that would make great flashcard questions for deeper learning."
       ],
       doc: [
-        "This Word document contains organized notes with a clear structure. I can see headings, subheadings, and key points that would be useful for collaborative study. The formatting suggests it's designed for easy reading and reference.",
-        "This appears to be an assignment template or study outline. The document includes guidelines and formatting that could help the group standardize their work and approach to similar tasks."
+        "This Word document contains organized notes with a clear structure. I can see headings, subheadings, and key points that would be useful for collaborative study. The formatting suggests it's designed for easy reading and would convert beautifully into study flashcards with clear questions and detailed answers.",
+        "This appears to be an assignment template or study outline. The document includes guidelines and formatting that could help the group standardize their work. The structured content would be perfect for creating flashcards that break down complex processes into manageable study chunks."
       ],
       docx: [
-        "This document contains well-formatted academic content with proper citations. The structure suggests it's either lecture notes or a study guide that could benefit the entire group's understanding of the subject.",
-        "I've analyzed this document and found it contains comprehensive coverage of course topics with examples and explanations. It's an excellent resource for group discussions and exam preparation."
+        "This document contains well-formatted academic content with proper citations. The structure suggests it's either lecture notes or a study guide that could benefit the entire group's understanding. I can identify key concepts that would make excellent flashcard questions for effective studying.",
+        "I've analyzed this document and found it contains comprehensive coverage of course topics with examples and explanations. It's an excellent resource for group discussions and would generate high-quality flashcards covering both fundamental concepts and practical applications."
       ],
       ppt: [
-        "This PowerPoint presentation contains visual slides that effectively communicate key concepts. The slides are well-designed with a good balance of text and visuals, making complex topics easier to understand.",
-        "This presentation appears to be from a lecture or study session. It includes diagrams, charts, and bullet points that would be great for group review sessions and visual learners."
+        "This PowerPoint presentation contains visual slides that effectively communicate key concepts. The slides are well-designed with a good balance of text and visuals, making complex topics easier to understand. Each slide could be transformed into focused flashcards that maintain the visual learning benefits.",
+        "This presentation appears to be from a lecture or study session. It includes diagrams, charts, and bullet points that would be great for group review sessions. The structured slide format is perfect for creating flashcards that capture both visual elements and key textual information."
       ],
       pptx: [
-        "This presentation contains engaging visual content with clear explanations. The slides progress logically through the topic and include helpful diagrams that could enhance group understanding.",
-        "I've identified this as a comprehensive presentation covering multiple subtopics. The visual elements and structure make it perfect for group presentations and collaborative learning."
+        "This presentation contains engaging visual content with clear explanations. The slides progress logically through the topic and include helpful diagrams that could enhance group understanding. I can extract the main points from each slide to create comprehensive flashcards that preserve the learning flow.",
+        "I've identified this as a comprehensive presentation covering multiple subtopics. The visual elements and structure make it perfect for group presentations and would generate diverse flashcards covering different learning styles - visual, textual, and conceptual."
       ],
       txt: [
-        "This text file contains raw notes or data that could be useful for analysis. While simple in format, the content appears relevant to your study group's objectives.",
-        "This document contains structured text information that could serve as a reference or quick lookup guide for the group."
+        "This text file contains raw notes or data that could be useful for analysis. While simple in format, the content appears relevant to your study group's objectives and could be organized into clear question-answer flashcards for quick review sessions.",
+        "This document contains structured text information that could serve as a reference or quick lookup guide for the group. The organized format makes it ideal for creating flashcards that help memorize key facts and definitions."
       ],
       xlsx: [
-        "This Excel spreadsheet contains organized data with calculations and formulas. The structure suggests it's designed for analysis or tracking progress, which could be valuable for group projects.",
-        "I've identified this as a data analysis file with charts and calculations. This could be extremely useful for understanding quantitative aspects of your coursework."
+        "This Excel spreadsheet contains organized data with calculations and formulas. The structure suggests it's designed for analysis or tracking progress, which could be valuable for group projects. I can create flashcards focusing on data interpretation skills and formula understanding.",
+        "I've identified this as a data analysis file with charts and calculations. This could be extremely useful for understanding quantitative aspects of your coursework and would generate excellent flashcards covering statistical concepts, formula applications, and data analysis techniques."
       ],
       xls: [
-        "This spreadsheet contains numerical data and formulas that appear to be course-related. The organization suggests it's designed for collaborative analysis and could enhance group understanding of data concepts."
+        "This spreadsheet contains numerical data and formulas that appear to be course-related. The organization suggests it's designed for collaborative analysis and could enhance group understanding of data concepts. Perfect for creating flashcards that test both calculation skills and conceptual understanding."
       ],
       jpg: [
-        "This image appears to contain visual information relevant to your studies. It could be a diagram, chart, or photograph that supports the group's learning objectives.",
-        "I've analyzed this image and identified it as educational content that could enhance visual understanding of course concepts."
+        "This image appears to contain visual information relevant to your studies. It could be a diagram, chart, or photograph that supports the group's learning objectives. Visual content like this is excellent for creating image-based flashcards that test visual recognition and interpretation skills.",
+        "I've analyzed this image and identified it as educational content that could enhance visual understanding of course concepts. This would be perfect for creating flashcards that combine visual elements with descriptive questions."
       ],
       jpeg: [
-        "This image contains visual educational content that could be valuable for group discussions. Visual materials often help explain complex concepts more effectively.",
-        "This appears to be a diagram or educational image that could serve as a helpful reference during group study sessions."
+        "This image contains visual educational content that could be valuable for group discussions. Visual materials often help explain complex concepts more effectively and would create engaging flashcards that appeal to visual learners.",
+        "This appears to be a diagram or educational image that could serve as a helpful reference during group study sessions. The visual content would translate well into flashcards that test both recognition and understanding."
       ],
       png: [
-        "This image file contains clear visual content that appears educational in nature. Visual aids like this are excellent for group learning and concept explanation.",
-        "I've identified this as a high-quality educational image that could enhance understanding of course materials through visual representation."
+        "This image file contains clear visual content that appears educational in nature. Visual aids like this are excellent for group learning and concept explanation, and would generate high-quality flashcards that leverage visual memory techniques.",
+        "I've identified this as a high-quality educational image that could enhance understanding of course materials through visual representation. Perfect for creating flashcards that combine visual cues with conceptual questions."
       ]
     };
 
@@ -1610,7 +1610,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
 
     // Default summary for unknown file types
-    return "I've analyzed this file and determined it contains educational content relevant to your study group. While I can't preview the specific format, the filename suggests it's a valuable resource for collaborative learning.";
+    return "I've analyzed this file and determined it contains educational content relevant to your study group. While I can't preview the specific format, the filename suggests it's a valuable resource for collaborative learning and would be excellent for creating custom flashcards to help reinforce key concepts.";
   };
 
   // Handle file preview with AI summary
@@ -1628,6 +1628,143 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }, 2000 + Math.random() * 1000); // 2-3 seconds delay for realism
   };
 
+  // Generate dummy flashcards based on file type and name
+  const generateDummyFlashcards = (file: any) => {
+    const extension = file.original_filename.split('.').pop()?.toLowerCase();
+    const fileName = file.original_filename.replace(/\.[^/.]+$/, "");
+    const baseId = Date.now();
+    
+    // Generate flashcards based on file type and common academic subjects
+    const flashcardSets = {
+      pdf: [
+        {
+          id: baseId + 1,
+          question: `What are the key concepts covered in ${fileName}?`,
+          answer: "The document covers fundamental principles, theoretical frameworks, and practical applications relevant to the course material. Key themes include definitions, examples, and real-world case studies.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `Define the main terminology introduced in this document.`,
+          answer: "Essential terms and concepts are defined with clear explanations and context. Each definition includes examples and relationships to broader course topics.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 3,
+          question: `What practical applications are discussed in ${fileName}?`,
+          answer: "The document presents real-world scenarios, case studies, and examples that demonstrate how theoretical concepts apply in professional and academic contexts.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      doc: [
+        {
+          id: baseId + 1,
+          question: `Summarize the main points from ${fileName}.`,
+          answer: "The document outlines core concepts, provides structured analysis, and presents key findings. It includes supporting evidence and logical arguments to support the main thesis.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `What methodology or approach is described in this document?`,
+          answer: "The document describes systematic approaches, research methods, or analytical frameworks used to examine the subject matter with clear step-by-step processes.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      docx: [
+        {
+          id: baseId + 1,
+          question: `What are the learning objectives covered in ${fileName}?`,
+          answer: "The document aims to help students understand core principles, develop analytical skills, and apply knowledge to solve problems in the subject area.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `Explain the structure and organization of this document.`,
+          answer: "The content is organized into logical sections with clear headings, subheadings, and supporting materials that build upon each other progressively.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      ppt: [
+        {
+          id: baseId + 1,
+          question: `What are the main topics covered in the ${fileName} presentation?`,
+          answer: "The presentation covers key course concepts through visual aids, diagrams, and structured slides that facilitate understanding and retention.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `How do the visual elements enhance understanding in this presentation?`,
+          answer: "Charts, graphs, images, and diagrams illustrate complex concepts, making abstract ideas more concrete and easier to comprehend.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      pptx: [
+        {
+          id: baseId + 1,
+          question: `What key insights can be drawn from ${fileName}?`,
+          answer: "The presentation provides clear explanations, visual representations, and practical examples that highlight important course concepts and their applications.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `How does this presentation connect to broader course themes?`,
+          answer: "The content links specific topics to overarching course objectives, showing relationships between different concepts and their real-world relevance.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      txt: [
+        {
+          id: baseId + 1,
+          question: `What information is contained in ${fileName}?`,
+          answer: "The text file contains structured information, notes, or data relevant to course topics, organized for easy reference and study.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `How can this text file be used for studying?`,
+          answer: "The content serves as a reference guide, study notes, or supplementary material that supports understanding of course concepts.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      xlsx: [
+        {
+          id: baseId + 1,
+          question: `What data analysis is presented in ${fileName}?`,
+          answer: "The spreadsheet contains organized data, calculations, and analysis that demonstrate quantitative methods and statistical concepts relevant to the course.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `How do the formulas and calculations support learning objectives?`,
+          answer: "The mathematical operations and data manipulation techniques illustrate practical applications of theoretical concepts in real-world scenarios.",
+          created_at: new Date().toISOString()
+        }
+      ]
+    };
+
+    // Get flashcards based on file type, fallback to generic ones
+    const typeFlashcards = flashcardSets[extension as keyof typeof flashcardSets];
+    if (typeFlashcards) {
+      return typeFlashcards;
+    }
+
+    // Default flashcards for unknown file types
+    return [
+      {
+        id: baseId + 1,
+        question: `What is the purpose of ${fileName}?`,
+        answer: "This file contains educational content designed to support learning objectives and enhance understanding of course material through structured information.",
+        created_at: new Date().toISOString()
+      },
+      {
+        id: baseId + 2,
+        question: `How does this file contribute to the study group's goals?`,
+        answer: "The content provides valuable resources, reference material, and examples that facilitate collaborative learning and knowledge sharing among group members.",
+        created_at: new Date().toISOString()
+      }
+    ];
+  };
+
   // Handle creating flashcards from file
   const handleCreateFlashcardsFromFile = async (file: any) => {
     if (!group?.id || !tokens?.access) return;
@@ -1639,7 +1776,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     const folderName = `${fileName} - Study Cards`;
     
     try {
-      // Create the folder
+      // Create the folder via API - backend will automatically create dummy flashcards
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/folders/`, {
         method: 'POST',
         headers: {
@@ -1648,17 +1785,22 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         },
         body: JSON.stringify({ 
           name: folderName,
-          group: group.id
+          group: group.id,
+          file_info: file // Send file info to backend for smarter flashcard generation
         })
       });
       
       if (res.ok) {
         const newFolder = await res.json();
+        console.log('Created flashcard folder:', newFolder);
+        
+        // Add to local state
+        setFlashcardFolders(prev => [newFolder, ...prev]);
         
         // Show success message
         toastSuccess({
           title: "Flashcard Folder Created!",
-          description: `Created "${folderName}" folder. You can now add flashcards based on this file.`,
+          description: `Created "${folderName}" with AI-generated flashcards based on your file.`,
         });
         
         // Close the preview modal
@@ -1666,41 +1808,18 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         setPreviewFile(null);
         setAiSummary('');
         
-        // Redirect to the new flashcard folder
+        // Navigate to the new flashcard folder
         router.push(`/flashcards/${newFolder.id}`);
       } else {
-        throw new Error('Failed to create folder');
+        const errorData = await res.json();
+        throw new Error(errorData.detail || 'Failed to create folder');
       }
     } catch (error) {
-      // For presentation purposes, create a mock folder and redirect
-      console.log('Backend creation failed, using presentation mode:', error);
-      
-      // Show success message
-      toastSuccess({
-        title: "Flashcard Folder Created!",
-        description: `Created "${folderName}" folder. You can now add flashcards based on this file.`,
+      console.error('Failed to create flashcard folder:', error);
+      toastFail({
+        title: "Creation Failed",
+        description: error.message || "Failed to create flashcard folder. Please try again.",
       });
-      
-      // Close the preview modal
-      setShowFilePreview(false);
-      setPreviewFile(null);
-      setAiSummary('');
-      
-      // For presentation, add the folder to local state if possible
-      const mockFolder = {
-        id: Date.now(), // Use timestamp as mock ID
-        name: folderName,
-        creator_name: user?.name || 'You',
-        flashcard_count: 0,
-        created_at: new Date().toISOString(),
-        group: group.id
-      };
-      
-      // Add to flashcard folders state
-      setFlashcardFolders(prev => [mockFolder, ...prev]);
-      
-      // Switch to flashcards tab to show the new folder
-      setActiveTab('flashcards');
     } finally {
       setCreatingFlashcards(false);
     }

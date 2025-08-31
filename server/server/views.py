@@ -1787,6 +1787,105 @@ class UpdateGroupView(APIView):
         except Group.DoesNotExist:
             return Response({'error': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
 
+def generate_dummy_flashcards_for_folder(folder, file_info=None):
+    """Generate dummy flashcards for a folder based on file type or generic content"""
+    from .models import Flashcard
+    
+    # Extract file extension if provided
+    file_extension = None
+    if file_info and 'original_filename' in file_info:
+        file_extension = file_info['original_filename'].split('.')[-1].lower()
+    
+    folder_name = folder.name.replace(' - Study Cards', '')
+    
+    # Generate flashcards based on file type
+    flashcard_data = []
+    
+    if file_extension == 'pdf':
+        flashcard_data = [
+            {
+                'question': f"What are the key concepts covered in {folder_name}?",
+                'answer': "The document covers fundamental principles, theoretical frameworks, and practical applications relevant to the course material. Key themes include definitions, examples, and real-world case studies."
+            },
+            {
+                'question': f"Define the main terminology introduced in this document.",
+                'answer': "Essential terms and concepts are defined with clear explanations and context. Each definition includes examples and relationships to broader course topics."
+            },
+            {
+                'question': f"What practical applications are discussed in {folder_name}?",
+                'answer': "The document presents real-world scenarios, case studies, and examples that demonstrate how theoretical concepts apply in professional and academic contexts."
+            }
+        ]
+    elif file_extension in ['doc', 'docx']:
+        flashcard_data = [
+            {
+                'question': f"Summarize the main points from {folder_name}.",
+                'answer': "The document outlines core concepts, provides structured analysis, and presents key findings. It includes supporting evidence and logical arguments to support the main thesis."
+            },
+            {
+                'question': f"What methodology or approach is described in this document?",
+                'answer': "The document describes systematic approaches, research methods, or analytical frameworks used to examine the subject matter with clear step-by-step processes."
+            },
+            {
+                'question': f"What are the learning objectives covered in {folder_name}?",
+                'answer': "The document aims to help students understand core principles, develop analytical skills, and apply knowledge to solve problems in the subject area."
+            }
+        ]
+    elif file_extension in ['ppt', 'pptx']:
+        flashcard_data = [
+            {
+                'question': f"What are the main topics covered in the {folder_name} presentation?",
+                'answer': "The presentation covers key course concepts through visual aids, diagrams, and structured slides that facilitate understanding and retention."
+            },
+            {
+                'question': f"How do the visual elements enhance understanding in this presentation?",
+                'answer': "Charts, graphs, images, and diagrams illustrate complex concepts, making abstract ideas more concrete and easier to comprehend."
+            },
+            {
+                'question': f"What key insights can be drawn from {folder_name}?",
+                'answer': "The presentation provides clear explanations, visual representations, and practical examples that highlight important course concepts and their applications."
+            }
+        ]
+    elif file_extension == 'xlsx':
+        flashcard_data = [
+            {
+                'question': f"What data analysis is presented in {folder_name}?",
+                'answer': "The spreadsheet contains organized data, calculations, and analysis that demonstrate quantitative methods and statistical concepts relevant to the course."
+            },
+            {
+                'question': f"How do the formulas and calculations support learning objectives?",
+                'answer': "The mathematical operations and data manipulation techniques illustrate practical applications of theoretical concepts in real-world scenarios."
+            }
+        ]
+    else:
+        # Default generic flashcards
+        flashcard_data = [
+            {
+                'question': f"What is the purpose of {folder_name}?",
+                'answer': "This material contains educational content designed to support learning objectives and enhance understanding of course material through structured information."
+            },
+            {
+                'question': f"How does this content contribute to the study group's goals?",
+                'answer': "The content provides valuable resources, reference material, and examples that facilitate collaborative learning and knowledge sharing among group members."
+            },
+            {
+                'question': f"What are the key takeaways from {folder_name}?",
+                'answer': "The material presents important concepts, practical applications, and real-world examples that help students develop deeper understanding of the subject matter."
+            }
+        ]
+    
+    # Create the flashcards in the database
+    created_flashcards = []
+    for data in flashcard_data:
+        flashcard = Flashcard.objects.create(
+            folder=folder,
+            question=data['question'],
+            answer=data['answer']
+        )
+        created_flashcards.append(flashcard)
+    
+    return created_flashcards
+
 class FlashcardFolderView(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -1804,11 +1903,32 @@ class FlashcardFolderView(APIView):
         return Response(serializer.data)
     
     def post(self, request):
-        """Create a new flashcard folder"""
+        """Create a new flashcard folder with automatic dummy flashcards"""
         serializer = FlashcardFolderSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            folder = serializer.save()
+            
+            # Get initial flashcards data if provided
+            initial_flashcards = request.data.get('initial_flashcards', [])
+            file_info = request.data.get('file_info', None)
+            
+            # Create dummy flashcards automatically
+            if initial_flashcards:
+                # If initial flashcards are provided, create them
+                from .models import Flashcard
+                for flashcard_data in initial_flashcards:
+                    Flashcard.objects.create(
+                        folder=folder,
+                        question=flashcard_data.get('question', ''),
+                        answer=flashcard_data.get('answer', '')
+                    )
+            else:
+                # Generate dummy flashcards based on folder name/file info
+                generate_dummy_flashcards_for_folder(folder, file_info)
+            
+            # Return the folder data with flashcard count
+            response_data = FlashcardFolderSerializer(folder, context={'request': request}).data
+            return Response(response_data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class FlashcardFolderDetailView(APIView):
