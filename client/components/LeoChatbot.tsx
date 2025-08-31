@@ -67,39 +67,52 @@ export default function LeoChatbot() {
   ]
 
   return (
-    // fixed container prevents layout shift when the chat opens
-    <div ref={containerRef} className="fixed bottom-16 right-8 z-50">
+  // render as a fixed right-side column so Leo can fill the empty right area in the hero
+  <div ref={containerRef} className="fixed z-50 top-24 right-16 bottom-6 flex items-center justify-end pointer-events-none">
       {/* Collapsed toggle (stays in DOM for smoother animation) */}
-      <div className={`transform origin-bottom-right transition-all duration-300 ease-out ${open ? "opacity-0 scale-90 translate-y-4 pointer-events-none" : "opacity-100 scale-100 translate-y-0"}`}>
+  {/* Collapsed right rail preview: fills the right area but stays subtle until opened */}
+  <div className={`absolute right-0 top-0 bottom-0 flex items-center justify-end transition-all duration-200 ease-out pointer-events-auto ${open ? "opacity-0 translate-x-full pointer-events-none" : "opacity-100 translate-x-0"}`}>
+        {/* desktop rail */}
+        <div
+          onClick={() => setOpen(true)}
+          role="button"
+          aria-label="Open Leo chat"
+          className="hidden lg:flex w-[30vw] min-w-[280px] max-w-[420px] h-[62vh] mr-12 bg-gradient-to-br from-[#0b334a]/40 to-[#09293b]/30 border border-white/10 rounded-l-2xl backdrop-blur-md p-5 flex-col justify-center gap-3 cursor-pointer hover:from-[#0b3a54]/45 hover:to-[#083045]/35 shadow-[0_10px_30px_rgba(2,6,23,0.45)]"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-deep-blue font-bold text-lg shadow-sm">L</div>
+            <div className="text-left flex-1">
+              <div className="text-lg font-serif font-semibold text-white">Ask Leo to find a study group</div>
+              <div className="text-sm text-blue-100 mt-1">Try: "COMP30024 evenings"</div>
+              <div className="text-xs text-blue-100 mt-3">Leo can search groups and surface matches directly in this panel.</div>
+            </div>
+          </div>
+        </div>
+        {/* mobile: small floating button bottom-right */}
+        <div className="lg:hidden absolute -left-[140px] bottom-6 transform rotate-0"></div>
         <button
           onClick={() => setOpen(true)}
-          className="flex items-center gap-3 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-2xl px-5 py-4 shadow-lg transition-colors duration-200"
           aria-label="Open Leo chat"
+          className="lg:hidden fixed z-50 right-8 bottom-6 w-14 h-14 rounded-full bg-gradient-to-br from-[#ffd27a] to-[#ffc34a] flex items-center justify-center text-deep-blue shadow-[0_8px_24px_rgba(2,6,23,0.3)] border border-white/20"
         >
-          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-deep-blue font-bold text-lg">L</div>
-          <div className="text-left">
-            <div className="text-lg font-serif font-semibold text-white">Ask Leo to find a study group</div>
-            <div className="text-sm text-blue-100">Try: "COMP30024 evenings"</div>
-          </div>
-          <div className="ml-3 text-white/90 p-2 rounded-md bg-white/5">
-            <MessageSquare className="h-5 w-5" />
-          </div>
+          <div className="font-bold">L</div>
         </button>
       </div>
 
       {/* Expanded panel (also remains in DOM for animation) */}
-      <div className={`transform origin-bottom-right transition-all duration-300 ease-out ${open ? "opacity-100 scale-100 translate-y-0 pointer-events-auto" : "opacity-0 scale-95 translate-y-6 pointer-events-none"}`}>
+      {/* Expanded panel: slide in/out from the right and occupy the right column */}
+      <div className={`absolute right-0 top-0 bottom-0 transform transition-transform duration-300 ease-out pointer-events-auto ${open ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"}`}>
         <div
           role="dialog"
           aria-modal="true"
-          className="w-[540px] h-[600px] bg-gradient-to-br from-white/6 to-white/3 border border-white/20 rounded-3xl shadow-2xl backdrop-blur-lg p-5 flex flex-col"
+          className="w-[46vw] max-w-[780px] min-w-[320px] h-full bg-gradient-to-br from-[#072033]/70 to-[#082d45]/60 border-l border-white/10 rounded-l-2xl shadow-[0_20px_60px_rgba(2,6,23,0.6)] backdrop-blur-md p-6 flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-deep-blue font-bold text-lg">L</div>
               <div>
-                <div className="text-xl font-serif font-semibold text-white">Leo — AI Study Finder</div>
+                <div className="text-2xl font-serif font-semibold text-white">Leo — AI Study Finder</div>
                 <div className="text-sm text-blue-100">I'll search MelbMinds and suggest groups for you.</div>
               </div>
             </div>
