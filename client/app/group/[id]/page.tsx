@@ -42,6 +42,10 @@ import {
   Presentation,
   Sparkles,
   X,
+  Package,
+  Target,
+  GraduationCap,
+  Lightbulb,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
@@ -298,6 +302,16 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
   // Add state for loading join per session
   const [joiningSessionId, setJoiningSessionId] = useState<number | null>(null);
+
+  // AI Planning state
+  const [showAiPlanModal, setShowAiPlanModal] = useState(false)
+  const [selectedSessionForAi, setSelectedSessionForAi] = useState<any>(null)
+  const [aiPlanLoading, setAiPlanLoading] = useState(false)
+  const [currentAiPlan, setCurrentAiPlan] = useState<any>(null)
+  const [showCurriculumModal, setShowCurriculumModal] = useState(false)
+  const [curriculumInput, setCurriculumInput] = useState("")
+  const [semesterPlan, setSemesterPlan] = useState<any>(null)
+  const [curriculumLoading, setCurriculumLoading] = useState(false)
 
   const [sessionsLoading, setSessionsLoading] = useState(false);
 
@@ -947,7 +961,20 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         body: JSON.stringify({ topic, date, start_time, end_time, location, meeting_format: type, description: fullDescription, extra_details: extraDetails }),
       });
       if (res.ok) {
-        setSessionForm({ topic: '', date: '', startTime: '', endTime: '', type: '', location: '', extraDetails: '', description: '' });
+        setSessionForm({ 
+          topic: '', 
+          date: '', 
+          startTime: '', 
+          endTime: '', 
+          type: '', 
+          location: '', 
+          extraDetails: '', 
+          description: '',
+          startHour: '',
+          startMinute: '',
+          endHour: '',
+          endMinute: '',
+        });
         setShowSessionModal(false);
         toastSuccess({ title: 'Session created!' });
         // Refresh sessions after creation
@@ -1814,7 +1841,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         const errorData = await res.json();
         throw new Error(errorData.detail || 'Failed to create folder');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create flashcard folder:', error);
       toastFail({
         title: "Creation Failed",
@@ -2332,6 +2359,254 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       </div>
     </div>
   );
+
+  // AI Session Planning Functions
+  const handleAiSessionPlan = (session: any) => {
+    setSelectedSessionForAi(session);
+    setShowAiPlanModal(true);
+  };
+
+  const generateSessionPlan = () => {
+    if (!selectedSessionForAi) return;
+    
+    setAiPlanLoading(true);
+    
+    // Simulate AI processing time
+    setTimeout(() => {
+      const sessionType = determineSessionType(selectedSessionForAi);
+      const plan = generatePlanBasedOnContext(selectedSessionForAi, sessionType);
+      setCurrentAiPlan(plan);
+      setAiPlanLoading(false);
+    }, 3000); // 3 second delay for realism
+  };
+
+  const determineSessionType = (session: any) => {
+    const sessionIndex = sessions.findIndex(s => s.id === session.id);
+    if (sessionIndex === 0) return 'icebreaker';
+    if (session.topic?.toLowerCase().includes('assignment')) return 'assignment';
+    if (session.topic?.toLowerCase().includes('exam')) return 'exam-prep';
+    if (session.topic?.toLowerCase().includes('review')) return 'review';
+    return 'general';
+  };
+
+  const generatePlanBasedOnContext = (session: any, type: string) => {
+    const planTemplates: { [key: string]: any } = {
+      icebreaker: {
+        title: "Icebreaker & Team Formation Session",
+        activities: [
+          {
+            time: "0-15 min",
+            activity: "Welcome & Introductions",
+            description: "Each member introduces themselves, shares their major, year level, and study goals for this group."
+          },
+          {
+            time: "15-30 min", 
+            activity: "Study Styles Assessment",
+            description: "Quick discussion about preferred learning styles, study habits, and scheduling preferences."
+          },
+          {
+            time: "30-45 min",
+            activity: "Group Goals Setting",
+            description: "Collaboratively define group objectives, meeting frequency, communication channels, and accountability measures."
+          },
+          {
+            time: "45-60 min",
+            activity: "First Study Topic Planning",
+            description: "Choose the first topic to tackle together and plan the next session's focus and preparation requirements."
+          }
+        ],
+        materials: ["Notebook for notes", "Calendar for scheduling", "Contact exchange"],
+        objectives: ["Build rapport among members", "Establish group dynamics", "Set clear expectations", "Plan future sessions"]
+      },
+      assignment: {
+        title: "Assignment Support & Collaboration Session",
+        activities: [
+          {
+            time: "0-10 min",
+            activity: "Assignment Review",
+            description: "Review assignment requirements together, clarify any questions, and identify challenging areas."
+          },
+          {
+            time: "10-25 min",
+            activity: "Problem-Solving Workshop", 
+            description: "Work through difficult concepts or questions collaboratively, sharing different approaches."
+          },
+          {
+            time: "25-45 min",
+            activity: "Peer Review Session",
+            description: "Exchange draft work for constructive feedback, suggestions for improvement, and error checking."
+          },
+          {
+            time: "45-60 min",
+            activity: "Resource Sharing & Next Steps",
+            description: "Share relevant resources, discuss common challenges, and plan individual work before submission."
+          }
+        ],
+        materials: ["Assignment guidelines", "Draft work", "Reference materials", "Laptops/tablets"],
+        objectives: ["Clarify assignment requirements", "Improve work quality through collaboration", "Share knowledge and resources", "Provide mutual support"]
+      },
+      'exam-prep': {
+        title: "Exam Preparation & Review Session",
+        activities: [
+          {
+            time: "0-15 min",
+            activity: "Exam Scope Review",
+            description: "Go through exam format, topics covered, and create a study timeline leading up to the exam date."
+          },
+          {
+            time: "15-40 min",
+            activity: "Collaborative Study Techniques",
+            description: "Practice active recall, quiz each other, and work through past papers or practice questions together."
+          },
+          {
+            time: "40-55 min",
+            activity: "Knowledge Gap Identification",
+            description: "Identify areas where group members need more support and plan focused study sessions."
+          },
+          {
+            time: "55-60 min",
+            activity: "Stress Management & Motivation",
+            description: "Discuss exam strategies, stress management techniques, and motivate each other for the final push."
+          }
+        ],
+        materials: ["Past exam papers", "Course notes", "Textbooks", "Flashcards", "Calculators if needed"],
+        objectives: ["Comprehensively review exam material", "Practice exam techniques", "Support struggling members", "Build confidence"]
+      },
+      review: {
+        title: "Course Review & Knowledge Consolidation",
+        activities: [
+          {
+            time: "0-15 min",
+            activity: "Topic Summary",
+            description: "Each member presents a brief summary of key concepts from assigned readings or lecture notes."
+          },
+          {
+            time: "15-35 min",
+            activity: "Discussion & Clarification",
+            description: "Deep dive into complex topics, address questions, and ensure everyone understands core concepts."
+          },
+          {
+            time: "35-50 min",
+            activity: "Application Practice",
+            description: "Work through examples, case studies, or problems that apply the theoretical knowledge."
+          },
+          {
+            time: "50-60 min",
+            activity: "Reflection & Future Planning",
+            description: "Reflect on learning progress, identify topics for future focus, and plan next session."
+          }
+        ],
+        materials: ["Course textbooks", "Lecture slides", "Note-taking materials", "Practice problems"],
+        objectives: ["Reinforce understanding", "Fill knowledge gaps", "Apply concepts practically", "Prepare for assessments"]
+      },
+      general: {
+        title: "Collaborative Study Session",
+        activities: [
+          {
+            time: "0-15 min",
+            activity: "Session Planning",
+            description: "Quickly discuss what each member wants to focus on and align on session priorities."
+          },
+          {
+            time: "15-35 min",
+            activity: "Focused Study Time",
+            description: "Concentrated study period where members work on individual tasks with mutual support available."
+          },
+          {
+            time: "35-50 min",
+            activity: "Knowledge Sharing",
+            description: "Share insights, help with difficult concepts, and explain topics to each other."
+          },
+          {
+            time: "50-60 min",
+            activity: "Progress Check & Next Steps",
+            description: "Review what was accomplished, celebrate wins, and plan next session's focus areas."
+          }
+        ],
+        materials: ["Course materials", "Notebooks", "Laptops/tablets", "Any specific resources for the topic"],
+        objectives: ["Make progress on individual study goals", "Support group members", "Share knowledge", "Maintain motivation"]
+      }
+    };
+
+    return planTemplates[type] || planTemplates.general;
+  };
+
+  const handleCurriculumSubmit = () => {
+    if (!curriculumInput.trim()) return;
+    
+    setCurriculumLoading(true);
+    
+    // Simulate AI processing time
+    setTimeout(() => {
+      const plan = generateSemesterPlan(curriculumInput);
+      setSemesterPlan(plan);
+      setCurriculumLoading(false);
+    }, 4000); // 4 second delay for realism
+  };
+
+  const generateSemesterPlan = (curriculum: string) => {
+    return {
+      overview: "Based on your curriculum, here's a comprehensive semester study plan designed to maximize learning outcomes and group collaboration.",
+      weeks: [
+        {
+          week: 1,
+          focus: "Course Introduction & Foundations",
+          activities: ["Group formation and goal setting", "Review course syllabus together", "Establish study schedule"],
+          topics: "Introduction to core concepts from your curriculum"
+        },
+        {
+          week: 2,
+          focus: "Fundamental Concepts Deep Dive", 
+          activities: ["Concept mapping session", "Create shared study materials", "Quiz each other on basics"],
+          topics: "Build strong foundation in key areas identified in curriculum"
+        },
+        {
+          week: 3,
+          focus: "Application & Practice",
+          activities: ["Work through practice problems", "Peer teaching sessions", "Create flashcards together"],
+          topics: "Apply theoretical knowledge to practical scenarios"
+        },
+        {
+          week: 4,
+          focus: "Mid-Semester Review",
+          activities: ["Comprehensive review session", "Identify knowledge gaps", "Plan catch-up strategies"],
+          topics: "Consolidate learning and prepare for mid-semester assessments"
+        },
+        {
+          week: 5,
+          focus: "Advanced Topics Introduction",
+          activities: ["Tackle challenging concepts together", "Break down complex problems", "Support struggling members"],
+          topics: "Move into more advanced curriculum areas with group support"
+        },
+        {
+          week: 6,
+          focus: "Project Work & Collaboration",
+          activities: ["Work on assignments together", "Peer review sessions", "Resource sharing"],
+          topics: "Collaborative approach to major projects and assignments"
+        },
+        {
+          week: 7,
+          focus: "Synthesis & Integration",
+          activities: ["Connect different course topics", "Create comprehensive study guides", "Practice explaining concepts"],
+          topics: "Integrate all curriculum elements into cohesive understanding"
+        },
+        {
+          week: 8,
+          focus: "Exam Preparation Intensive",
+          activities: ["Mock exams and practice tests", "Stress management workshop", "Final review sessions"],
+          topics: "Comprehensive exam preparation covering entire curriculum"
+        }
+      ],
+      tips: [
+        "Adjust the pace based on your group's learning speed",
+        "Use different study techniques each week to keep engagement high", 
+        "Regular check-ins to ensure everyone is keeping up",
+        "Celebrate milestones and achievements together",
+        "Be flexible and adapt the plan as needed throughout the semester"
+      ]
+    };
+  };
+
   if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
   if (!group) return null
 
@@ -2941,13 +3216,21 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     <div className="flex justify-between items-center">
                       <h3 className="text-lg font-serif font-medium text-deep-blue">Upcoming Sessions</h3>
                       {isGroupCreator() && (
-                        <Dialog open={showSessionModal} onOpenChange={setShowSessionModal}>
-                          <DialogTrigger asChild>
-                            <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                              <CalendarPlus className="mr-2 h-4 w-4" />
-                              Schedule Session
-                            </Button>
-                          </DialogTrigger>
+                        <div className="flex gap-2">
+                          <Button 
+                            onClick={() => setShowCurriculumModal(true)}
+                            className="bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-600 hover:from-purple-400 hover:via-violet-400 hover:to-indigo-500 text-white font-medium shadow-xl hover:shadow-2xl hover:shadow-purple-500/25 transition-all duration-300 transform hover:scale-105 border border-purple-400/20 backdrop-blur-sm"
+                          >
+                            <Brain className="mr-2 h-4 w-4 animate-pulse" />
+                            Leon's Semester Plan
+                          </Button>
+                          <Dialog open={showSessionModal} onOpenChange={setShowSessionModal}>
+                            <DialogTrigger asChild>
+                              <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
+                                <CalendarPlus className="mr-2 h-4 w-4" />
+                                Schedule Session
+                              </Button>
+                            </DialogTrigger>
                           <DialogContent className="max-w-2xl w-full rounded-xl p-0 bg-white shadow-2xl border border-gray-200 overflow-hidden">
                             <div className="p-6 border-b border-gray-200">
                               <div className="flex justify-between items-center">
@@ -3181,6 +3464,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                             </div>
                           </DialogContent>
                         </Dialog>
+                        </div>
                       )}
                     </div>
 
@@ -3211,6 +3495,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                         </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => handleAiSessionPlan(session)}>
+                                          <Brain className="h-4 w-4 mr-2" /> Leon's Session Plan
+                                        </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => handleEditSession(session)}>
                                           <Edit className="h-4 w-4 mr-2" /> Edit
                                         </DropdownMenuItem>
@@ -3878,6 +4165,428 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             </div>
           </div>
         </div>
+      )}
+
+      {/* AI Session Plan Modal */}
+      <Dialog open={showAiPlanModal} onOpenChange={setShowAiPlanModal}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
+          {/* Header with subtle gradient like AI Analysis */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-br from-purple-50 to-blue-50">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Brain className="h-6 w-6 text-purple-600" />
+                <div className="absolute -top-1 -right-1 w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+              </div>
+              <div>
+                <h3 className="text-xl font-serif font-semibold text-purple-700">Leon Session Planner</h3>
+                <p className="text-sm text-gray-600">{selectedSessionForAi?.topic || "Study Session"}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+            {!currentAiPlan ? (
+              <div className="text-center py-12">
+                {aiPlanLoading ? (
+                  <div className="space-y-6">
+                    {/* Subtle loading animation like AI Analysis */}
+                    <div className="flex items-center justify-center mb-6">
+                      <div className="relative">
+                        <Brain className="h-12 w-12 text-purple-600" />
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-400 rounded-full animate-pulse"></div>
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm text-purple-600 flex items-center justify-center gap-1">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      <span className="ml-2">Leon is analyzing your session and creating a plan...</span>
+                    </div>
+                    
+                    {/* Loading skeleton cards like AI Analysis */}
+                    <div className="space-y-4 mt-8">
+                      <div className="bg-white/70 rounded-lg p-4 border border-purple-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-4 h-4 bg-purple-300 rounded animate-pulse"></div>
+                          <div className="w-24 h-4 bg-purple-300 rounded animate-pulse"></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="w-full h-3 bg-purple-200 rounded animate-pulse"></div>
+                          <div className="w-5/6 h-3 bg-purple-200 rounded animate-pulse"></div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white/70 rounded-lg p-4 border border-blue-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-4 h-4 bg-blue-300 rounded animate-pulse"></div>
+                          <div className="w-32 h-4 bg-blue-300 rounded animate-pulse"></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="w-full h-3 bg-blue-200 rounded animate-pulse"></div>
+                          <div className="w-3/4 h-3 bg-blue-200 rounded animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="relative">
+                      <Brain className="h-16 w-16 text-purple-600 mx-auto mb-4" />
+                      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-4 h-4 bg-purple-400 rounded-full animate-pulse"></div>
+                    </div>
+                    
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      Let Leon Plan Your Session
+                    </h3>
+                    <p className="text-gray-600 mb-6 max-w-md mx-auto leading-relaxed">
+                      Get a personalized study session plan based on your session context and group dynamics.
+                    </p>
+                    
+                    <Button 
+                      onClick={generateSessionPlan}
+                      className="bg-purple-600 hover:bg-purple-700 text-white"
+                    >
+                      <Brain className="h-4 w-4 mr-2" />
+                      Let Leon Plan This Session
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Plan Header */}
+                <div className="bg-white/80 rounded-lg p-6 border border-purple-200 shadow-sm">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Brain className="h-5 w-5 text-purple-600" />
+                    <h4 className="text-lg font-serif font-semibold text-purple-700">Leon's Session Plan</h4>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    {currentAiPlan.title}
+                  </h3>
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">Session:</span> {selectedSessionForAi?.topic} • 
+                    <span className="font-medium ml-2">Duration:</span> 60 minutes
+                  </div>
+                </div>
+
+                {/* Session Timeline */}
+                <div className="bg-white/80 rounded-lg p-4 border border-blue-200 shadow-sm">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Clock className="h-4 w-4 text-blue-600" />
+                    <h5 className="font-semibold text-blue-700">Session Timeline</h5>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {currentAiPlan.activities.map((activity: any, index: number) => (
+                      <div key={index} className="bg-gray-50 border rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs font-medium min-w-fit">
+                            {activity.time}
+                          </div>
+                          <div className="flex-1">
+                            <h6 className="font-medium text-gray-900 mb-1">{activity.activity}</h6>
+                            <p className="text-gray-600 text-sm leading-relaxed">{activity.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Materials & Objectives */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="bg-white/80 rounded-lg p-4 border border-green-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Package className="h-4 w-4 text-green-600" />
+                      <h5 className="font-semibold text-green-700">Required Materials</h5>
+                    </div>
+                    <ul className="space-y-2">
+                      {currentAiPlan.materials.map((material: any, index: number) => (
+                        <li key={index} className="flex items-start gap-2 text-gray-700">
+                          <span className="text-green-500 mt-1">•</span>
+                          <span className="text-sm leading-relaxed">{material}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <div className="bg-white/80 rounded-lg p-4 border border-blue-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Target className="h-4 w-4 text-blue-600" />
+                      <h5 className="font-semibold text-blue-700">Session Objectives</h5>
+                    </div>
+                    <ul className="space-y-2">
+                      {currentAiPlan.objectives.map((objective: any, index: number) => (
+                        <li key={index} className="flex items-start gap-2 text-gray-700">
+                          <span className="text-blue-500 mt-1">•</span>
+                          <span className="text-sm leading-relaxed">{objective}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          {currentAiPlan && (
+            <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Sparkles className="h-4 w-4 text-purple-500" />
+                <span>Powered by Leon AI</span>
+              </div>
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    setCurrentAiPlan(null);
+                    setShowAiPlanModal(false);
+                  }}
+                >
+                  Close
+                </Button>
+                <Button 
+                  onClick={generateSessionPlan}
+                  disabled={aiPlanLoading}
+                  variant="outline"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Let Leon Replan
+                </Button>
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share Leon's Plan with Group
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Curriculum Planning Modal */}
+      {isGroupCreator() && (
+        <Dialog open={showCurriculumModal} onOpenChange={setShowCurriculumModal}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
+            {/* Header with purple gradient like Session Plan */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-br from-purple-50 to-blue-50">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <GraduationCap className="h-6 w-6 text-purple-600" />
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-serif font-semibold text-purple-700">Leon Semester Planner</h3>
+                  <p className="text-sm text-gray-600">Comprehensive curriculum planning</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+              {!semesterPlan ? (
+                <div className="space-y-6">
+                  {curriculumLoading ? (
+                    <div className="text-center py-12">
+                      {/* Subtle loading like AI Analysis */}
+                      <div className="flex items-center justify-center mb-6">
+                        <div className="relative">
+                          <GraduationCap className="h-12 w-12 text-purple-600" />
+                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-400 rounded-full animate-pulse"></div>
+                        </div>
+                      </div>
+                      
+                      <div className="text-sm text-purple-600 flex items-center justify-center gap-1 mb-6">
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <span className="ml-2">Leon is analyzing your curriculum and creating a plan...</span>
+                      </div>
+                      
+                      {/* Loading skeleton like AI Analysis */}
+                      <div className="space-y-4">
+                        <div className="bg-white/70 rounded-lg p-4 border border-purple-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-4 h-4 bg-purple-300 rounded animate-pulse"></div>
+                            <div className="w-32 h-4 bg-purple-300 rounded animate-pulse"></div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="w-full h-3 bg-purple-200 rounded animate-pulse"></div>
+                            <div className="w-5/6 h-3 bg-purple-200 rounded animate-pulse"></div>
+                            <div className="w-4/5 h-3 bg-purple-200 rounded animate-pulse"></div>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-white/70 rounded-lg p-4 border border-blue-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-4 h-4 bg-blue-300 rounded animate-pulse"></div>
+                            <div className="w-28 h-4 bg-blue-300 rounded animate-pulse"></div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="w-full h-3 bg-blue-200 rounded animate-pulse"></div>
+                            <div className="w-3/4 h-3 bg-blue-200 rounded animate-pulse"></div>
+                          </div>
+                        </div>
+
+                        <div className="bg-white/70 rounded-lg p-4 border border-purple-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-4 h-4 bg-purple-300 rounded animate-pulse"></div>
+                            <div className="w-24 h-4 bg-purple-300 rounded animate-pulse"></div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="w-full h-3 bg-purple-200 rounded animate-pulse"></div>
+                            <div className="w-2/3 h-3 bg-purple-200 rounded animate-pulse"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Introduction */}
+                      <div className="bg-white/80 rounded-lg p-6 border border-purple-200 shadow-sm">
+                        <div className="flex items-center gap-3 mb-3">
+                          <GraduationCap className="h-5 w-5 text-purple-600" />
+                          <h4 className="text-lg font-serif font-semibold text-purple-700">Semester Planning</h4>
+                        </div>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                          Let Leon Plan Your Semester
+                        </h3>
+                        <p className="text-gray-600 leading-relaxed">
+                          Enter your course curriculum and get a comprehensive semester study plan tailored for group learning.
+                        </p>
+                      </div>
+                      
+                      {/* Input Section */}
+                      <div className="space-y-4">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Course Curriculum & Learning Objectives
+                        </label>
+                        <textarea
+                          value={curriculumInput}
+                          onChange={(e) => setCurriculumInput(e.target.value)}
+                          placeholder="Paste your course curriculum, syllabus, or learning objectives here. Include topics, assignments, and any key information about the course structure..."
+                          className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                        />
+                        
+                        <Button 
+                          onClick={handleCurriculumSubmit}
+                          disabled={!curriculumInput.trim()}
+                          className="bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          <Brain className="h-4 w-4 mr-2" />
+                          Let Leon Plan This Semester
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Plan Overview */}
+                  <div className="bg-white/80 rounded-lg p-6 border border-purple-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <GraduationCap className="h-5 w-5 text-purple-600" />
+                      <h4 className="text-lg font-serif font-semibold text-purple-700">Leon's Semester Plan</h4>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                      Your Personalized Semester Plan
+                    </h3>
+                    <p className="text-gray-700 leading-relaxed">{semesterPlan.overview}</p>
+                  </div>
+
+                  {/* Weekly Breakdown */}
+                  <div className="bg-white/80 rounded-lg p-4 border border-blue-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Calendar className="h-4 w-4 text-blue-600" />
+                      <h5 className="font-semibold text-blue-700">8-Week Study Plan</h5>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {semesterPlan.weeks.map((week: any, index: number) => (
+                        <div key={index} className="bg-gray-50 border rounded-lg p-5">
+                          <div className="flex items-start gap-4">
+                            <div className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm font-medium min-w-fit">
+                              Week {week.week}
+                            </div>
+                            <div className="flex-1">
+                              <h6 className="font-medium text-gray-900 mb-2">{week.focus}</h6>
+                              <p className="text-gray-600 text-sm mb-3 leading-relaxed">{week.topics}</p>
+                              
+                              <div>
+                                <h6 className="text-sm font-medium text-gray-700 mb-1">Recommended Activities:</h6>
+                                <ul className="text-sm text-gray-600 space-y-1">
+                                  {week.activities.map((activity: any, actIndex: number) => (
+                                    <li key={actIndex} className="flex items-start gap-2">
+                                      <span className="text-blue-500 mt-1">•</span>
+                                      <span className="leading-relaxed">{activity}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Study Tips */}
+                  <div className="bg-white/80 rounded-lg p-4 border border-green-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Lightbulb className="h-4 w-4 text-green-600" />
+                      <h5 className="font-semibold text-green-700">Leon's Study Tips</h5>
+                    </div>
+                    <ul className="space-y-2">
+                      {semesterPlan.tips.map((tip: any, index: number) => (
+                        <li key={index} className="flex items-start gap-2 text-green-700">
+                          <span className="text-green-600 mt-1">✓</span>
+                          <span className="text-sm leading-relaxed">{tip}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {semesterPlan && (
+              <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Sparkles className="h-4 w-4 text-purple-500" />
+                  <span>Powered by Leon AI</span>
+                </div>
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setSemesterPlan(null);
+                      setShowCurriculumModal(false);
+                    }}
+                  >
+                    Close
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      setSemesterPlan(null);
+                      setCurriculumInput('');
+                    }}
+                    variant="outline"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Let Leon Replan
+                  </Button>
+                  <Button className="bg-purple-600 hover:bg-purple-700 text-white">
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share Leon's Plan with Group
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       )}
 
     </div>
