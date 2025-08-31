@@ -1,4 +1,60 @@
-# Ignore environment files
+# Environment files - NEVER commit these!
 .env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
+
+# Client environment files
+client/.env
 client/.env.local
+client/.env.development
+client/.env.test
+client/.env.production
+client/.env.staging
+client/.env.local.bak
+
+# Server environment files
 server/.env
+server/.env.local
+server/.env.development
+server/.env.test
+server/.env.production
+server/.env.staging
+
+# Database files
+server/db.sqlite3
+server/*.sqlite3
+
+# Python cache files
+server/__pycache__/
+server/**/__pycache__/
+server/**/*.pyc
+server/**/*.pyo
+
+# Node modules and build files
+client/node_modules/
+client/.next/
+client/out/
+client/build/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+client/npm-debug.log*
+client/yarn-debug.log*
+client/yarn-error.log*
+client/.pnpm-debug.log*
+
+# Other
+.vercel
