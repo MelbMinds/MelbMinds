@@ -67,17 +67,17 @@ export default function LeoChatbot() {
   ]
 
   return (
-  // render as a fixed right-side column so Leo can fill the empty right area in the hero
-  <div ref={containerRef} className="fixed z-50 top-24 right-16 bottom-6 flex items-center justify-end pointer-events-none">
+  // render as a right-side column positioned within the hero so Leo stays anchored to that section
+  <div ref={containerRef} className="absolute z-50 inset-y-0 right-0 flex items-center justify-end pointer-events-none">
       {/* Collapsed toggle (stays in DOM for smoother animation) */}
   {/* Collapsed right rail preview: fills the right area but stays subtle until opened */}
-  <div className={`absolute right-0 top-0 bottom-0 flex items-center justify-end transition-all duration-200 ease-out pointer-events-auto ${open ? "opacity-0 translate-x-full pointer-events-none" : "opacity-100 translate-x-0"}`}>
+  <div className={`absolute right-0 top-1/2 -translate-y-1/2 flex items-center justify-end transition-all duration-200 ease-out pointer-events-auto ${open ? "opacity-0 translate-x-full pointer-events-none" : "opacity-100 translate-x-0"}`}>
         {/* desktop rail */}
         <div
           onClick={() => setOpen(true)}
           role="button"
           aria-label="Open Leo chat"
-          className="hidden lg:flex w-[30vw] min-w-[280px] max-w-[420px] h-[62vh] mr-12 bg-gradient-to-br from-[#0b334a]/40 to-[#09293b]/30 border border-white/10 rounded-l-2xl backdrop-blur-md p-5 flex-col justify-center gap-3 cursor-pointer hover:from-[#0b3a54]/45 hover:to-[#083045]/35 shadow-[0_10px_30px_rgba(2,6,23,0.45)]"
+          className="hidden lg:flex w-[30vw] min-w-[280px] max-w-[420px] h-[62vh] mr-0 bg-gradient-to-br from-[#0b334a]/40 to-[#09293b]/30 border border-white/10 rounded-l-2xl backdrop-blur-md p-5 flex-col justify-center gap-3 cursor-pointer hover:from-[#0b3a54]/45 hover:to-[#083045]/35 shadow-[0_10px_30px_rgba(2,6,23,0.45)]"
         >
           <div className="flex items-start gap-3">
             <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-deep-blue font-bold text-lg shadow-sm">L</div>
@@ -93,7 +93,7 @@ export default function LeoChatbot() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Open Leo chat"
-          className="lg:hidden fixed z-50 right-8 bottom-6 w-14 h-14 rounded-full bg-gradient-to-br from-[#ffd27a] to-[#ffc34a] flex items-center justify-center text-deep-blue shadow-[0_8px_24px_rgba(2,6,23,0.3)] border border-white/20"
+          className="lg:hidden absolute z-50 right-2 bottom-6 w-14 h-14 rounded-full bg-gradient-to-br from-[#ffd27a] to-[#ffc34a] flex items-center justify-center text-deep-blue shadow-[0_8px_24px_rgba(2,6,23,0.3)] border border-white/20"
         >
           <div className="font-bold">L</div>
         </button>
@@ -101,11 +101,11 @@ export default function LeoChatbot() {
 
       {/* Expanded panel (also remains in DOM for animation) */}
       {/* Expanded panel: slide in/out from the right and occupy the right column */}
-      <div className={`absolute right-0 top-0 bottom-0 transform transition-transform duration-300 ease-out pointer-events-auto ${open ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"}`}>
+  <div className={`absolute -right-24 top-1/2 -translate-y-1/2 transform transition-transform duration-300 ease-out pointer-events-auto ${open ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"}`}>
         <div
           role="dialog"
           aria-modal="true"
-          className="w-[46vw] max-w-[780px] min-w-[320px] h-full bg-gradient-to-br from-[#072033]/70 to-[#082d45]/60 border-l border-white/10 rounded-l-2xl shadow-[0_20px_60px_rgba(2,6,23,0.6)] backdrop-blur-md p-6 flex flex-col"
+          className="w-[46vw] max-w-[780px] min-w-[320px] h-[62vh] bg-gradient-to-br from-[#072033]/70 to-[#082d45]/60 border-l border-white/10 rounded-l-2xl shadow-[0_20px_60px_rgba(2,6,23,0.6)] backdrop-blur-md p-6 flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-3">
