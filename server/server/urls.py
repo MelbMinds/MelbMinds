@@ -61,6 +61,7 @@ urlpatterns = [
     path('api/groups/messages/<int:message_id>/', views.message_detail, name='message_detail'),
     path('api/files/<int:file_id>/delete/', views.GroupFileDeleteView.as_view(), name='file_delete'),
     path('api/files/<int:file_id>/download/', views.GroupFileDownloadView.as_view(), name='file_download'),
+    path('api/files/<int:file_id>/preview/', views.GroupFilePreviewView.as_view(), name='file_preview'),
 ]
 
 urlpatterns += [

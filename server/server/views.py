@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status, generics, serializers
 from django.contrib.auth import authenticate
 from django.db.models import Q
+from django.views import View
 from .serializers import UserSerializer, GroupSerializer, GroupDetailSerializer, UserProfileSerializer, MessageSerializer, GroupSessionSerializer, GroupFileSerializer, GroupRatingSerializer, FlashcardFolderSerializer, FlashcardSerializer
 from .models import Group, Message, GroupSession, CompletedSessionCounter, GroupNotification, GroupFile, GroupRating, PendingRegistration, FlashcardFolder, Flashcard
 from rest_framework.permissions import IsAuthenticated
@@ -1371,6 +1372,169 @@ class GroupFileDownloadView(APIView):
             
         except GroupFile.DoesNotExist:
             return Response({'detail': 'File not found'}, status=status.HTTP_404_NOT_FOUND)
+
+from django.views.decorators.clickjacking import xframe_options_exempt
+from django.utils.decorators import method_decorator
+
+@method_decorator(xframe_options_exempt, name='get')
+class GroupFilePreviewView(View):
+    def get(self, request, file_id):
+        """Preview a file (inline display)"""
+        from django.http import HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect, HttpResponseServerError
+        from rest_framework_simplejwt.authentication import JWTAuthentication
+        from rest_framework.exceptions import AuthenticationFailed
+        from django.contrib.auth.models import AnonymousUser
+        
+        # Manual JWT authentication since we're not using APIView
+        jwt_auth = JWTAuthentication()
+        user = None
+        
+        # Method 1: Try Authorization header (for fetch requests)
+        try:
+            user_auth = jwt_auth.authenticate(request)
+            if user_auth:
+                user, token = user_auth
+                request.user = user
+        except (AuthenticationFailed, Exception):
+            pass
+        
+        # Method 2: Try token from query parameter (for direct browser access like img src, iframe src)
+        if not user:
+            token_param = request.GET.get('token')
+            if token_param:
+                try:
+                    from rest_framework_simplejwt.tokens import UntypedToken
+                    from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+                    from django.contrib.auth import get_user_model
+                    
+                    User = get_user_model()
+                    
+                    # Validate the token
+                    UntypedToken(token_param)
+                    # Decode the token to get user info
+                    from rest_framework_simplejwt.tokens import AccessToken
+                    
+                    access_token = AccessToken(token_param)
+                    user_id = access_token['user_id']
+                    user = User.objects.get(id=user_id)
+                    request.user = user
+                except (InvalidToken, TokenError, User.DoesNotExist, Exception) as e:
+                    print(f"DEBUG: Token parameter authentication failed: {e}")
+        
+        # If still no authenticated user, reject
+        if not user or isinstance(user, AnonymousUser) or not user.is_authenticated:
+            return HttpResponseForbidden('Authentication required. Please include token in URL or header.')
+        
+        try:
+            file_obj = GroupFile.objects.get(id=file_id)
+            print(f"DEBUG: Preview request for file: {file_obj.original_filename}")
+            print(f"DEBUG: User requesting: {request.user.email if hasattr(request.user, 'email') else 'Unknown'}")
+            print(f"DEBUG: Group members: {[m.email for m in file_obj.group.members.all()]}")
+            print(f"DEBUG: Group creator: {file_obj.group.creator.email if hasattr(file_obj.group.creator, 'email') else 'Unknown'}")
+            
+            # Check if user is a member or creator of the group
+            is_member = request.user in file_obj.group.members.all()
+            is_creator = request.user == file_obj.group.creator
+            
+            print(f"DEBUG: Is member: {is_member}, Is creator: {is_creator}")
+            
+            if not (is_member or is_creator):
+                return HttpResponseForbidden('Access denied - not a group member')
+            
+            if not file_obj.file:
+                return HttpResponseNotFound('File not found')
+            
+            # Get file extension to determine content type
+            extension = file_obj.original_filename.split('.')[-1].lower() if '.' in file_obj.original_filename else ''
+            
+            # Map extensions to content types
+            content_type_map = {
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'png': 'image/png',
+                'gif': 'image/gif',
+                'pdf': 'application/pdf',
+                'txt': 'text/plain',
+                'html': 'text/html',
+                'css': 'text/css',
+                'js': 'text/javascript',
+                'json': 'application/json',
+                'xml': 'text/xml',
+                'svg': 'image/svg+xml',
+                'mp4': 'video/mp4',
+                'webm': 'video/webm',
+                'ogg': 'video/ogg',
+                'mp3': 'audio/mpeg',
+                'wav': 'audio/wav',
+                'oga': 'audio/ogg',
+            }
+            
+            content_type = content_type_map.get(extension, 'application/octet-stream')
+            
+            # For S3 files, generate pre-signed URL for inline viewing
+            if hasattr(file_obj.file, 'url'):
+                import boto3
+                from django.conf import settings
+                print(f"DEBUG: Generating preview URL for S3 file")
+                
+                try:
+                    bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'melbmindsbucket')
+                    file_path = file_obj.file.name
+                    
+                    # Create S3 client
+                    s3_client = boto3.client(
+                        's3',
+                        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                        region_name=settings.AWS_S3_REGION_NAME
+                    )
+                    
+                    # For preview, we want inline display (no download prompt)
+                    params = {
+                        'Bucket': bucket_name,
+                        'Key': file_path,
+                        'ResponseContentType': content_type,
+                    }
+                    
+                    # Only add content disposition for non-previewable files
+                    if content_type not in ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain']:
+                        params['ResponseContentDisposition'] = f'inline; filename="{file_obj.original_filename}"'
+                    
+                    # Generate pre-signed URL for inline viewing
+                    file_url = s3_client.generate_presigned_url(
+                        'get_object',
+                        Params=params,
+                        ExpiresIn=3600  # 60 minutes
+                    )
+                    
+                    print(f"DEBUG: Generated preview URL successfully")
+                    # Return redirect to the pre-signed URL for direct access
+                    return HttpResponseRedirect(file_url)
+                    
+                except Exception as s3_error:
+                    print(f"DEBUG: Error generating preview URL: {s3_error}")
+                    return HttpResponseServerError(f'Error accessing file: {str(s3_error)}')
+            else:
+                # For local files, serve directly with appropriate content type
+                try:
+                    with file_obj.file.open('rb') as f:
+                        file_content = f.read()
+                    
+                    response = HttpResponse(file_content, content_type=content_type)
+                    
+                    # For previewable files, use inline disposition
+                    if content_type.startswith(('image/', 'text/', 'application/pdf')):
+                        response['Content-Disposition'] = f'inline; filename="{file_obj.original_filename}"'
+                    else:
+                        response['Content-Disposition'] = f'attachment; filename="{file_obj.original_filename}"'
+                    
+                    return response
+                except Exception as e:
+                    print(f"DEBUG: Error serving local file: {e}")
+                    return HttpResponseNotFound('File not accessible')
+            
+        except GroupFile.DoesNotExist:
+            return HttpResponseNotFound('File not found')
 
 class GroupFileDeleteView(APIView):
     permission_classes = [IsAuthenticated]

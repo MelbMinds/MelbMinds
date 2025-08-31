@@ -1631,9 +1631,108 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }, 2000 + Math.random() * 1000); // 2-3 seconds delay for realism
   };
 
+  // Text file preview component
+  const TextFilePreview = ({ file }: { file: any }) => {
+    const [textContent, setTextContent] = useState<string>('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+      const fetchTextContent = async () => {
+        try {
+          const token = tokens?.access || localStorage.getItem('access_token');
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/download/?token=${token}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          
+          if (response.ok) {
+            const text = await response.text();
+            setTextContent(text.slice(0, 5000)); // Limit to first 5000 characters
+          } else {
+            setError('Failed to load file content');
+          }
+        } catch (err) {
+          setError('Error loading file');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchTextContent();
+    }, [file.id]);
+
+    if (loading) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded-lg">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-deep-blue mx-auto mb-4"></div>
+            <p className="text-gray-500">Loading text content...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
+          <FileText className="h-16 w-16 mb-4 text-gray-400" />
+          <h3 className="text-lg font-medium text-gray-700 mb-2">Text Document</h3>
+          <p className="text-gray-500 text-center mb-4">{file.original_filename}</p>
+          <p className="text-sm text-red-500 text-center mb-4">{error}</p>
+          <Button 
+            onClick={() => handleFileDownload(file)}
+            className="bg-deep-blue hover:bg-deep-blue/90"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Download to View
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="w-full h-full bg-white rounded-lg overflow-hidden">
+        <div className="bg-gray-50 px-4 py-2 border-b flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <FileText className="h-4 w-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">{file.original_filename}</span>
+          </div>
+          <Button 
+            size="sm"
+            onClick={() => handleFileDownload(file)}
+            className="bg-deep-blue hover:bg-deep-blue/90"
+          >
+            <Download className="h-3 w-3 mr-1" />
+            Download
+          </Button>
+        </div>
+        <div className="p-4 h-full overflow-auto">
+          <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono leading-relaxed">
+            {textContent}
+            {textContent.length >= 5000 && (
+              <div className="mt-4 p-4 bg-gray-100 rounded-lg text-center">
+                <p className="text-gray-600 mb-2">Preview limited to first 5000 characters</p>
+                <Button 
+                  onClick={() => handleFileDownload(file)}
+                  className="bg-deep-blue hover:bg-deep-blue/90"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Full File
+                </Button>
+              </div>
+            )}
+          </pre>
+        </div>
+      </div>
+    );
+  };
+
   // Get file preview content based on type
   const getFilePreviewContent = (file: any) => {
     const extension = file.original_filename.split('.').pop()?.toLowerCase();
+    const token = tokens?.access || localStorage.getItem('access_token');
     
     switch (extension) {
       case 'jpg':
@@ -1641,9 +1740,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       case 'png':
       case 'gif':
         return (
-          <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded-lg">
+          <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded-lg overflow-hidden">
             <img 
-              src={`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/preview/`}
+              src={`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/preview/?token=${token}`}
               alt={file.original_filename}
               className="max-w-full max-h-full object-contain rounded-lg"
               onError={(e) => {
@@ -1654,80 +1753,264 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             <div className="hidden flex-col items-center justify-center text-gray-500">
               <FileImage className="h-16 w-16 mb-4 text-gray-400" />
               <p>Image preview not available</p>
+              <Button 
+                onClick={() => handleFileDownload(file)}
+                className="mt-4 bg-deep-blue hover:bg-deep-blue/90"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download to View
+              </Button>
             </div>
           </div>
         );
       
       case 'pdf':
         return (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
-            <FileText className="h-16 w-16 mb-4 text-red-500" />
-            <h3 className="text-lg font-medium text-gray-700 mb-2">PDF Document</h3>
-            <p className="text-gray-500 text-center mb-4">
-              {file.original_filename}
-            </p>
-            <p className="text-sm text-gray-400 text-center">
-              PDF preview coming soon. Click download to view the full document.
-            </p>
+          <div className="w-full h-full bg-gray-50 rounded-lg overflow-hidden">
+            <iframe
+              src={`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/preview/?token=${token}`}
+              className="w-full h-full border-0"
+              title={file.original_filename}
+              onError={(e) => {
+                (e.target as HTMLIFrameElement).style.display = 'none';
+                (e.target as HTMLIFrameElement).nextElementSibling!.className = 'flex flex-col items-center justify-center text-gray-500 h-full';
+              }}
+            />
+            <div className="hidden flex-col items-center justify-center text-gray-500 h-full">
+              <FileText className="h-16 w-16 mb-4 text-red-500" />
+              <h3 className="text-lg font-medium text-gray-700 mb-2">PDF Document</h3>
+              <p className="text-gray-500 text-center mb-4">
+                {file.original_filename}
+              </p>
+              <p className="text-sm text-gray-400 text-center mb-4">
+                PDF preview not available in this browser.
+              </p>
+              <Button 
+                onClick={() => handleFileDownload(file)}
+                className="bg-deep-blue hover:bg-deep-blue/90"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download to View
+              </Button>
+            </div>
           </div>
         );
+
+      case 'txt':
+        return <TextFilePreview file={file} />;
 
       case 'doc':
       case 'docx':
         return (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
-            <FileText className="h-16 w-16 mb-4 text-blue-500" />
-            <h3 className="text-lg font-medium text-gray-700 mb-2">Word Document</h3>
-            <p className="text-gray-500 text-center mb-4">
-              {file.original_filename}
-            </p>
-            <p className="text-sm text-gray-400 text-center">
-              Document preview coming soon. Click download to view the full content.
-            </p>
+          <div className="w-full h-full bg-gray-50 rounded-lg overflow-hidden">
+            {/* Try to embed with Office Online or Google Docs Viewer */}
+            <iframe
+              src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/download/?token=${token}`)}`}
+              className="w-full h-full border-0"
+              title={file.original_filename}
+              onError={(e) => {
+                (e.target as HTMLIFrameElement).style.display = 'none';
+                (e.target as HTMLIFrameElement).nextElementSibling!.className = 'flex flex-col items-center justify-center text-gray-500 h-full';
+              }}
+            />
+            <div className="hidden flex-col items-center justify-center text-gray-500 h-full">
+              <FileText className="h-16 w-16 mb-4 text-blue-500" />
+              <h3 className="text-lg font-medium text-gray-700 mb-2">Word Document</h3>
+              <p className="text-gray-500 text-center mb-4">
+                {file.original_filename}
+              </p>
+              <div className="bg-white rounded-lg p-4 mb-4 max-w-md mx-4 shadow-sm border">
+                <h4 className="font-semibold text-gray-700 mb-2">Document Preview</h4>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="h-3 bg-gray-200 rounded w-full"></div>
+                  <div className="h-3 bg-gray-200 rounded w-5/6"></div>
+                  <div className="h-3 bg-gray-200 rounded w-4/5"></div>
+                  <div className="h-2 my-3"></div>
+                  <div className="h-3 bg-gray-200 rounded w-full"></div>
+                  <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-3 bg-gray-200 rounded w-5/6"></div>
+                  <div className="h-2 my-3"></div>
+                  <div className="h-3 bg-gray-200 rounded w-4/5"></div>
+                  <div className="h-3 bg-gray-200 rounded w-full"></div>
+                </div>
+              </div>
+              <Button 
+                onClick={() => handleFileDownload(file)}
+                className="bg-deep-blue hover:bg-deep-blue/90"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download to View Full Document
+              </Button>
+            </div>
           </div>
         );
 
       case 'ppt':
       case 'pptx':
         return (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
-            <Presentation className="h-16 w-16 mb-4 text-orange-500" />
-            <h3 className="text-lg font-medium text-gray-700 mb-2">PowerPoint Presentation</h3>
-            <p className="text-gray-500 text-center mb-4">
-              {file.original_filename}
-            </p>
-            <p className="text-sm text-gray-400 text-center">
-              Presentation preview coming soon. Click download to view all slides.
-            </p>
+          <div className="w-full h-full bg-gray-50 rounded-lg overflow-hidden">
+            <iframe
+              src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/download/?token=${token}`)}`}
+              className="w-full h-full border-0"
+              title={file.original_filename}
+              onError={(e) => {
+                (e.target as HTMLIFrameElement).style.display = 'none';
+                (e.target as HTMLIFrameElement).nextElementSibling!.className = 'flex flex-col items-center justify-center text-gray-500 h-full';
+              }}
+            />
+            <div className="hidden flex-col items-center justify-center text-gray-500 h-full">
+              <Presentation className="h-16 w-16 mb-4 text-orange-500" />
+              <h3 className="text-lg font-medium text-gray-700 mb-2">PowerPoint Presentation</h3>
+              <p className="text-gray-500 text-center mb-4">
+                {file.original_filename}
+              </p>
+              <div className="bg-white rounded-lg p-4 mb-4 max-w-md mx-4 shadow-sm border">
+                <h4 className="font-semibold text-gray-700 mb-3">Slide Preview</h4>
+                <div className="space-y-3">
+                  <div className="bg-gradient-to-r from-orange-100 to-red-100 p-3 rounded border-l-4 border-orange-400">
+                    <div className="h-4 bg-orange-200 rounded w-3/4 mb-2"></div>
+                    <div className="h-2 bg-orange-200 rounded w-1/2"></div>
+                  </div>
+                  <div className="bg-gradient-to-r from-blue-100 to-purple-100 p-3 rounded border-l-4 border-blue-400">
+                    <div className="h-4 bg-blue-200 rounded w-2/3 mb-2"></div>
+                    <div className="h-2 bg-blue-200 rounded w-3/4"></div>
+                  </div>
+                  <div className="bg-gradient-to-r from-green-100 to-teal-100 p-3 rounded border-l-4 border-green-400">
+                    <div className="h-4 bg-green-200 rounded w-4/5 mb-2"></div>
+                    <div className="h-2 bg-green-200 rounded w-2/3"></div>
+                  </div>
+                </div>
+              </div>
+              <Button 
+                onClick={() => handleFileDownload(file)}
+                className="bg-deep-blue hover:bg-deep-blue/90"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download to View All Slides
+              </Button>
+            </div>
           </div>
         );
 
       case 'xls':
       case 'xlsx':
         return (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
-            <FileSpreadsheet className="h-16 w-16 mb-4 text-green-500" />
-            <h3 className="text-lg font-medium text-gray-700 mb-2">Excel Spreadsheet</h3>
-            <p className="text-gray-500 text-center mb-4">
-              {file.original_filename}
-            </p>
-            <p className="text-sm text-gray-400 text-center">
-              Spreadsheet preview coming soon. Click download to view the data.
-            </p>
+          <div className="w-full h-full bg-gray-50 rounded-lg overflow-hidden">
+            <iframe
+              src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/download/?token=${token}`)}`}
+              className="w-full h-full border-0"
+              title={file.original_filename}
+              onError={(e) => {
+                (e.target as HTMLIFrameElement).style.display = 'none';
+                (e.target as HTMLIFrameElement).nextElementSibling!.className = 'flex flex-col items-center justify-center text-gray-500 h-full';
+              }}
+            />
+            <div className="hidden flex-col items-center justify-center text-gray-500 h-full">
+              <FileSpreadsheet className="h-16 w-16 mb-4 text-green-500" />
+              <h3 className="text-lg font-medium text-gray-700 mb-2">Excel Spreadsheet</h3>
+              <p className="text-gray-500 text-center mb-4">
+                {file.original_filename}
+              </p>
+              <div className="bg-white rounded-lg p-4 mb-4 max-w-md mx-4 shadow-sm border">
+                <h4 className="font-semibold text-gray-700 mb-3">Data Preview</h4>
+                <div className="overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-green-100">
+                        <th className="p-1 border border-green-200 bg-green-200 rounded-tl"></th>
+                        <th className="p-1 border border-green-200 bg-green-200">A</th>
+                        <th className="p-1 border border-green-200 bg-green-200">B</th>
+                        <th className="p-1 border border-green-200 bg-green-200 rounded-tr">C</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="p-1 border border-gray-300 bg-green-100 font-semibold">1</td>
+                        <td className="p-1 border border-gray-300 bg-gray-100"></td>
+                        <td className="p-1 border border-gray-300 bg-gray-100"></td>
+                        <td className="p-1 border border-gray-300 bg-gray-100"></td>
+                      </tr>
+                      <tr>
+                        <td className="p-1 border border-gray-300 bg-green-100 font-semibold">2</td>
+                        <td className="p-1 border border-gray-300 bg-gray-100"></td>
+                        <td className="p-1 border border-gray-300 bg-gray-100"></td>
+                        <td className="p-1 border border-gray-300 bg-gray-100"></td>
+                      </tr>
+                      <tr>
+                        <td className="p-1 border border-gray-300 bg-green-100 font-semibold">3</td>
+                        <td className="p-1 border border-gray-300 bg-gray-100"></td>
+                        <td className="p-1 border border-gray-300 bg-gray-100"></td>
+                        <td className="p-1 border border-gray-300 bg-gray-100 rounded-br"></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <Button 
+                onClick={() => handleFileDownload(file)}
+                className="bg-deep-blue hover:bg-deep-blue/90"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download to View Data
+              </Button>
+            </div>
           </div>
         );
 
-      case 'txt':
+      case 'mp4':
+      case 'avi':
+      case 'mov':
+      case 'webm':
         return (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
-            <FileText className="h-16 w-16 mb-4 text-gray-500" />
-            <h3 className="text-lg font-medium text-gray-700 mb-2">Text Document</h3>
-            <p className="text-gray-500 text-center mb-4">
-              {file.original_filename}
-            </p>
-            <p className="text-sm text-gray-400 text-center">
-              Text preview coming soon. Click download to view the content.
-            </p>
+          <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded-lg">
+            <video 
+              controls
+              className="max-w-full max-h-full rounded-lg shadow-lg"
+              src={`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/preview/?token=${token}`}
+              onError={(e) => {
+                (e.target as HTMLVideoElement).style.display = 'none';
+                (e.target as HTMLVideoElement).nextElementSibling!.className = 'flex flex-col items-center justify-center text-gray-500';
+              }}
+            >
+              Your browser does not support the video tag.
+            </video>
+            <div className="hidden flex-col items-center justify-center text-gray-500">
+              <File className="h-16 w-16 mb-4 text-gray-400" />
+              <p>Video preview not available</p>
+              <Button 
+                onClick={() => handleFileDownload(file)}
+                className="mt-4 bg-deep-blue hover:bg-deep-blue/90"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download to View
+              </Button>
+            </div>
+          </div>
+        );
+
+      case 'mp3':
+      case 'wav':
+      case 'ogg':
+        return (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-8">
+            <div className="text-6xl mb-6">🎵</div>
+            <h3 className="text-lg font-medium text-gray-700 mb-4">{file.original_filename}</h3>
+            <audio 
+              controls
+              className="mb-6"
+              src={`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/preview/?token=${token}`}
+            >
+              Your browser does not support the audio element.
+            </audio>
+            <div className="flex gap-3">
+              <Button 
+                onClick={() => handleFileDownload(file)}
+                className="bg-deep-blue hover:bg-deep-blue/90"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </Button>
+            </div>
           </div>
         );
 
@@ -1739,9 +2022,16 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             <p className="text-gray-500 text-center mb-4">
               {file.original_filename}
             </p>
-            <p className="text-sm text-gray-400 text-center">
-              Preview not available for this file type. Click download to open the file.
+            <p className="text-sm text-gray-400 text-center mb-4">
+              Preview not available for this file type.
             </p>
+            <Button 
+              onClick={() => handleFileDownload(file)}
+              className="bg-deep-blue hover:bg-deep-blue/90"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download to Open
+            </Button>
           </div>
         );
     }
