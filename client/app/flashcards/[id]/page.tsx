@@ -63,7 +63,13 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
   const { user, tokens, refreshToken } = useUser()
 
   useEffect(() => {
-    if (!user || !tokens?.access) return
+    // Only try API if we have authentication
+    if (!user || !tokens?.access) {
+      setError("Please log in to view flashcards");
+      setLoading(false);
+      return;
+    }
+    
     fetchFolderData()
   }, [user, tokens, id])
 
@@ -72,18 +78,25 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
     
     setLoading(true)
     setError(null)
+    
     try {
+      console.log(`Fetching flashcard folder with ID: ${id}`);
       const res = await apiRequest(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/folders/${id}/`, {}, tokens, refreshToken)
       
-      if (!res.ok) throw new Error("Failed to fetch folder")
-      
-      const data = await res.json()
-      setFolder(data.folder)
-      setFlashcards(data.flashcards)
-      setError(null)
+      if (res.ok) {
+        const data = await res.json()
+        console.log('Received folder data:', data);
+        setFolder(data.folder)
+        setFlashcards(data.flashcards)
+        setError(null)
+      } else {
+        const errorText = await res.text();
+        console.error('API error:', res.status, errorText);
+        throw new Error("Failed to fetch folder")
+      }
     } catch (err) {
+      console.error('Fetch error:', err);
       setError("Failed to load flashcard folder")
-      console.error(err)
     } finally {
       setLoading(false)
     }
@@ -690,13 +703,18 @@ export default function FlashcardFolderPage({ params }: { params: Promise<{ id: 
 
       {flashcards.length === 0 ? (
         <div className="text-center py-12">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No flashcards yet</h3>
-          <p className="text-gray-600 mb-4">Create your first flashcard to get started</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No flashcards found</h3>
+          <p className="text-gray-600 mb-4">
+            {folder?.name ? `The folder "${folder.name}" appears to be empty.` : 'This folder does not contain any flashcards yet.'}
+          </p>
+          <p className="text-sm text-gray-500">
+            Flashcards should be automatically created when the folder is made. Please try creating a new folder.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {flashcards.map((flashcard) => (
-            <Card key={flashcard.id} className="group hover:shadow-lg transition-shadow">
+          {flashcards.map((flashcard, index) => (
+            <Card key={flashcard.id || `flashcard-${index}`} className="group hover:shadow-lg transition-shadow">
               <CardContent className="p-6">
                 <div className="mb-4">
                   <h3 className="font-semibold text-gray-900 mb-2">Question:</h3>

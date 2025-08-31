@@ -42,6 +42,10 @@ import {
   Presentation,
   Sparkles,
   X,
+  Package,
+  Target,
+  GraduationCap,
+  Lightbulb,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
@@ -299,6 +303,16 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   // Add state for loading join per session
   const [joiningSessionId, setJoiningSessionId] = useState<number | null>(null);
 
+  // AI Planning state
+  const [showAiPlanModal, setShowAiPlanModal] = useState(false)
+  const [selectedSessionForAi, setSelectedSessionForAi] = useState<any>(null)
+  const [aiPlanLoading, setAiPlanLoading] = useState(false)
+  const [currentAiPlan, setCurrentAiPlan] = useState<any>(null)
+  const [showCurriculumModal, setShowCurriculumModal] = useState(false)
+  const [curriculumInput, setCurriculumInput] = useState("")
+  const [semesterPlan, setSemesterPlan] = useState<any>(null)
+  const [curriculumLoading, setCurriculumLoading] = useState(false)
+
   const [sessionsLoading, setSessionsLoading] = useState(false);
 
   // Add state for share link UI
@@ -315,6 +329,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const [previewFile, setPreviewFile] = useState<any>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiSummary, setAiSummary] = useState<string>('');
+  const [creatingFlashcards, setCreatingFlashcards] = useState(false);
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -946,7 +961,20 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         body: JSON.stringify({ topic, date, start_time, end_time, location, meeting_format: type, description: fullDescription, extra_details: extraDetails }),
       });
       if (res.ok) {
-        setSessionForm({ topic: '', date: '', startTime: '', endTime: '', type: '', location: '', extraDetails: '', description: '' });
+        setSessionForm({ 
+          topic: '', 
+          date: '', 
+          startTime: '', 
+          endTime: '', 
+          type: '', 
+          location: '', 
+          extraDetails: '', 
+          description: '',
+          startHour: '',
+          startMinute: '',
+          endHour: '',
+          endMinute: '',
+        });
         setShowSessionModal(false);
         toastSuccess({ title: 'Session created!' });
         // Refresh sessions after creation
@@ -1557,48 +1585,48 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     // Mock AI summaries based on file type and content hints
     const summaries = {
       pdf: [
-        "This appears to be a comprehensive study guide covering key concepts in the subject. The document is well-structured with clear headings and bullet points, making it ideal for revision. I've identified several important topics that align with typical exam questions.",
-        "This document contains detailed lecture notes with diagrams and examples. The content appears to be from a recent semester and includes practical applications of theoretical concepts. Perfect for group study sessions.",
-        "This is a research paper or academic article with citations and references. The document provides in-depth analysis and could be valuable for understanding advanced concepts in your course."
+        "This appears to be a comprehensive study guide covering key concepts in the subject. The document is well-structured with clear headings and bullet points, making it ideal for revision. I've identified several important topics that would be perfect for creating focused flashcards to help with memorization.",
+        "This document contains detailed lecture notes with diagrams and examples. The content appears to be from a recent semester and includes practical applications of theoretical concepts. Perfect for group study sessions and would generate excellent study flashcards covering both theory and application.",
+        "This is a research paper or academic article with citations and references. The document provides in-depth analysis and could be valuable for understanding advanced concepts. I can extract key findings and methodology that would make great flashcard questions for deeper learning."
       ],
       doc: [
-        "This Word document contains organized notes with a clear structure. I can see headings, subheadings, and key points that would be useful for collaborative study. The formatting suggests it's designed for easy reading and reference.",
-        "This appears to be an assignment template or study outline. The document includes guidelines and formatting that could help the group standardize their work and approach to similar tasks."
+        "This Word document contains organized notes with a clear structure. I can see headings, subheadings, and key points that would be useful for collaborative study. The formatting suggests it's designed for easy reading and would convert beautifully into study flashcards with clear questions and detailed answers.",
+        "This appears to be an assignment template or study outline. The document includes guidelines and formatting that could help the group standardize their work. The structured content would be perfect for creating flashcards that break down complex processes into manageable study chunks."
       ],
       docx: [
-        "This document contains well-formatted academic content with proper citations. The structure suggests it's either lecture notes or a study guide that could benefit the entire group's understanding of the subject.",
-        "I've analyzed this document and found it contains comprehensive coverage of course topics with examples and explanations. It's an excellent resource for group discussions and exam preparation."
+        "This document contains well-formatted academic content with proper citations. The structure suggests it's either lecture notes or a study guide that could benefit the entire group's understanding. I can identify key concepts that would make excellent flashcard questions for effective studying.",
+        "I've analyzed this document and found it contains comprehensive coverage of course topics with examples and explanations. It's an excellent resource for group discussions and would generate high-quality flashcards covering both fundamental concepts and practical applications."
       ],
       ppt: [
-        "This PowerPoint presentation contains visual slides that effectively communicate key concepts. The slides are well-designed with a good balance of text and visuals, making complex topics easier to understand.",
-        "This presentation appears to be from a lecture or study session. It includes diagrams, charts, and bullet points that would be great for group review sessions and visual learners."
+        "This PowerPoint presentation contains visual slides that effectively communicate key concepts. The slides are well-designed with a good balance of text and visuals, making complex topics easier to understand. Each slide could be transformed into focused flashcards that maintain the visual learning benefits.",
+        "This presentation appears to be from a lecture or study session. It includes diagrams, charts, and bullet points that would be great for group review sessions. The structured slide format is perfect for creating flashcards that capture both visual elements and key textual information."
       ],
       pptx: [
-        "This presentation contains engaging visual content with clear explanations. The slides progress logically through the topic and include helpful diagrams that could enhance group understanding.",
-        "I've identified this as a comprehensive presentation covering multiple subtopics. The visual elements and structure make it perfect for group presentations and collaborative learning."
+        "This presentation contains engaging visual content with clear explanations. The slides progress logically through the topic and include helpful diagrams that could enhance group understanding. I can extract the main points from each slide to create comprehensive flashcards that preserve the learning flow.",
+        "I've identified this as a comprehensive presentation covering multiple subtopics. The visual elements and structure make it perfect for group presentations and would generate diverse flashcards covering different learning styles - visual, textual, and conceptual."
       ],
       txt: [
-        "This text file contains raw notes or data that could be useful for analysis. While simple in format, the content appears relevant to your study group's objectives.",
-        "This document contains structured text information that could serve as a reference or quick lookup guide for the group."
+        "This text file contains raw notes or data that could be useful for analysis. While simple in format, the content appears relevant to your study group's objectives and could be organized into clear question-answer flashcards for quick review sessions.",
+        "This document contains structured text information that could serve as a reference or quick lookup guide for the group. The organized format makes it ideal for creating flashcards that help memorize key facts and definitions."
       ],
       xlsx: [
-        "This Excel spreadsheet contains organized data with calculations and formulas. The structure suggests it's designed for analysis or tracking progress, which could be valuable for group projects.",
-        "I've identified this as a data analysis file with charts and calculations. This could be extremely useful for understanding quantitative aspects of your coursework."
+        "This Excel spreadsheet contains organized data with calculations and formulas. The structure suggests it's designed for analysis or tracking progress, which could be valuable for group projects. I can create flashcards focusing on data interpretation skills and formula understanding.",
+        "I've identified this as a data analysis file with charts and calculations. This could be extremely useful for understanding quantitative aspects of your coursework and would generate excellent flashcards covering statistical concepts, formula applications, and data analysis techniques."
       ],
       xls: [
-        "This spreadsheet contains numerical data and formulas that appear to be course-related. The organization suggests it's designed for collaborative analysis and could enhance group understanding of data concepts."
+        "This spreadsheet contains numerical data and formulas that appear to be course-related. The organization suggests it's designed for collaborative analysis and could enhance group understanding of data concepts. Perfect for creating flashcards that test both calculation skills and conceptual understanding."
       ],
       jpg: [
-        "This image appears to contain visual information relevant to your studies. It could be a diagram, chart, or photograph that supports the group's learning objectives.",
-        "I've analyzed this image and identified it as educational content that could enhance visual understanding of course concepts."
+        "This image appears to contain visual information relevant to your studies. It could be a diagram, chart, or photograph that supports the group's learning objectives. Visual content like this is excellent for creating image-based flashcards that test visual recognition and interpretation skills.",
+        "I've analyzed this image and identified it as educational content that could enhance visual understanding of course concepts. This would be perfect for creating flashcards that combine visual elements with descriptive questions."
       ],
       jpeg: [
-        "This image contains visual educational content that could be valuable for group discussions. Visual materials often help explain complex concepts more effectively.",
-        "This appears to be a diagram or educational image that could serve as a helpful reference during group study sessions."
+        "This image contains visual educational content that could be valuable for group discussions. Visual materials often help explain complex concepts more effectively and would create engaging flashcards that appeal to visual learners.",
+        "This appears to be a diagram or educational image that could serve as a helpful reference during group study sessions. The visual content would translate well into flashcards that test both recognition and understanding."
       ],
       png: [
-        "This image file contains clear visual content that appears educational in nature. Visual aids like this are excellent for group learning and concept explanation.",
-        "I've identified this as a high-quality educational image that could enhance understanding of course materials through visual representation."
+        "This image file contains clear visual content that appears educational in nature. Visual aids like this are excellent for group learning and concept explanation, and would generate high-quality flashcards that leverage visual memory techniques.",
+        "I've identified this as a high-quality educational image that could enhance understanding of course materials through visual representation. Perfect for creating flashcards that combine visual cues with conceptual questions."
       ]
     };
 
@@ -1609,7 +1637,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
 
     // Default summary for unknown file types
-    return "I've analyzed this file and determined it contains educational content relevant to your study group. While I can't preview the specific format, the filename suggests it's a valuable resource for collaborative learning.";
+    return "I've analyzed this file and determined it contains educational content relevant to your study group. While I can't preview the specific format, the filename suggests it's a valuable resource for collaborative learning and would be excellent for creating custom flashcards to help reinforce key concepts.";
   };
 
   // Handle file preview with AI summary
@@ -1625,6 +1653,203 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       setAiSummary(summary);
       setAiSummaryLoading(false);
     }, 2000 + Math.random() * 1000); // 2-3 seconds delay for realism
+  };
+
+  // Generate dummy flashcards based on file type and name
+  const generateDummyFlashcards = (file: any) => {
+    const extension = file.original_filename.split('.').pop()?.toLowerCase();
+    const fileName = file.original_filename.replace(/\.[^/.]+$/, "");
+    const baseId = Date.now();
+    
+    // Generate flashcards based on file type and common academic subjects
+    const flashcardSets = {
+      pdf: [
+        {
+          id: baseId + 1,
+          question: `What are the key concepts covered in ${fileName}?`,
+          answer: "The document covers fundamental principles, theoretical frameworks, and practical applications relevant to the course material. Key themes include definitions, examples, and real-world case studies.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `Define the main terminology introduced in this document.`,
+          answer: "Essential terms and concepts are defined with clear explanations and context. Each definition includes examples and relationships to broader course topics.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 3,
+          question: `What practical applications are discussed in ${fileName}?`,
+          answer: "The document presents real-world scenarios, case studies, and examples that demonstrate how theoretical concepts apply in professional and academic contexts.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      doc: [
+        {
+          id: baseId + 1,
+          question: `Summarize the main points from ${fileName}.`,
+          answer: "The document outlines core concepts, provides structured analysis, and presents key findings. It includes supporting evidence and logical arguments to support the main thesis.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `What methodology or approach is described in this document?`,
+          answer: "The document describes systematic approaches, research methods, or analytical frameworks used to examine the subject matter with clear step-by-step processes.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      docx: [
+        {
+          id: baseId + 1,
+          question: `What are the learning objectives covered in ${fileName}?`,
+          answer: "The document aims to help students understand core principles, develop analytical skills, and apply knowledge to solve problems in the subject area.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `Explain the structure and organization of this document.`,
+          answer: "The content is organized into logical sections with clear headings, subheadings, and supporting materials that build upon each other progressively.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      ppt: [
+        {
+          id: baseId + 1,
+          question: `What are the main topics covered in the ${fileName} presentation?`,
+          answer: "The presentation covers key course concepts through visual aids, diagrams, and structured slides that facilitate understanding and retention.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `How do the visual elements enhance understanding in this presentation?`,
+          answer: "Charts, graphs, images, and diagrams illustrate complex concepts, making abstract ideas more concrete and easier to comprehend.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      pptx: [
+        {
+          id: baseId + 1,
+          question: `What key insights can be drawn from ${fileName}?`,
+          answer: "The presentation provides clear explanations, visual representations, and practical examples that highlight important course concepts and their applications.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `How does this presentation connect to broader course themes?`,
+          answer: "The content links specific topics to overarching course objectives, showing relationships between different concepts and their real-world relevance.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      txt: [
+        {
+          id: baseId + 1,
+          question: `What information is contained in ${fileName}?`,
+          answer: "The text file contains structured information, notes, or data relevant to course topics, organized for easy reference and study.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `How can this text file be used for studying?`,
+          answer: "The content serves as a reference guide, study notes, or supplementary material that supports understanding of course concepts.",
+          created_at: new Date().toISOString()
+        }
+      ],
+      xlsx: [
+        {
+          id: baseId + 1,
+          question: `What data analysis is presented in ${fileName}?`,
+          answer: "The spreadsheet contains organized data, calculations, and analysis that demonstrate quantitative methods and statistical concepts relevant to the course.",
+          created_at: new Date().toISOString()
+        },
+        {
+          id: baseId + 2,
+          question: `How do the formulas and calculations support learning objectives?`,
+          answer: "The mathematical operations and data manipulation techniques illustrate practical applications of theoretical concepts in real-world scenarios.",
+          created_at: new Date().toISOString()
+        }
+      ]
+    };
+
+    // Get flashcards based on file type, fallback to generic ones
+    const typeFlashcards = flashcardSets[extension as keyof typeof flashcardSets];
+    if (typeFlashcards) {
+      return typeFlashcards;
+    }
+
+    // Default flashcards for unknown file types
+    return [
+      {
+        id: baseId + 1,
+        question: `What is the purpose of ${fileName}?`,
+        answer: "This file contains educational content designed to support learning objectives and enhance understanding of course material through structured information.",
+        created_at: new Date().toISOString()
+      },
+      {
+        id: baseId + 2,
+        question: `How does this file contribute to the study group's goals?`,
+        answer: "The content provides valuable resources, reference material, and examples that facilitate collaborative learning and knowledge sharing among group members.",
+        created_at: new Date().toISOString()
+      }
+    ];
+  };
+
+  // Handle creating flashcards from file
+  const handleCreateFlashcardsFromFile = async (file: any) => {
+    if (!group?.id || !tokens?.access) return;
+    
+    setCreatingFlashcards(true);
+    
+    // Generate folder name based on file
+    const fileName = file.original_filename.replace(/\.[^/.]+$/, ""); // Remove extension
+    const folderName = `${fileName} - Study Cards`;
+    
+    try {
+      // Create the folder via API - backend will automatically create dummy flashcards
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/flashcards/folders/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokens.access}`
+        },
+        body: JSON.stringify({ 
+          name: folderName,
+          group: group.id,
+          file_info: file // Send file info to backend for smarter flashcard generation
+        })
+      });
+      
+      if (res.ok) {
+        const newFolder = await res.json();
+        console.log('Created flashcard folder:', newFolder);
+        
+        // Add to local state
+        setFlashcardFolders(prev => [newFolder, ...prev]);
+        
+        // Show success message
+        toastSuccess({
+          title: "Flashcard Folder Created!",
+          description: `Created "${folderName}" with AI-generated flashcards based on your file.`,
+        });
+        
+        // Close the preview modal
+        setShowFilePreview(false);
+        setPreviewFile(null);
+        setAiSummary('');
+        
+        // Navigate to the new flashcard folder
+        router.push(`/flashcards/${newFolder.id}`);
+      } else {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || 'Failed to create folder');
+      }
+    } catch (error: any) {
+      console.error('Failed to create flashcard folder:', error);
+      toastFail({
+        title: "Creation Failed",
+        description: error.message || "Failed to create flashcard folder. Please try again.",
+      });
+    } finally {
+      setCreatingFlashcards(false);
+    }
   };
 
   // Text file preview component
@@ -2134,6 +2359,254 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
       </div>
     </div>
   );
+
+  // AI Session Planning Functions
+  const handleAiSessionPlan = (session: any) => {
+    setSelectedSessionForAi(session);
+    setShowAiPlanModal(true);
+  };
+
+  const generateSessionPlan = () => {
+    if (!selectedSessionForAi) return;
+    
+    setAiPlanLoading(true);
+    
+    // Simulate AI processing time
+    setTimeout(() => {
+      const sessionType = determineSessionType(selectedSessionForAi);
+      const plan = generatePlanBasedOnContext(selectedSessionForAi, sessionType);
+      setCurrentAiPlan(plan);
+      setAiPlanLoading(false);
+    }, 3000); // 3 second delay for realism
+  };
+
+  const determineSessionType = (session: any) => {
+    const sessionIndex = sessions.findIndex(s => s.id === session.id);
+    if (sessionIndex === 0) return 'icebreaker';
+    if (session.topic?.toLowerCase().includes('assignment')) return 'assignment';
+    if (session.topic?.toLowerCase().includes('exam')) return 'exam-prep';
+    if (session.topic?.toLowerCase().includes('review')) return 'review';
+    return 'general';
+  };
+
+  const generatePlanBasedOnContext = (session: any, type: string) => {
+    const planTemplates: { [key: string]: any } = {
+      icebreaker: {
+        title: "Icebreaker & Team Formation Session",
+        activities: [
+          {
+            time: "0-15 min",
+            activity: "Welcome & Introductions",
+            description: "Each member introduces themselves, shares their major, year level, and study goals for this group."
+          },
+          {
+            time: "15-30 min", 
+            activity: "Study Styles Assessment",
+            description: "Quick discussion about preferred learning styles, study habits, and scheduling preferences."
+          },
+          {
+            time: "30-45 min",
+            activity: "Group Goals Setting",
+            description: "Collaboratively define group objectives, meeting frequency, communication channels, and accountability measures."
+          },
+          {
+            time: "45-60 min",
+            activity: "First Study Topic Planning",
+            description: "Choose the first topic to tackle together and plan the next session's focus and preparation requirements."
+          }
+        ],
+        materials: ["Notebook for notes", "Calendar for scheduling", "Contact exchange"],
+        objectives: ["Build rapport among members", "Establish group dynamics", "Set clear expectations", "Plan future sessions"]
+      },
+      assignment: {
+        title: "Assignment Support & Collaboration Session",
+        activities: [
+          {
+            time: "0-10 min",
+            activity: "Assignment Review",
+            description: "Review assignment requirements together, clarify any questions, and identify challenging areas."
+          },
+          {
+            time: "10-25 min",
+            activity: "Problem-Solving Workshop", 
+            description: "Work through difficult concepts or questions collaboratively, sharing different approaches."
+          },
+          {
+            time: "25-45 min",
+            activity: "Peer Review Session",
+            description: "Exchange draft work for constructive feedback, suggestions for improvement, and error checking."
+          },
+          {
+            time: "45-60 min",
+            activity: "Resource Sharing & Next Steps",
+            description: "Share relevant resources, discuss common challenges, and plan individual work before submission."
+          }
+        ],
+        materials: ["Assignment guidelines", "Draft work", "Reference materials", "Laptops/tablets"],
+        objectives: ["Clarify assignment requirements", "Improve work quality through collaboration", "Share knowledge and resources", "Provide mutual support"]
+      },
+      'exam-prep': {
+        title: "Exam Preparation & Review Session",
+        activities: [
+          {
+            time: "0-15 min",
+            activity: "Exam Scope Review",
+            description: "Go through exam format, topics covered, and create a study timeline leading up to the exam date."
+          },
+          {
+            time: "15-40 min",
+            activity: "Collaborative Study Techniques",
+            description: "Practice active recall, quiz each other, and work through past papers or practice questions together."
+          },
+          {
+            time: "40-55 min",
+            activity: "Knowledge Gap Identification",
+            description: "Identify areas where group members need more support and plan focused study sessions."
+          },
+          {
+            time: "55-60 min",
+            activity: "Stress Management & Motivation",
+            description: "Discuss exam strategies, stress management techniques, and motivate each other for the final push."
+          }
+        ],
+        materials: ["Past exam papers", "Course notes", "Textbooks", "Flashcards", "Calculators if needed"],
+        objectives: ["Comprehensively review exam material", "Practice exam techniques", "Support struggling members", "Build confidence"]
+      },
+      review: {
+        title: "Course Review & Knowledge Consolidation",
+        activities: [
+          {
+            time: "0-15 min",
+            activity: "Topic Summary",
+            description: "Each member presents a brief summary of key concepts from assigned readings or lecture notes."
+          },
+          {
+            time: "15-35 min",
+            activity: "Discussion & Clarification",
+            description: "Deep dive into complex topics, address questions, and ensure everyone understands core concepts."
+          },
+          {
+            time: "35-50 min",
+            activity: "Application Practice",
+            description: "Work through examples, case studies, or problems that apply the theoretical knowledge."
+          },
+          {
+            time: "50-60 min",
+            activity: "Reflection & Future Planning",
+            description: "Reflect on learning progress, identify topics for future focus, and plan next session."
+          }
+        ],
+        materials: ["Course textbooks", "Lecture slides", "Note-taking materials", "Practice problems"],
+        objectives: ["Reinforce understanding", "Fill knowledge gaps", "Apply concepts practically", "Prepare for assessments"]
+      },
+      general: {
+        title: "Collaborative Study Session",
+        activities: [
+          {
+            time: "0-15 min",
+            activity: "Session Planning",
+            description: "Quickly discuss what each member wants to focus on and align on session priorities."
+          },
+          {
+            time: "15-35 min",
+            activity: "Focused Study Time",
+            description: "Concentrated study period where members work on individual tasks with mutual support available."
+          },
+          {
+            time: "35-50 min",
+            activity: "Knowledge Sharing",
+            description: "Share insights, help with difficult concepts, and explain topics to each other."
+          },
+          {
+            time: "50-60 min",
+            activity: "Progress Check & Next Steps",
+            description: "Review what was accomplished, celebrate wins, and plan next session's focus areas."
+          }
+        ],
+        materials: ["Course materials", "Notebooks", "Laptops/tablets", "Any specific resources for the topic"],
+        objectives: ["Make progress on individual study goals", "Support group members", "Share knowledge", "Maintain motivation"]
+      }
+    };
+
+    return planTemplates[type] || planTemplates.general;
+  };
+
+  const handleCurriculumSubmit = () => {
+    if (!curriculumInput.trim()) return;
+    
+    setCurriculumLoading(true);
+    
+    // Simulate AI processing time
+    setTimeout(() => {
+      const plan = generateSemesterPlan(curriculumInput);
+      setSemesterPlan(plan);
+      setCurriculumLoading(false);
+    }, 4000); // 4 second delay for realism
+  };
+
+  const generateSemesterPlan = (curriculum: string) => {
+    return {
+      overview: "Based on your curriculum, here's a comprehensive semester study plan designed to maximize learning outcomes and group collaboration.",
+      weeks: [
+        {
+          week: 1,
+          focus: "Course Introduction & Foundations",
+          activities: ["Group formation and goal setting", "Review course syllabus together", "Establish study schedule"],
+          topics: "Introduction to core concepts from your curriculum"
+        },
+        {
+          week: 2,
+          focus: "Fundamental Concepts Deep Dive", 
+          activities: ["Concept mapping session", "Create shared study materials", "Quiz each other on basics"],
+          topics: "Build strong foundation in key areas identified in curriculum"
+        },
+        {
+          week: 3,
+          focus: "Application & Practice",
+          activities: ["Work through practice problems", "Peer teaching sessions", "Create flashcards together"],
+          topics: "Apply theoretical knowledge to practical scenarios"
+        },
+        {
+          week: 4,
+          focus: "Mid-Semester Review",
+          activities: ["Comprehensive review session", "Identify knowledge gaps", "Plan catch-up strategies"],
+          topics: "Consolidate learning and prepare for mid-semester assessments"
+        },
+        {
+          week: 5,
+          focus: "Advanced Topics Introduction",
+          activities: ["Tackle challenging concepts together", "Break down complex problems", "Support struggling members"],
+          topics: "Move into more advanced curriculum areas with group support"
+        },
+        {
+          week: 6,
+          focus: "Project Work & Collaboration",
+          activities: ["Work on assignments together", "Peer review sessions", "Resource sharing"],
+          topics: "Collaborative approach to major projects and assignments"
+        },
+        {
+          week: 7,
+          focus: "Synthesis & Integration",
+          activities: ["Connect different course topics", "Create comprehensive study guides", "Practice explaining concepts"],
+          topics: "Integrate all curriculum elements into cohesive understanding"
+        },
+        {
+          week: 8,
+          focus: "Exam Preparation Intensive",
+          activities: ["Mock exams and practice tests", "Stress management workshop", "Final review sessions"],
+          topics: "Comprehensive exam preparation covering entire curriculum"
+        }
+      ],
+      tips: [
+        "Adjust the pace based on your group's learning speed",
+        "Use different study techniques each week to keep engagement high", 
+        "Regular check-ins to ensure everyone is keeping up",
+        "Celebrate milestones and achievements together",
+        "Be flexible and adapt the plan as needed throughout the semester"
+      ]
+    };
+  };
+
   if (error) return <div className="min-h-screen flex items-center justify-center">{error}</div>
   if (!group) return null
 
@@ -2771,13 +3244,21 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                     <div className="flex justify-between items-center">
                       <h3 className="text-lg font-serif font-medium text-deep-blue">Upcoming Sessions</h3>
                       {isGroupCreator() && (
-                        <Dialog open={showSessionModal} onOpenChange={setShowSessionModal}>
-                          <DialogTrigger asChild>
-                            <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
-                              <CalendarPlus className="mr-2 h-4 w-4" />
-                              Schedule Session
-                            </Button>
-                          </DialogTrigger>
+                        <div className="flex gap-2">
+                          <Button 
+                            onClick={() => setShowCurriculumModal(true)}
+                            className="bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-600 hover:from-purple-400 hover:via-violet-400 hover:to-indigo-500 text-white font-medium shadow-xl hover:shadow-2xl hover:shadow-purple-500/25 transition-all duration-300 transform hover:scale-105 border border-purple-400/20 backdrop-blur-sm"
+                          >
+                            <Brain className="mr-2 h-4 w-4 animate-pulse" />
+                            Leon's Semester Plan
+                          </Button>
+                          <Dialog open={showSessionModal} onOpenChange={setShowSessionModal}>
+                            <DialogTrigger asChild>
+                              <Button className="bg-deep-blue hover:bg-deep-blue/90 text-white font-serif">
+                                <CalendarPlus className="mr-2 h-4 w-4" />
+                                Schedule Session
+                              </Button>
+                            </DialogTrigger>
                           <DialogContent className="max-w-2xl w-full rounded-xl p-0 bg-white shadow-2xl border border-gray-200 overflow-hidden">
                             <div className="p-6 border-b border-gray-200">
                               <div className="flex justify-between items-center">
@@ -3011,6 +3492,7 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                             </div>
                           </DialogContent>
                         </Dialog>
+                        </div>
                       )}
                     </div>
 
@@ -3041,6 +3523,9 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                                         </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => handleAiSessionPlan(session)}>
+                                          <Brain className="h-4 w-4 mr-2" /> Leon's Session Plan
+                                        </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => handleEditSession(session)}>
                                           <Edit className="h-4 w-4 mr-2" /> Edit
                                         </DropdownMenuItem>
@@ -3625,10 +4110,30 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                               <span>Use this material as a reference during group study sessions</span>
                             </li>
                             <li className="flex items-start gap-2">
-                              <span className="text-blue-500 mt-1">•</span>
-                              <span>Consider creating flashcards based on key concepts from this file</span>
+                              <span className="text-purple-500 mt-1">⚡</span>
+                              <span className="font-medium text-purple-700">Create interactive flashcards to reinforce key concepts from this file</span>
                             </li>
                           </ul>
+                          
+                          {/* Enhanced Call-to-Action */}
+                          <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Brain className="h-4 w-4 text-purple-600" />
+                              <span className="text-sm font-medium text-purple-700">AI Suggestion</span>
+                            </div>
+                            <p className="text-xs text-gray-600 mb-2">
+                              Transform this file into interactive study materials for better retention and group collaboration.
+                            </p>
+                            <Button
+                              onClick={() => handleCreateFlashcardsFromFile(previewFile)}
+                              disabled={creatingFlashcards}
+                              size="sm"
+                              className="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1 h-auto"
+                            >
+                              <Brain className="h-3 w-3 mr-1" />
+                              {creatingFlashcards ? 'Creating...' : 'Create Flashcards Now'}
+                            </Button>
+                          </div>
                         </div>
 
                         {/* File Details */}
@@ -3670,6 +4175,14 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
                   Close
                 </Button>
                 <Button
+                  onClick={() => handleCreateFlashcardsFromFile(previewFile)}
+                  disabled={creatingFlashcards}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-6"
+                >
+                  <Brain className="h-4 w-4 mr-2" />
+                  {creatingFlashcards ? 'Creating...' : 'Create Flashcards'}
+                </Button>
+                <Button
                   onClick={() => handleFileDownload(previewFile)}
                   className="bg-deep-blue hover:bg-deep-blue/90 text-white px-6"
                 >
@@ -3680,6 +4193,428 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
             </div>
           </div>
         </div>
+      )}
+
+      {/* AI Session Plan Modal */}
+      <Dialog open={showAiPlanModal} onOpenChange={setShowAiPlanModal}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
+          {/* Header with subtle gradient like AI Analysis */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-br from-purple-50 to-blue-50">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Brain className="h-6 w-6 text-purple-600" />
+                <div className="absolute -top-1 -right-1 w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+              </div>
+              <div>
+                <h3 className="text-xl font-serif font-semibold text-purple-700">Leon Session Planner</h3>
+                <p className="text-sm text-gray-600">{selectedSessionForAi?.topic || "Study Session"}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+            {!currentAiPlan ? (
+              <div className="text-center py-12">
+                {aiPlanLoading ? (
+                  <div className="space-y-6">
+                    {/* Subtle loading animation like AI Analysis */}
+                    <div className="flex items-center justify-center mb-6">
+                      <div className="relative">
+                        <Brain className="h-12 w-12 text-purple-600" />
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-400 rounded-full animate-pulse"></div>
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm text-purple-600 flex items-center justify-center gap-1">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      <span className="ml-2">Leon is analyzing your session and creating a plan...</span>
+                    </div>
+                    
+                    {/* Loading skeleton cards like AI Analysis */}
+                    <div className="space-y-4 mt-8">
+                      <div className="bg-white/70 rounded-lg p-4 border border-purple-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-4 h-4 bg-purple-300 rounded animate-pulse"></div>
+                          <div className="w-24 h-4 bg-purple-300 rounded animate-pulse"></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="w-full h-3 bg-purple-200 rounded animate-pulse"></div>
+                          <div className="w-5/6 h-3 bg-purple-200 rounded animate-pulse"></div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white/70 rounded-lg p-4 border border-blue-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-4 h-4 bg-blue-300 rounded animate-pulse"></div>
+                          <div className="w-32 h-4 bg-blue-300 rounded animate-pulse"></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="w-full h-3 bg-blue-200 rounded animate-pulse"></div>
+                          <div className="w-3/4 h-3 bg-blue-200 rounded animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="relative">
+                      <Brain className="h-16 w-16 text-purple-600 mx-auto mb-4" />
+                      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-4 h-4 bg-purple-400 rounded-full animate-pulse"></div>
+                    </div>
+                    
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      Let Leon Plan Your Session
+                    </h3>
+                    <p className="text-gray-600 mb-6 max-w-md mx-auto leading-relaxed">
+                      Get a personalized study session plan based on your session context and group dynamics.
+                    </p>
+                    
+                    <Button 
+                      onClick={generateSessionPlan}
+                      className="bg-purple-600 hover:bg-purple-700 text-white"
+                    >
+                      <Brain className="h-4 w-4 mr-2" />
+                      Let Leon Plan This Session
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Plan Header */}
+                <div className="bg-white/80 rounded-lg p-6 border border-purple-200 shadow-sm">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Brain className="h-5 w-5 text-purple-600" />
+                    <h4 className="text-lg font-serif font-semibold text-purple-700">Leon's Session Plan</h4>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    {currentAiPlan.title}
+                  </h3>
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">Session:</span> {selectedSessionForAi?.topic} • 
+                    <span className="font-medium ml-2">Duration:</span> 60 minutes
+                  </div>
+                </div>
+
+                {/* Session Timeline */}
+                <div className="bg-white/80 rounded-lg p-4 border border-blue-200 shadow-sm">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Clock className="h-4 w-4 text-blue-600" />
+                    <h5 className="font-semibold text-blue-700">Session Timeline</h5>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {currentAiPlan.activities.map((activity: any, index: number) => (
+                      <div key={index} className="bg-gray-50 border rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs font-medium min-w-fit">
+                            {activity.time}
+                          </div>
+                          <div className="flex-1">
+                            <h6 className="font-medium text-gray-900 mb-1">{activity.activity}</h6>
+                            <p className="text-gray-600 text-sm leading-relaxed">{activity.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Materials & Objectives */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="bg-white/80 rounded-lg p-4 border border-green-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Package className="h-4 w-4 text-green-600" />
+                      <h5 className="font-semibold text-green-700">Required Materials</h5>
+                    </div>
+                    <ul className="space-y-2">
+                      {currentAiPlan.materials.map((material: any, index: number) => (
+                        <li key={index} className="flex items-start gap-2 text-gray-700">
+                          <span className="text-green-500 mt-1">•</span>
+                          <span className="text-sm leading-relaxed">{material}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <div className="bg-white/80 rounded-lg p-4 border border-blue-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Target className="h-4 w-4 text-blue-600" />
+                      <h5 className="font-semibold text-blue-700">Session Objectives</h5>
+                    </div>
+                    <ul className="space-y-2">
+                      {currentAiPlan.objectives.map((objective: any, index: number) => (
+                        <li key={index} className="flex items-start gap-2 text-gray-700">
+                          <span className="text-blue-500 mt-1">•</span>
+                          <span className="text-sm leading-relaxed">{objective}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          {currentAiPlan && (
+            <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Sparkles className="h-4 w-4 text-purple-500" />
+                <span>Powered by Leon AI</span>
+              </div>
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    setCurrentAiPlan(null);
+                    setShowAiPlanModal(false);
+                  }}
+                >
+                  Close
+                </Button>
+                <Button 
+                  onClick={generateSessionPlan}
+                  disabled={aiPlanLoading}
+                  variant="outline"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Let Leon Replan
+                </Button>
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share Leon's Plan with Group
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Curriculum Planning Modal */}
+      {isGroupCreator() && (
+        <Dialog open={showCurriculumModal} onOpenChange={setShowCurriculumModal}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
+            {/* Header with purple gradient like Session Plan */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-br from-purple-50 to-blue-50">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <GraduationCap className="h-6 w-6 text-purple-600" />
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-serif font-semibold text-purple-700">Leon Semester Planner</h3>
+                  <p className="text-sm text-gray-600">Comprehensive curriculum planning</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+              {!semesterPlan ? (
+                <div className="space-y-6">
+                  {curriculumLoading ? (
+                    <div className="text-center py-12">
+                      {/* Subtle loading like AI Analysis */}
+                      <div className="flex items-center justify-center mb-6">
+                        <div className="relative">
+                          <GraduationCap className="h-12 w-12 text-purple-600" />
+                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-400 rounded-full animate-pulse"></div>
+                        </div>
+                      </div>
+                      
+                      <div className="text-sm text-purple-600 flex items-center justify-center gap-1 mb-6">
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <span className="ml-2">Leon is analyzing your curriculum and creating a plan...</span>
+                      </div>
+                      
+                      {/* Loading skeleton like AI Analysis */}
+                      <div className="space-y-4">
+                        <div className="bg-white/70 rounded-lg p-4 border border-purple-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-4 h-4 bg-purple-300 rounded animate-pulse"></div>
+                            <div className="w-32 h-4 bg-purple-300 rounded animate-pulse"></div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="w-full h-3 bg-purple-200 rounded animate-pulse"></div>
+                            <div className="w-5/6 h-3 bg-purple-200 rounded animate-pulse"></div>
+                            <div className="w-4/5 h-3 bg-purple-200 rounded animate-pulse"></div>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-white/70 rounded-lg p-4 border border-blue-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-4 h-4 bg-blue-300 rounded animate-pulse"></div>
+                            <div className="w-28 h-4 bg-blue-300 rounded animate-pulse"></div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="w-full h-3 bg-blue-200 rounded animate-pulse"></div>
+                            <div className="w-3/4 h-3 bg-blue-200 rounded animate-pulse"></div>
+                          </div>
+                        </div>
+
+                        <div className="bg-white/70 rounded-lg p-4 border border-purple-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-4 h-4 bg-purple-300 rounded animate-pulse"></div>
+                            <div className="w-24 h-4 bg-purple-300 rounded animate-pulse"></div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="w-full h-3 bg-purple-200 rounded animate-pulse"></div>
+                            <div className="w-2/3 h-3 bg-purple-200 rounded animate-pulse"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Introduction */}
+                      <div className="bg-white/80 rounded-lg p-6 border border-purple-200 shadow-sm">
+                        <div className="flex items-center gap-3 mb-3">
+                          <GraduationCap className="h-5 w-5 text-purple-600" />
+                          <h4 className="text-lg font-serif font-semibold text-purple-700">Semester Planning</h4>
+                        </div>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                          Let Leon Plan Your Semester
+                        </h3>
+                        <p className="text-gray-600 leading-relaxed">
+                          Enter your course curriculum and get a comprehensive semester study plan tailored for group learning.
+                        </p>
+                      </div>
+                      
+                      {/* Input Section */}
+                      <div className="space-y-4">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Course Curriculum & Learning Objectives
+                        </label>
+                        <textarea
+                          value={curriculumInput}
+                          onChange={(e) => setCurriculumInput(e.target.value)}
+                          placeholder="Paste your course curriculum, syllabus, or learning objectives here. Include topics, assignments, and any key information about the course structure..."
+                          className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                        />
+                        
+                        <Button 
+                          onClick={handleCurriculumSubmit}
+                          disabled={!curriculumInput.trim()}
+                          className="bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          <Brain className="h-4 w-4 mr-2" />
+                          Let Leon Plan This Semester
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Plan Overview */}
+                  <div className="bg-white/80 rounded-lg p-6 border border-purple-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <GraduationCap className="h-5 w-5 text-purple-600" />
+                      <h4 className="text-lg font-serif font-semibold text-purple-700">Leon's Semester Plan</h4>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                      Your Personalized Semester Plan
+                    </h3>
+                    <p className="text-gray-700 leading-relaxed">{semesterPlan.overview}</p>
+                  </div>
+
+                  {/* Weekly Breakdown */}
+                  <div className="bg-white/80 rounded-lg p-4 border border-blue-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Calendar className="h-4 w-4 text-blue-600" />
+                      <h5 className="font-semibold text-blue-700">8-Week Study Plan</h5>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {semesterPlan.weeks.map((week: any, index: number) => (
+                        <div key={index} className="bg-gray-50 border rounded-lg p-5">
+                          <div className="flex items-start gap-4">
+                            <div className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm font-medium min-w-fit">
+                              Week {week.week}
+                            </div>
+                            <div className="flex-1">
+                              <h6 className="font-medium text-gray-900 mb-2">{week.focus}</h6>
+                              <p className="text-gray-600 text-sm mb-3 leading-relaxed">{week.topics}</p>
+                              
+                              <div>
+                                <h6 className="text-sm font-medium text-gray-700 mb-1">Recommended Activities:</h6>
+                                <ul className="text-sm text-gray-600 space-y-1">
+                                  {week.activities.map((activity: any, actIndex: number) => (
+                                    <li key={actIndex} className="flex items-start gap-2">
+                                      <span className="text-blue-500 mt-1">•</span>
+                                      <span className="leading-relaxed">{activity}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Study Tips */}
+                  <div className="bg-white/80 rounded-lg p-4 border border-green-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Lightbulb className="h-4 w-4 text-green-600" />
+                      <h5 className="font-semibold text-green-700">Leon's Study Tips</h5>
+                    </div>
+                    <ul className="space-y-2">
+                      {semesterPlan.tips.map((tip: any, index: number) => (
+                        <li key={index} className="flex items-start gap-2 text-green-700">
+                          <span className="text-green-600 mt-1">✓</span>
+                          <span className="text-sm leading-relaxed">{tip}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {semesterPlan && (
+              <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Sparkles className="h-4 w-4 text-purple-500" />
+                  <span>Powered by Leon AI</span>
+                </div>
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setSemesterPlan(null);
+                      setShowCurriculumModal(false);
+                    }}
+                  >
+                    Close
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      setSemesterPlan(null);
+                      setCurriculumInput('');
+                    }}
+                    variant="outline"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Let Leon Replan
+                  </Button>
+                  <Button className="bg-purple-600 hover:bg-purple-700 text-white">
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share Leon's Plan with Group
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       )}
 
     </div>
