@@ -1,13 +1,14 @@
 "use client"
 import React, { useEffect, useRef, useState } from "react"
 import { X, Send, MessageSquare } from "lucide-react"
+import Link from "next/link"
 
 type Message = {
   id: string
   from: "leo" | "user"
   text: string
+  groups?: any[]
 }
-
 export default function LeoChatbot() {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState("")
@@ -42,22 +43,50 @@ export default function LeoChatbot() {
     }
   }, [open])
 
-  function submit() {
+  async function submit() {
     if (!input.trim()) return
-    const userMsg: Message = { id: String(Date.now()), from: "user", text: input.trim() }
+    const query = input.trim()
+    const userMsg: Message = { id: String(Date.now()), from: "user", text: query }
     setMessages((m) => [...m, userMsg])
     setInput("")
 
-    // simulated Leo response (placeholders)
+    // Simulate a search response with dummy groups (no backend call)
     setTimeout(() => {
+      const dummyGroups = [
+        {
+          id: "g1",
+          group_name: `${query} — Algorithms Study Group`,
+          subject_code: "COMP30024",
+          meeting_format: "In-person",
+          meeting_schedule: "Wed 6pm",
+          description: "Friendly students focusing on weekly problem sets and exam prep.",
+        },
+        {
+          id: "g2",
+          group_name: `${query} — Biochem Notes Crew`,
+          subject_code: "BIOM3001",
+          meeting_format: "Virtual",
+          meeting_schedule: "Thu 7pm",
+          description: "Shared notes, flashcards and weekly quizzes.",
+        },
+        {
+          id: "g3",
+          group_name: `${query} — Exam Prep Squad`,
+          subject_code: "LAWS5002",
+          meeting_format: "Hybrid",
+          meeting_schedule: "Sat 10am",
+          description: "Focused review sessions with past paper run-throughs.",
+        },
+      ]
+
       const reply: Message = {
         id: "r" + Date.now(),
         from: "leo",
-        text:
-          "Here are a few matches (placeholders):\n\n• COMP30024 — Algorithms Study Group — Wed 6pm\n• BIOM3001 — Biochemistry Notes Crew — Thu 7pm\n• LAWS5002 — Exam Prep — Sat 10am\n\nTap any item later to view the real group."
+        text: `I found ${dummyGroups.length} groups matching "${query}". Here are the top results:`,
+        groups: dummyGroups,
       }
       setMessages((m) => [...m, reply])
-    }, 700)
+    }, 600)
   }
 
   const quickPrompts = [
@@ -140,6 +169,24 @@ export default function LeoChatbot() {
                     }`}
                   >
                     <div className="text-sm leading-relaxed"><pre className="whitespace-pre-wrap break-words m-0">{m.text}</pre></div>
+                    {m.groups && m.groups.length > 0 && (
+                      <div className="mt-3 space-y-3">
+                        {m.groups.map((g, i) => (
+                          <div key={g.id || i} className="bg-white/5 p-3 rounded-lg">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 pr-2">
+                                <div className="text-sm font-semibold text-white line-clamp-1">{g.group_name || g.title}</div>
+                                <div className="text-xs text-blue-100 mt-1">{g.subject_code || g.subject} • {g.meeting_format || g.format} • {g.meeting_schedule || ''}</div>
+                                <div className="text-xs text-blue-100 mt-2 line-clamp-2">{g.description}</div>
+                              </div>
+                              <div className="ml-3">
+                                <Link href={`/group/${g.id}`} className="inline-block bg-gold text-deep-blue px-3 py-1 rounded-full text-xs">View</Link>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
