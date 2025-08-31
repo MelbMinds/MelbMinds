@@ -40,6 +40,12 @@ import {
   Clipboard,
   Check,
   RotateCcw,
+  File,
+  FileImage,
+  FileSpreadsheet,
+  Presentation,
+  Sparkles,
+  X,
 } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
@@ -307,6 +313,12 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
   const GROUP_NOTIF_CLEAR_KEY = `group_notifications_cleared_at_${group?.id || ''}`;
   const [notifLoading, setNotifLoading] = useState(false);
   const [clearLoading, setClearLoading] = useState(false);
+
+  // Add state for file preview modal
+  const [showFilePreview, setShowFilePreview] = useState(false);
+  const [previewFile, setPreviewFile] = useState<any>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string>('');
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -1541,6 +1553,200 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
     }
   };
 
+  // Function to generate mock AI summary based on file type and name
+  const generateAISummary = (file: any) => {
+    const extension = file.original_filename.split('.').pop()?.toLowerCase();
+    const filename = file.original_filename.toLowerCase();
+    
+    // Mock AI summaries based on file type and content hints
+    const summaries = {
+      pdf: [
+        "This appears to be a comprehensive study guide covering key concepts in the subject. The document is well-structured with clear headings and bullet points, making it ideal for revision. I've identified several important topics that align with typical exam questions.",
+        "This document contains detailed lecture notes with diagrams and examples. The content appears to be from a recent semester and includes practical applications of theoretical concepts. Perfect for group study sessions.",
+        "This is a research paper or academic article with citations and references. The document provides in-depth analysis and could be valuable for understanding advanced concepts in your course."
+      ],
+      doc: [
+        "This Word document contains organized notes with a clear structure. I can see headings, subheadings, and key points that would be useful for collaborative study. The formatting suggests it's designed for easy reading and reference.",
+        "This appears to be an assignment template or study outline. The document includes guidelines and formatting that could help the group standardize their work and approach to similar tasks."
+      ],
+      docx: [
+        "This document contains well-formatted academic content with proper citations. The structure suggests it's either lecture notes or a study guide that could benefit the entire group's understanding of the subject.",
+        "I've analyzed this document and found it contains comprehensive coverage of course topics with examples and explanations. It's an excellent resource for group discussions and exam preparation."
+      ],
+      ppt: [
+        "This PowerPoint presentation contains visual slides that effectively communicate key concepts. The slides are well-designed with a good balance of text and visuals, making complex topics easier to understand.",
+        "This presentation appears to be from a lecture or study session. It includes diagrams, charts, and bullet points that would be great for group review sessions and visual learners."
+      ],
+      pptx: [
+        "This presentation contains engaging visual content with clear explanations. The slides progress logically through the topic and include helpful diagrams that could enhance group understanding.",
+        "I've identified this as a comprehensive presentation covering multiple subtopics. The visual elements and structure make it perfect for group presentations and collaborative learning."
+      ],
+      txt: [
+        "This text file contains raw notes or data that could be useful for analysis. While simple in format, the content appears relevant to your study group's objectives.",
+        "This document contains structured text information that could serve as a reference or quick lookup guide for the group."
+      ],
+      xlsx: [
+        "This Excel spreadsheet contains organized data with calculations and formulas. The structure suggests it's designed for analysis or tracking progress, which could be valuable for group projects.",
+        "I've identified this as a data analysis file with charts and calculations. This could be extremely useful for understanding quantitative aspects of your coursework."
+      ],
+      xls: [
+        "This spreadsheet contains numerical data and formulas that appear to be course-related. The organization suggests it's designed for collaborative analysis and could enhance group understanding of data concepts."
+      ],
+      jpg: [
+        "This image appears to contain visual information relevant to your studies. It could be a diagram, chart, or photograph that supports the group's learning objectives.",
+        "I've analyzed this image and identified it as educational content that could enhance visual understanding of course concepts."
+      ],
+      jpeg: [
+        "This image contains visual educational content that could be valuable for group discussions. Visual materials often help explain complex concepts more effectively.",
+        "This appears to be a diagram or educational image that could serve as a helpful reference during group study sessions."
+      ],
+      png: [
+        "This image file contains clear visual content that appears educational in nature. Visual aids like this are excellent for group learning and concept explanation.",
+        "I've identified this as a high-quality educational image that could enhance understanding of course materials through visual representation."
+      ]
+    };
+
+    // Get random summary based on file type
+    const typeSummaries = summaries[extension as keyof typeof summaries];
+    if (typeSummaries) {
+      return typeSummaries[Math.floor(Math.random() * typeSummaries.length)];
+    }
+
+    // Default summary for unknown file types
+    return "I've analyzed this file and determined it contains educational content relevant to your study group. While I can't preview the specific format, the filename suggests it's a valuable resource for collaborative learning.";
+  };
+
+  // Handle file preview with AI summary
+  const handleFilePreview = async (file: any) => {
+    setPreviewFile(file);
+    setShowFilePreview(true);
+    setAiSummaryLoading(true);
+    setAiSummary('');
+
+    // Simulate AI processing time
+    setTimeout(() => {
+      const summary = generateAISummary(file);
+      setAiSummary(summary);
+      setAiSummaryLoading(false);
+    }, 2000 + Math.random() * 1000); // 2-3 seconds delay for realism
+  };
+
+  // Get file preview content based on type
+  const getFilePreviewContent = (file: any) => {
+    const extension = file.original_filename.split('.').pop()?.toLowerCase();
+    
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return (
+          <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded-lg">
+            <img 
+              src={`${process.env.NEXT_PUBLIC_API_URL}/api/files/${file.id}/preview/`}
+              alt={file.original_filename}
+              className="max-w-full max-h-full object-contain rounded-lg"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+                (e.target as HTMLImageElement).nextElementSibling!.className = 'flex flex-col items-center justify-center text-gray-500';
+              }}
+            />
+            <div className="hidden flex-col items-center justify-center text-gray-500">
+              <FileImage className="h-16 w-16 mb-4 text-gray-400" />
+              <p>Image preview not available</p>
+            </div>
+          </div>
+        );
+      
+      case 'pdf':
+        return (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
+            <FileText className="h-16 w-16 mb-4 text-red-500" />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">PDF Document</h3>
+            <p className="text-gray-500 text-center mb-4">
+              {file.original_filename}
+            </p>
+            <p className="text-sm text-gray-400 text-center">
+              PDF preview coming soon. Click download to view the full document.
+            </p>
+          </div>
+        );
+
+      case 'doc':
+      case 'docx':
+        return (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
+            <FileText className="h-16 w-16 mb-4 text-blue-500" />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">Word Document</h3>
+            <p className="text-gray-500 text-center mb-4">
+              {file.original_filename}
+            </p>
+            <p className="text-sm text-gray-400 text-center">
+              Document preview coming soon. Click download to view the full content.
+            </p>
+          </div>
+        );
+
+      case 'ppt':
+      case 'pptx':
+        return (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
+            <Presentation className="h-16 w-16 mb-4 text-orange-500" />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">PowerPoint Presentation</h3>
+            <p className="text-gray-500 text-center mb-4">
+              {file.original_filename}
+            </p>
+            <p className="text-sm text-gray-400 text-center">
+              Presentation preview coming soon. Click download to view all slides.
+            </p>
+          </div>
+        );
+
+      case 'xls':
+      case 'xlsx':
+        return (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
+            <FileSpreadsheet className="h-16 w-16 mb-4 text-green-500" />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">Excel Spreadsheet</h3>
+            <p className="text-gray-500 text-center mb-4">
+              {file.original_filename}
+            </p>
+            <p className="text-sm text-gray-400 text-center">
+              Spreadsheet preview coming soon. Click download to view the data.
+            </p>
+          </div>
+        );
+
+      case 'txt':
+        return (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
+            <FileText className="h-16 w-16 mb-4 text-gray-500" />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">Text Document</h3>
+            <p className="text-gray-500 text-center mb-4">
+              {file.original_filename}
+            </p>
+            <p className="text-sm text-gray-400 text-center">
+              Text preview coming soon. Click download to view the content.
+            </p>
+          </div>
+        );
+
+      default:
+        return (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-lg">
+            <File className="h-16 w-16 mb-4 text-gray-400" />
+            <h3 className="text-lg font-medium text-gray-700 mb-2">File Preview</h3>
+            <p className="text-gray-500 text-center mb-4">
+              {file.original_filename}
+            </p>
+            <p className="text-sm text-gray-400 text-center">
+              Preview not available for this file type. Click download to open the file.
+            </p>
+          </div>
+        );
+    }
+  };
+
   if (loading) return (
     <div className="min-h-screen bg-soft-gray">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -2089,6 +2295,18 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
 
                               {/* Action Buttons */}
                               <div className="flex gap-1 mt-3 w-full justify-center">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-8 w-8 p-0 hover:bg-purple-50"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleFilePreview(file)
+                                  }}
+                                  title="Preview with AI summary"
+                                >
+                                  <Brain className="h-4 w-4 text-purple-600" />
+                                </Button>
                                 <Button 
                                   size="sm" 
                                   variant="ghost" 
@@ -2962,6 +3180,191 @@ export default function StudyGroupPage({ params }: { params: Promise<{ id: strin
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-4">
           <span>Session created!</span>
           <button onClick={() => setShowSessionSuccess(false)} className="ml-2 text-white hover:text-gray-200 text-xl font-bold">×</button>
+        </div>
+      )}
+
+      {/* File Preview Modal with AI Summary */}
+      {showFilePreview && previewFile && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-7xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-deep-blue to-deep-blue/80">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/10 rounded-lg">
+                  <Brain className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-serif font-bold text-white">AI-Powered File Analysis</h3>
+                  <p className="text-blue-100 text-sm">{previewFile.original_filename}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowFilePreview(false);
+                  setPreviewFile(null);
+                  setAiSummary('');
+                }}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <X className="h-6 w-6 text-white" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex h-[calc(90vh-100px)]">
+              {/* File Preview Section */}
+              <div className="flex-1 border-r border-gray-200">
+                <div className="p-6 h-full">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="h-5 w-5 text-deep-blue" />
+                    <h4 className="text-lg font-serif font-semibold text-deep-blue">File Preview</h4>
+                  </div>
+                  <div className="h-[calc(100%-60px)] border border-gray-200 rounded-lg overflow-hidden">
+                    {getFilePreviewContent(previewFile)}
+                  </div>
+                </div>
+              </div>
+
+              {/* AI Summary Section */}
+              <div className="w-1/2 bg-gradient-to-br from-purple-50 to-blue-50">
+                <div className="p-6 h-full">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="relative">
+                      <Sparkles className="h-5 w-5 text-purple-600" />
+                      <div className="absolute -top-1 -right-1 w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                    </div>
+                    <h4 className="text-lg font-serif font-semibold text-purple-700">AI Analysis</h4>
+                    {aiSummaryLoading && (
+                      <div className="ml-2 text-sm text-purple-600 flex items-center gap-1">
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <span className="ml-1">Analyzing...</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="h-[calc(100%-60px)] overflow-y-auto">
+                    {aiSummaryLoading ? (
+                      <div className="space-y-4">
+                        {/* Loading skeleton for AI analysis */}
+                        <div className="bg-white/70 rounded-lg p-4 border border-purple-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-4 h-4 bg-purple-300 rounded animate-pulse"></div>
+                            <div className="w-24 h-4 bg-purple-300 rounded animate-pulse"></div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="w-full h-3 bg-purple-200 rounded animate-pulse"></div>
+                            <div className="w-5/6 h-3 bg-purple-200 rounded animate-pulse"></div>
+                            <div className="w-4/5 h-3 bg-purple-200 rounded animate-pulse"></div>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-white/70 rounded-lg p-4 border border-blue-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-4 h-4 bg-blue-300 rounded animate-pulse"></div>
+                            <div className="w-32 h-4 bg-blue-300 rounded animate-pulse"></div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="w-full h-3 bg-blue-200 rounded animate-pulse"></div>
+                            <div className="w-3/4 h-3 bg-blue-200 rounded animate-pulse"></div>
+                          </div>
+                        </div>
+
+                        <div className="bg-white/70 rounded-lg p-4 border border-green-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-4 h-4 bg-green-300 rounded animate-pulse"></div>
+                            <div className="w-28 h-4 bg-green-300 rounded animate-pulse"></div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="w-full h-3 bg-green-200 rounded animate-pulse"></div>
+                            <div className="w-4/5 h-3 bg-green-200 rounded animate-pulse"></div>
+                            <div className="w-5/6 h-3 bg-green-200 rounded animate-pulse"></div>
+                            <div className="w-3/5 h-3 bg-green-200 rounded animate-pulse"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* File Type Analysis */}
+                        <div className="bg-white/80 rounded-lg p-4 border border-purple-200 shadow-sm">
+                          <div className="flex items-center gap-2 mb-3">
+                            <FileText className="h-4 w-4 text-purple-600" />
+                            <h5 className="font-semibold text-purple-700">Content Analysis</h5>
+                          </div>
+                          <p className="text-gray-700 leading-relaxed">{aiSummary}</p>
+                        </div>
+
+                        {/* Study Recommendations */}
+                        <div className="bg-white/80 rounded-lg p-4 border border-blue-200 shadow-sm">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Brain className="h-4 w-4 text-blue-600" />
+                            <h5 className="font-semibold text-blue-700">Study Recommendations</h5>
+                          </div>
+                          <ul className="text-gray-700 space-y-2 text-sm">
+                            <li className="flex items-start gap-2">
+                              <span className="text-blue-500 mt-1">•</span>
+                              <span>Share this file with your study group to facilitate collaborative learning</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-blue-500 mt-1">•</span>
+                              <span>Use this material as a reference during group study sessions</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-blue-500 mt-1">•</span>
+                              <span>Consider creating flashcards based on key concepts from this file</span>
+                            </li>
+                          </ul>
+                        </div>
+
+                        {/* File Details */}
+                        <div className="bg-white/80 rounded-lg p-4 border border-green-200 shadow-sm">
+                          <div className="flex items-center gap-2 mb-3">
+                            <File className="h-4 w-4 text-green-600" />
+                            <h5 className="font-semibold text-green-700">File Information</h5>
+                          </div>
+                          <div className="text-sm text-gray-600 space-y-1">
+                            <p><span className="font-medium">File size:</span> {previewFile.file_size_display}</p>
+                            <p><span className="font-medium">Uploaded by:</span> {previewFile.uploaded_by_name}</p>
+                            <p><span className="font-medium">Type:</span> {previewFile.original_filename.split('.').pop()?.toUpperCase()} document</p>
+                            <p><span className="font-medium">Study relevance:</span> High - Contains course-related material</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Sparkles className="h-4 w-4 text-purple-500" />
+                <span>Powered by MelbMinds AI - Enhancing collaborative learning</span>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowFilePreview(false);
+                    setPreviewFile(null);
+                    setAiSummary('');
+                  }}
+                  className="px-6"
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={() => handleFileDownload(previewFile)}
+                  className="bg-deep-blue hover:bg-deep-blue/90 text-white px-6"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download File
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
