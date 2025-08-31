@@ -16,7 +16,7 @@ export default function LeoChatbot() {
     {
       id: "m1",
       from: "leo",
-      text: "Hi — I'm Leo. Tell me what you're studying or the kind of group you're after, and I'll find a match."
+      text: "Hi — I'm Leon. Tell me what you're studying or the kind of group you're after, and I'll find a match."
     }
   ])
 
@@ -96,7 +96,7 @@ export default function LeoChatbot() {
   ]
 
   return (
-  // render as a right-side column positioned within the hero so Leo stays anchored to that section
+  // render as a right-side column positioned within the hero so Leon stays anchored to that section
   <div ref={containerRef} className="absolute z-50 inset-y-0 right-0 flex items-center justify-end pointer-events-none">
       {/* Collapsed toggle (stays in DOM for smoother animation) */}
   {/* Collapsed right rail preview: fills the right area but stays subtle until opened */}
@@ -111,9 +111,9 @@ export default function LeoChatbot() {
           <div className="flex items-start gap-3">
             <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-deep-blue font-bold text-lg shadow-sm">L</div>
             <div className="text-left flex-1">
-              <div className="text-lg font-serif font-semibold text-white">Ask Leo to find a study group</div>
+              <div className="text-lg font-serif font-semibold text-white">Ask Leon to find a study group</div>
               <div className="text-sm text-blue-100 mt-1">Try: "COMP30024 evenings"</div>
-              <div className="text-xs text-blue-100 mt-3">Leo can search groups and surface matches directly in this panel.</div>
+              <div className="text-xs text-blue-100 mt-3">Leon can search groups and surface matches directly in this panel.</div>
             </div>
           </div>
         </div>
@@ -121,7 +121,7 @@ export default function LeoChatbot() {
         <div className="lg:hidden absolute -left-[140px] bottom-6 transform rotate-0"></div>
         <button
           onClick={() => setOpen(true)}
-          aria-label="Open Leo chat"
+          aria-label="Open Leon chat"
           className="lg:hidden absolute z-50 right-2 bottom-6 w-14 h-14 rounded-full bg-gradient-to-br from-[#ffd27a] to-[#ffc34a] flex items-center justify-center text-deep-blue shadow-[0_8px_24px_rgba(2,6,23,0.3)] border border-white/20"
         >
           <div className="font-bold">L</div>
@@ -141,14 +141,14 @@ export default function LeoChatbot() {
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-deep-blue font-bold text-lg">L</div>
               <div>
-                <div className="text-2xl font-serif font-semibold text-white">Leo — AI Study Finder</div>
+                <div className="text-2xl font-serif font-semibold text-white">Leon — AI Study Finder</div>
                 <div className="text-sm text-blue-100">I'll search MelbMinds and suggest groups for you.</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setOpen(false)}
-                aria-label="Close Leo"
+                aria-label="Close Leon"
                 className="p-2 rounded-md hover:bg-white/10"
               >
                 <X className="h-5 w-5 text-white" />
@@ -218,7 +218,7 @@ export default function LeoChatbot() {
                 onChange={(e) => setInput(e.target.value)}
                 className="flex-1 bg-white/5 text-white placeholder-blue-100 rounded-full px-4 py-3 focus:outline-none"
                 placeholder="Describe what you're looking for (e.g. 'weekly COMP30024, friendly')"
-                aria-label="Message Leo"
+                aria-label="Message Leon"
               />
               <button
                 type="submit"
@@ -229,7 +229,7 @@ export default function LeoChatbot() {
                 <span className="text-sm font-medium">Ask</span>
               </button>
             </form>
-            <div className="text-xs text-blue-100 mt-2">Leo is a visual prototype — results are placeholders for now.</div>
+            <div className="text-xs text-blue-100 mt-2">Leon is a visual prototype — results are placeholders for now.</div>
           </div>
         </div>
       </div>
