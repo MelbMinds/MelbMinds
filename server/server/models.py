@@ -31,6 +31,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     preferred_study_format = models.CharField(max_length=100)
     languages_spoken = models.CharField(max_length=255)
     bio = models.TextField(blank=True)
+    interests_hobbies = models.TextField(blank=True, help_text="Comma-separated list of interests and hobbies")
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     is_email_verified = models.BooleanField(default=False)

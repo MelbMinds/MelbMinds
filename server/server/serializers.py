@@ -133,13 +133,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
     joinDate = serializers.SerializerMethodField()
     avatar = serializers.SerializerMethodField()
     groups_joined = serializers.SerializerMethodField()
+    interests = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             "id",
             "name", "email", "major", "year", "studyFormat",
-            "languages", "bio", "joinDate", "avatar",
+            "languages", "bio", "interests", "interests_hobbies", "joinDate", "avatar",
             "groups_joined",
         ]
     
@@ -158,6 +159,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_groups_joined(self, obj):
         return obj.joined_groups.count()
+
+    def get_interests(self, obj):
+        if obj.interests_hobbies:
+            return [interest.strip() for interest in obj.interests_hobbies.split(',') if interest.strip()]
+        return []
 
 class MessageSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)

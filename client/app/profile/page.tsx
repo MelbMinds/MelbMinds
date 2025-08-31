@@ -33,12 +33,26 @@ import { PopupAlert } from "@/components/ui/popup-alert"
 import { apiClient } from "@/lib/api"
 import Skeleton from "@/components/ui/Skeleton";
 
+// Available interests/hobbies options
+const INTEREST_OPTIONS = [
+  "Reading", "Writing", "Photography", "Music", "Gaming", "Cooking", "Baking",
+  "Sports", "Fitness", "Yoga", "Dancing", "Art", "Drawing", "Painting",
+  "Travel", "Hiking", "Camping", "Movies", "TV Shows", "Podcasts",
+  "Technology", "Programming", "AI/ML", "Data Science", "Web Development",
+  "Languages", "History", "Science", "Philosophy", "Psychology",
+  "Volunteering", "Gardening", "Fashion", "DIY Projects", "Board Games",
+  "Chess", "Puzzles", "Meditation", "Investing", "Entrepreneurship",
+  "Social Media", "Blogging", "Video Editing", "Graphic Design", "3D Modeling"
+];
+
 export default function ProfilePage() {
   const { tokens, setUser } = useUser()
   const [isEditing, setIsEditing] = useState(false)
   const [profileData, setProfileData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([])
+  const [availableInterests, setAvailableInterests] = useState<string[]>(INTEREST_OPTIONS)
 
   useEffect(() => {
     // Try to load profile from localStorage first
@@ -67,6 +81,13 @@ export default function ProfilePage() {
     if (tokens?.access) fetchProfile()
     else setLoading(false)
   }, [tokens])
+
+  // Sync interests when profile data loads
+  useEffect(() => {
+    if (profileData?.interests) {
+      setSelectedInterests(profileData.interests)
+    }
+  }, [profileData])
 
   if (loading) {
     return (
@@ -257,9 +278,24 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     try {
-      const response = await apiClient.put("/profile/", profileData)
+      console.log('[Profile] Saving profile data...')
+      console.log('[Profile] Original profile data:', profileData)
+      console.log('[Profile] Selected interests:', selectedInterests)
+      
+      // Include interests in the profile data
+      const profileDataWithInterests = {
+        ...profileData,
+        interests: selectedInterests
+      }
+      
+      console.log('[Profile] Sending data to API:', profileDataWithInterests)
+      
+      const response = await apiClient.put("/profile/", profileDataWithInterests)
+      
+      console.log('[Profile] API Response:', response)
       
       if (response.error) {
+        console.error('[Profile] API Error:', response.error)
         setError(response.error)
         return
       }
@@ -269,6 +305,7 @@ export default function ProfilePage() {
       setUser(response.data, tokens)
       setIsEditing(false)
       setError(null)
+      console.log('[Profile] Save successful!')
     } catch (err: any) {
       console.error('Save error:', err)
       setError('Network error. Please try again.')
@@ -499,6 +536,52 @@ export default function ProfilePage() {
                       ) : (
                         <div className="p-4 bg-soft-gray rounded-md">
                           <p className="text-gray-700">{profileData.bio}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Interests & Hobbies */}
+                    <div className="space-y-2">
+                      <Label>Interests & Hobbies</Label>
+                      {isEditing ? (
+                        <div className="space-y-3">
+                          <p className="text-sm text-gray-600">Select your interests and hobbies to help others find common ground with you:</p>
+                          <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-md p-3 bg-gray-50">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                              {availableInterests.map((interest) => (
+                                <label key={interest} className="flex items-center space-x-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedInterests.includes(interest)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedInterests([...selectedInterests, interest])
+                                      } else {
+                                        setSelectedInterests(selectedInterests.filter(i => i !== interest))
+                                      }
+                                    }}
+                                    className="rounded text-blue-600 focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700">{interest}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500">Selected: {selectedInterests.length} interests</p>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-soft-gray rounded-md">
+                          {profileData.interests && profileData.interests.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {profileData.interests.map((interest: string) => (
+                                <Badge key={interest} variant="secondary" className="bg-blue-100 text-blue-800">
+                                  {interest}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 italic">No interests added yet</p>
+                          )}
                         </div>
                       )}
                     </div>

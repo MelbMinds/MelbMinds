@@ -33,17 +33,30 @@ export default function DashboardPage() {
   const [recommendations, setRecommendations] = useState<any[]>([])
   const [loadingRecommendations, setLoadingRecommendations] = useState(true)
   const [loadingActions, setLoadingActions] = useState(false)
-  const { user, tokens } = useUser()
+  const { user, tokens, isLoading: userLoading } = useUser()
   
   useEffect(() => {
+    if (userLoading) {
+      // Don't do anything while UserContext is still loading
+      return;
+    }
+    
     if (tokens?.access && user?.email) {
       setLoadingGroups(true)
+      console.log('[Dashboard] Loading groups with API URL:', process.env.NEXT_PUBLIC_API_URL)
       // Fetch all groups and filter them properly
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/`, {
         headers: { "Authorization": `Bearer ${tokens.access}` },
       })
-        .then(res => res.json())
+        .then(res => {
+          console.log('[Dashboard] Groups API response:', res.status, res.statusText)
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          }
+          return res.json()
+        })
         .then(data => {
+          console.log('[Dashboard] Groups data received:', data?.length || 0, 'groups')
           // Filter groups where user is the creator
           const created = data.filter((group: any) => group.creator_email === user.email)
           // Filter groups where user has joined (but is not the creator)
@@ -52,24 +65,34 @@ export default function DashboardPage() {
           setJoinedGroups(joined)
           setLoadingGroups(false)
         })
-        .catch(() => {
+        .catch((error) => {
+          console.error('[Dashboard] Groups API error:', error)
           // Fallback to profile endpoint for joined groups
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/profile/`, {
             headers: { "Authorization": `Bearer ${tokens.access}` },
           })
-            .then(res => res.json())
+            .then(res => {
+              console.log('[Dashboard] Profile API response:', res.status, res.statusText)
+              if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+              }
+              return res.json()
+            })
             .then(data => {
+              console.log('[Dashboard] Profile data received')
               setJoinedGroups(data.joined_groups || [])
               setLoadingGroups(false)
             })
-            .catch(() => {
+            .catch((profileError) => {
+              console.error('[Dashboard] Profile API error:', profileError)
               setLoadingGroups(false)
             });
         });
     } else {
+      // User is not authenticated or no valid tokens
       setLoadingGroups(false)
     }
-  }, [tokens, user]);
+  }, [tokens, user, userLoading]);
 
   // Fetch all sessions for all groups (created + joined)
   useEffect(() => {
@@ -97,6 +120,11 @@ export default function DashboardPage() {
 
   // Fetch recommendations in parallel with groups, show top 5, load fast
   useEffect(() => {
+    if (userLoading) {
+      // Don't do anything while UserContext is still loading
+      return;
+    }
+    
     if (tokens?.access && !loadingGroups) {
       setLoadingRecommendations(true);
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/recommendations/`, {
@@ -114,7 +142,7 @@ export default function DashboardPage() {
     } else if (!tokens?.access) {
       setLoadingRecommendations(false);
     }
-  }, [tokens, loadingGroups]);
+  }, [tokens, loadingGroups, userLoading]);
 
   const [notifLoading, setNotifLoading] = useState(false);
   const [clearLoading, setClearLoading] = useState(false);
@@ -323,7 +351,7 @@ export default function DashboardPage() {
     }
   }
 
-  if (loadingGroups) {
+  if (userLoading || loadingGroups) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
