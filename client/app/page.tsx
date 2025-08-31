@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Users, Video, MapPin, UserCheck, Star, ArrowRight, Clock, Globe, Quote } from "lucide-react"
+import dynamic from "next/dynamic"
+const LeoChatbot = dynamic(() => import("@/components/LeoChatbot"), { ssr: false })
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
 import { useEffect, useState } from "react"
@@ -132,39 +134,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="relative">
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
-                <h3 className="text-2xl font-serif font-medium mb-6">Live Activity</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center">
-                      <Clock className="mr-2 h-5 w-5" />
-                      Active Study Sessions
-                    </span>
-                    <Badge variant="secondary" className="bg-gold text-deep-blue font-medium">
-                      {loadingStats ? <span className="animate-pulse">...</span> : stats?.active_sessions}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center">
-                      <Globe className="mr-2 h-5 w-5" />
-                      Subject Areas
-                    </span>
-                    <Badge variant="secondary" className="bg-gold text-deep-blue font-medium">
-                      {loadingStats ? <span className="animate-pulse">...</span> : stats?.subject_areas}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center">
-                      <Users className="mr-2 h-5 w-5" />
-                      New Groups Today
-                    </span>
-                    <Badge variant="secondary" className="bg-gold text-deep-blue font-medium">
-                      {loadingStats ? <span className="animate-pulse">...</span> : stats?.new_groups_today}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
+            <div className="relative flex justify-center">
+              <LeoChatbot />
             </div>
           </div>
         </div>
