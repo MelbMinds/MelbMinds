@@ -97,7 +97,7 @@ export default function LeoChatbot() {
 
   return (
   // render as a right-side column positioned within the hero so Leon stays anchored to that section
-  <div ref={containerRef} className="absolute z-50 inset-y-0 right-0 flex items-center justify-end pointer-events-none">
+  <div ref={containerRef} className="leo-chatbot-container absolute z-50 inset-y-0 right-0 flex items-center justify-end pointer-events-none">
       {/* Collapsed toggle (stays in DOM for smoother animation) */}
   {/* Collapsed right rail preview: fills the right area but stays subtle until opened */}
   <div className={`absolute right-0 top-1/2 -translate-y-1/2 flex items-center justify-end transition-all duration-200 ease-out pointer-events-auto ${open ? "opacity-0 translate-x-full pointer-events-none" : "opacity-100 translate-x-0"}`}>

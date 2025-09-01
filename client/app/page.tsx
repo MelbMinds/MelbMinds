@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Users, Video, MapPin, UserCheck, Star, ArrowRight, Clock, Globe, Quote } from "lucide-react"
 import dynamic from "next/dynamic"
 const LeoChatbot = dynamic(() => import("@/components/LeoChatbot"), { ssr: false })
+const OnboardingTutorial = dynamic(() => import("@/components/OnboardingTutorial"), { ssr: false })
 import Link from "next/link"
 import { useUser } from "@/components/UserContext"
 import { useEffect, useState } from "react"
@@ -14,6 +15,19 @@ export default function HomePage() {
   const { user } = useUser();
   const [stats, setStats] = useState<any>(null);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    // Check if user has seen onboarding tutorial
+    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+    if (!hasSeenOnboarding) {
+      // Delay showing onboarding to let page load
+      const timer = setTimeout(() => {
+        setShowOnboarding(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   useEffect(() => {
     // Try to load stats from localStorage first
@@ -363,6 +377,26 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* Onboarding Tutorial */}
+      {showOnboarding && (
+        <OnboardingTutorial 
+          onComplete={() => setShowOnboarding(false)} 
+        />
+      )}
+
+      {/* Dev button to trigger onboarding (remove in production) */}
+      {process.env.NODE_ENV === 'development' && (
+        <button
+          onClick={() => {
+            localStorage.removeItem('hasSeenOnboarding');
+            setShowOnboarding(true);
+          }}
+          className="fixed bottom-4 left-4 z-[10000] bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700"
+        >
+          Test Tutorial
+        </button>
+      )}
     </div>
   )
 }
