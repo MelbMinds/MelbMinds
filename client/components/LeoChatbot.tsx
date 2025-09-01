@@ -43,6 +43,13 @@ export default function LeoChatbot() {
     }
   }, [open])
 
+  // Listen for onboarding tutorial event to open chatbox
+  useEffect(() => {
+    const handleOpenLeo = () => setOpen(true)
+    window.addEventListener('openLeoChatbot', handleOpenLeo)
+    return () => window.removeEventListener('openLeoChatbot', handleOpenLeo)
+  }, [])
+
   async function submit() {
     if (!input.trim()) return
     const query = input.trim()

@@ -18,7 +18,7 @@ export default function OnboardingTutorial({ onComplete }: OnboardingTutorialPro
       id: "leon-intro",
       title: "Meet Leon, Your AI Study Buddy! 🤖",
       description: "Leon is your personal AI assistant who'll help you find study groups that match your vibe! He knows about all the groups at UniMelb and can suggest the perfect match based on your subjects, schedule, and personality. Click on him to start chatting!",
-      targetSelector: ".leo-chatbot-container",
+      targetSelector: ".leo-chatbot-container [role=\"dialog\"]",
       position: "left",
       highlightPadding: 30,
     },
@@ -48,8 +48,13 @@ export default function OnboardingTutorial({ onComplete }: OnboardingTutorialPro
     
     // Wait for components to render before starting tutorial
     const timer = setTimeout(() => {
-      // Force a re-render to ensure target elements are available
-      setCurrentStep(0)
+      // Dispatch event to open Leo chatbox first
+      window.dispatchEvent(new CustomEvent('openLeoChatbot'))
+      // Wait for transition, then start tutorial
+      setTimeout(() => {
+        setCurrentStep(0)
+        setForceRefresh(prev => prev + 1)
+      }, 600)
     }, 500)
     
     return () => {
@@ -58,16 +63,7 @@ export default function OnboardingTutorial({ onComplete }: OnboardingTutorialPro
     }
   }, [])
 
-  // Recalculate positions when step changes or force refresh
-  useEffect(() => {
-    if (currentStep === 0) {
-      // Extra delay for Leon to be ready
-      const timer = setTimeout(() => {
-        setForceRefresh(prev => prev + 1)
-      }, 200)
-      return () => clearTimeout(timer)
-    }
-  }, [currentStep])
+  // Removed automatic refresh for step 0 since we handle it manually
 
   const getTargetElement = () => {
     if (!currentStepData?.targetSelector) return null
@@ -76,13 +72,15 @@ export default function OnboardingTutorial({ onComplete }: OnboardingTutorialPro
     if (currentStepData.targetSelector === ".leo-chatbot-container") {
       // Try to find elements in order of preference
       const selectors = [
-        // Desktop Leo panel
+        // Desktop collapsed panel
         '.leo-chatbot-container .lg\\:flex.w-\\[30vw\\]',
         '.leo-chatbot-container [role="button"]',
         '.leo-chatbot-container .hidden.lg\\:flex',
-        // Mobile Leo button  
+        // Mobile collapsed button  
         '.leo-chatbot-container .lg\\:hidden',
         '.leo-chatbot-container button',
+        // Expanded panel
+        '.leo-chatbot-container [role="dialog"]',
         // Fallback to container itself
         '.leo-chatbot-container'
       ]
@@ -114,7 +112,7 @@ export default function OnboardingTutorial({ onComplete }: OnboardingTutorialPro
     let rect = target.getBoundingClientRect()
     
     // For Leo chatbot, use the same logic as highlight to get the correct rect
-    if (currentStepData.targetSelector === ".leo-chatbot-container") {
+    if (currentStepData.targetSelector === ".leo-chatbot-container" || currentStepData.targetSelector === ".leo-chatbot-container [role=\"dialog\"]") {
       const desktopLeo = document.querySelector('.leo-chatbot-container .lg\\:flex.w-\\[30vw\\]')
       if (desktopLeo && window.innerWidth >= 1024) {
         const desktopRect = desktopLeo.getBoundingClientRect()
@@ -148,15 +146,14 @@ export default function OnboardingTutorial({ onComplete }: OnboardingTutorialPro
         left += rect.width + 20
         break
       case "left":
-        top += rect.height / 2 - tooltipHeight / 2
-        left -= tooltipWidth + 20
-        // Special case for Leo: if tooltip would go off-screen left, show it on the right
-        if (left < margin && currentStepData.targetSelector === ".leo-chatbot-container") {
-          left = rect.left + scrollLeft + rect.width + 20
-        }
-        // For Leo, also adjust vertical position to ensure it's visible
-        if (currentStepData.targetSelector === ".leo-chatbot-container") {
-          top = Math.max(margin + scrollTop, Math.min(top, window.innerHeight / 2 + scrollTop - tooltipHeight / 2))
+        // Special case for Leo: position explicitly on the left side of screen
+        if (currentStepData.targetSelector === ".leo-chatbot-container" || currentStepData.targetSelector === ".leo-chatbot-container [role=\"dialog\"]") {
+          // Position on the left side of the screen, away from the chatbox
+          left = window.innerWidth * 0.2 + scrollLeft // 20% from left edge (moved more right)
+          top = window.innerHeight * 0.15 + scrollTop // 15% from top (moved higher)
+        } else {
+          top += rect.height / 2 - tooltipHeight / 2
+          left -= tooltipWidth + 20
         }
         break
       case "bottom":
@@ -179,13 +176,20 @@ export default function OnboardingTutorial({ onComplete }: OnboardingTutorialPro
     const maxTop = window.innerHeight - tooltipHeight - margin
 
     // For vertical positioning, prioritize keeping it in the upper portion of the screen
-    if (currentStepData.targetSelector === ".leo-chatbot-container") {
-      top = Math.max(margin + scrollTop, Math.min(top, window.innerHeight * 0.6 + scrollTop - tooltipHeight))
+    if (currentStepData.targetSelector === ".leo-chatbot-container" || currentStepData.targetSelector === ".leo-chatbot-container [role=\"dialog\"]") {
+      // Keep the explicit positioning we set in the switch case
+      // Don't override the top position
     } else {
       top = Math.max(margin + scrollTop, Math.min(top, maxTop + scrollTop))
     }
     
-    left = Math.max(margin, Math.min(left, maxLeft))
+    // For Leo, don't constrain left position as we set it explicitly
+    if (currentStepData.targetSelector === ".leo-chatbot-container" || currentStepData.targetSelector === ".leo-chatbot-container [role=\"dialog\"]") {
+      // Keep the explicit left positioning
+      left = Math.max(margin, left) // Just ensure minimum margin
+    } else {
+      left = Math.max(margin, Math.min(left, maxLeft))
+    }
 
     return { top, left }
   }
